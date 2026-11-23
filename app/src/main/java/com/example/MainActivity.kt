@@ -20,14 +20,17 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material3.CircularProgressIndicator
@@ -50,6 +53,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -72,17 +76,21 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.ai.configureAppCheck
 import com.example.auth.AuthScreen
 import com.example.auth.signOut
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
+import com.example.data.EventEntry
 import com.example.data.FamilyProfile
 import com.example.data.LedgerRepository
 import com.example.data.UiState
 import com.example.drive.GoogleDriveSyncManager
 import com.example.reminders.ReminderReceiver
+import com.example.ui.components.NewEventFormSheet
 import com.example.ui.screens.ActivityDetailScreen
 import com.example.ui.screens.ActivityEditorScreen
+import com.example.ui.screens.AiAssistantScreen
 import com.example.ui.screens.CalendarScreen
 import com.example.ui.screens.CategoriesScreen
 import com.example.ui.screens.FamiliesScreen
@@ -98,6 +106,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 const val ROUTE_LEDGER = "ledger"
 const val ROUTE_CALENDAR = "calendar"
 const val ROUTE_FAMILIES = "families"
+const val ROUTE_AI = "ai"
 const val ROUTE_REMINDERS = "reminders"
 const val ROUTE_DETAIL = "detail"
 const val ROUTE_EDITOR = "editor"
@@ -112,12 +121,14 @@ private enum class TopTab(
     LEDGER(ROUTE_LEDGER, R.string.nav_ledger, Icons.Rounded.Book, Icons.Outlined.Book),
     CALENDAR(ROUTE_CALENDAR, R.string.nav_calendar, Icons.Rounded.CalendarMonth, Icons.Outlined.CalendarMonth),
     FAMILIES(ROUTE_FAMILIES, R.string.nav_families, Icons.Rounded.Groups, Icons.Outlined.Groups),
+    AI(ROUTE_AI, R.string.nav_ai, Icons.Rounded.AutoAwesome, Icons.Outlined.AutoAwesome),
     REMINDERS(ROUTE_REMINDERS, R.string.nav_reminders, Icons.Rounded.Notifications, Icons.Outlined.Notifications)
 }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
         enableEdgeToEdge()
         ReminderReceiver.ensureNotificationChannel(this)
         setContent {
@@ -205,6 +216,9 @@ private fun AuthenticatedAppShell(
     val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
     val driveSyncStatus by viewModel.driveSyncStatus.collectAsStateWithLifecycle()
     val pendingDriveConsent by viewModel.pendingDriveConsent.collectAsStateWithLifecycle()
+    val aiSearchState by viewModel.aiSearchState.collectAsStateWithLifecycle()
+    val aiComparisonState by viewModel.aiComparisonState.collectAsStateWithLifecycle()
+    val selectedCompareFamilyIds by viewModel.selectedCompareFamilyIds.collectAsStateWithLifecycle()
 
     var didAttemptCategorySeed by remember(currentUserId) { mutableStateOf(false) }
     LaunchedEffect(dashboardState) {
@@ -253,8 +267,34 @@ private fun AuthenticatedAppShell(
     var prefilledFamily by remember { mutableStateOf<FamilyProfile?>(null) }
     var prefilledDateMillis by remember { mutableStateOf<Long?>(null) }
 
+    var showNewEventSheet by remember { mutableStateOf(false) }
+    var editingEvent by remember { mutableStateOf<EventEntry?>(null) }
+    var newEventPrefilledDate by remember { mutableStateOf<Long?>(null) }
+    var aiInitialTabIndex by remember { mutableIntStateOf(0) }
+
     val allActivities = (dashboardState as? UiState.Success)?.data?.activities ?: emptyList()
     val catalog = (dashboardState as? UiState.Success)?.data?.catalog ?: DropdownCatalog()
+
+    if (showNewEventSheet) {
+        NewEventFormSheet(
+            initialEvent = editingEvent,
+            initialDateMillis = newEventPrefilledDate,
+            catalog = catalog,
+            isSaving = isSaving,
+            onDismiss = {
+                showNewEventSheet = false
+                editingEvent = null
+                newEventPrefilledDate = null
+            },
+            onSaveEvent = { entry ->
+                viewModel.saveEvent(context, entry) {
+                    showNewEventSheet = false
+                    editingEvent = null
+                    newEventPrefilledDate = null
+                }
+            }
+        )
+    }
 
     val showChrome = currentRoute in TopTab.entries.map { it.route }
 
@@ -275,12 +315,25 @@ private fun AuthenticatedAppShell(
                         },
                         actions = {
                             IconButton(
+                                onClick = {
+                                    editingEvent = null
+                                    newEventPrefilledDate = null
+                                    showNewEventSheet = true
+                                },
+                                modifier = Modifier.testTag("topbar_new_event_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Event,
+                                    contentDescription = stringResource(R.string.action_new_event)
+                                )
+                            }
+                            IconButton(
                                 onClick = { navController.navigate(ROUTE_CATEGORIES) },
                                 modifier = Modifier.testTag("topbar_categories_button")
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Category,
-                                    contentDescription = "کیٹیگریز منظم کریں"
+                                    contentDescription = "Manage Categories"
                                 )
                             }
                             IconButton(
@@ -296,7 +349,7 @@ private fun AuthenticatedAppShell(
                                 } else {
                                     Icon(
                                         imageVector = Icons.Rounded.CloudUpload,
-                                        contentDescription = "Google Drive پر محفوظ کریں"
+                                        contentDescription = "Back Up to Google Drive"
                                     )
                                 }
                             }
@@ -318,6 +371,9 @@ private fun AuthenticatedAppShell(
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = {
+                                    if (tab == TopTab.AI) {
+                                        aiInitialTabIndex = 0
+                                    }
                                     navController.navigate(tab.route) {
                                         popUpTo(navController.graph.findStartDestination().id) {
                                             saveState = true
@@ -351,6 +407,9 @@ private fun AuthenticatedAppShell(
                             NavigationRailItem(
                                 selected = selected,
                                 onClick = {
+                                    if (tab == TopTab.AI) {
+                                        aiInitialTabIndex = 0
+                                    }
                                     navController.navigate(tab.route) {
                                         popUpTo(navController.graph.findStartDestination().id) {
                                             saveState = true
@@ -390,6 +449,16 @@ private fun AuthenticatedAppShell(
                             onManageCategoriesClick = {
                                 navController.navigate(ROUTE_CATEGORIES)
                             },
+                            onNewEventClick = {
+                                editingEvent = null
+                                newEventPrefilledDate = null
+                                showNewEventSheet = true
+                            },
+                            onEventClick = { evt ->
+                                editingEvent = evt
+                                newEventPrefilledDate = null
+                                showNewEventSheet = true
+                            },
                             onActivityClick = { act ->
                                 selectedActivityId = act.id
                                 navController.navigate(ROUTE_DETAIL)
@@ -416,6 +485,19 @@ private fun AuthenticatedAppShell(
                                 prefilledDateMillis = dateMillis
                                 navController.navigate(ROUTE_EDITOR)
                             },
+                            onNewEventOnDate = { dateMillis ->
+                                editingEvent = null
+                                newEventPrefilledDate = dateMillis
+                                showNewEventSheet = true
+                            },
+                            onEditEvent = { evt ->
+                                editingEvent = evt
+                                newEventPrefilledDate = null
+                                showNewEventSheet = true
+                            },
+                            onDeleteEvent = { eventId ->
+                                viewModel.deleteEvent(context, eventId)
+                            },
                             onCalendarSynced = { actId ->
                                 viewModel.markCalendarSynced(context, actId)
                             }
@@ -432,6 +514,45 @@ private fun AuthenticatedAppShell(
                                 prefilledFamily = fam
                                 prefilledDateMillis = null
                                 navController.navigate(ROUTE_EDITOR)
+                            },
+                            onCompareWithAiClick = {
+                                aiInitialTabIndex = 1
+                                if (selectedCompareFamilyIds.size < 2) {
+                                    viewModel.selectTopFamiliesForComparison(limit = 3)
+                                }
+                                navController.navigate(ROUTE_AI) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        )
+                    }
+
+                    composable(ROUTE_AI) {
+                        AiAssistantScreen(
+                            dashboardState = dashboardState,
+                            aiSearchState = aiSearchState,
+                            aiComparisonState = aiComparisonState,
+                            selectedCompareFamilyIds = selectedCompareFamilyIds,
+                            initialTabIndex = aiInitialTabIndex,
+                            onRunAiSearch = viewModel::runAiSearch,
+                            onClearAiSearch = viewModel::clearAiSearch,
+                            onToggleFamilyCompare = viewModel::toggleFamilyForComparison,
+                            onSelectTopFamilies = { viewModel.selectTopFamiliesForComparison(3) },
+                            onRunAiComparison = { viewModel.runAiBalanceComparison() },
+                            onClearAiComparison = viewModel::clearAiComparison,
+                            onActivityClick = { act ->
+                                selectedActivityId = act.id
+                                navController.navigate(ROUTE_DETAIL)
+                            },
+                            onCompareThisFamily = { familyDocId ->
+                                if (familyDocId !in selectedCompareFamilyIds) {
+                                    viewModel.toggleFamilyForComparison(familyDocId)
+                                }
+                                aiInitialTabIndex = 1
                             }
                         )
                     }

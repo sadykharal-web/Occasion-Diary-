@@ -133,12 +133,12 @@ fun RemindersScreen(
                             )
                             Column {
                                 Text(
-                                    text = userDisplayName?.takeIf { it.isNotBlank() } ?: "Google صارف",
+                                    text = userDisplayName?.takeIf { it.isNotBlank() } ?: "Google User",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = userEmail ?: "کلاؤڈ مطابقت فعال",
+                                    text = userEmail ?: "Cloud sync active",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -155,7 +155,7 @@ fun RemindersScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("سائن آؤٹ")
+                            Text("Sign Out")
                         }
                     }
                 }
@@ -189,15 +189,15 @@ fun RemindersScreen(
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Google Drive بیک اپ اور مطابقت",
+                                    text = "Google Drive Backup & Sync",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     text = if (!userEmail.isNullOrBlank()) {
-                                        "منسلک Gmail: $userEmail"
+                                        "Connected Gmail: $userEmail"
                                     } else {
-                                        "آپ کے Google Drive میں تمام ڈیٹا محفوظ رکھا جاتا ہے"
+                                        "Your diary entries, events, and families are backed up safely in Google Drive"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -212,15 +212,15 @@ fun RemindersScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "خودکار Drive بیک اپ (Auto-Sync)",
+                                    text = "Auto-Sync to Google Drive",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
                                     text = if (driveSyncStatus.lastSyncMillis > 0L) {
-                                        "آخری بیک اپ: ${formatDisplayDate(driveSyncStatus.lastSyncMillis)} • ${formatDisplayTime(driveSyncStatus.lastSyncMillis)}"
+                                        "Last backup: ${formatDisplayDate(driveSyncStatus.lastSyncMillis)} • ${formatDisplayTime(driveSyncStatus.lastSyncMillis)}"
                                     } else {
-                                        "فائل: Neondra_Roznamcha_Backup.json"
+                                        "File: Occasion_Diary_Backup.json"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -270,7 +270,7 @@ fun RemindersScreen(
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Drive پر محفوظ کریں")
+                                Text("Back Up Now")
                             }
 
                             OutlinedButton(
@@ -288,7 +288,7 @@ fun RemindersScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Drive سے بحال کریں")
+                                Text("Restore")
                             }
                         }
                     }
@@ -326,12 +326,12 @@ fun RemindersScreen(
                             )
                             Column {
                                 Text(
-                                    text = "سرگرمی کیٹیگریز منظم کریں",
+                                    text = "Manage Occasion Categories",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "$categoriesCount کیٹیگریز • ہر کیٹیگری کا رنگ اور آئیکن ترتیب دیں",
+                                    text = "$categoriesCount categories • Customize colors & icons",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -339,7 +339,7 @@ fun RemindersScreen(
                         }
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                            contentDescription = "کیٹیگریز کھولیں",
+                            contentDescription = "Open Categories",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -348,7 +348,7 @@ fun RemindersScreen(
 
             item {
                 Text(
-                    text = "آنے والی تقاریب اور یاد دہانیاں (${reminderItems.size})",
+                    text = "Upcoming Occasions & Reminders (${reminderItems.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -377,7 +377,7 @@ fun RemindersScreen(
                                 modifier = Modifier.size(40.dp)
                             )
                             Text(
-                                text = "کوئی فعال یاد دہانی یا آنے والی تقریب موجود نہیں",
+                                text = "No active reminders or upcoming occasions yet",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -472,7 +472,7 @@ fun RemindersScreen(
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                             shape = RoundedCornerShape(8.dp)
                                         ) {
-                                            Text("ٹیسٹ الرٹ", style = MaterialTheme.typography.labelSmall)
+                                            Text("Test Alert", style = MaterialTheme.typography.labelSmall)
                                         }
                                     }
                                 }
@@ -484,4 +484,3 @@ fun RemindersScreen(
         }
     }
 }
-

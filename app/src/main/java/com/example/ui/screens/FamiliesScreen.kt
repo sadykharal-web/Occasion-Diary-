@@ -1,6 +1,5 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -19,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.CompareArrows
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Groups
@@ -45,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -61,6 +61,7 @@ fun FamiliesScreen(
     onSaveFamily: (FamilyProfile) -> Unit,
     onDeleteFamily: (String) -> Unit,
     onNewActivityForFamily: (FamilyProfile) -> Unit,
+    onCompareWithAiClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var search by remember { mutableStateOf("") }
@@ -103,9 +104,10 @@ fun FamiliesScreen(
                     showFamilyDialog = true
                 },
                 containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.testTag("add_family_fab")
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = "نئی فیملی شامل کریں")
+                Icon(Icons.Rounded.Add, contentDescription = "Add New Family")
             }
         }
     ) { innerPadding ->
@@ -134,30 +136,47 @@ fun FamiliesScreen(
                             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
                         )
                     ) {
-                        Row(
+                        Column(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Groups,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Column {
-                                Text(
-                                    text = "خودکار فیملی ڈائریکٹری (${families.size})",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Groups,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(32.dp)
                                 )
-                                Text(
-                                    text = "ہر نیا اندراج خود بخود یہاں شامل ہوتا ہے اور نام، FN و ایڈریس کے ڈراپ ڈاؤن بناتا ہے۔",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                Column {
+                                    Text(
+                                        text = "Family Directory (${families.size})",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "Every entry automatically builds this directory and populates Name, FN, and Address dropdowns.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            if (families.size >= 2) {
+                                OutlinedButton(
+                                    onClick = onCompareWithAiClick,
+                                    shape = RoundedCornerShape(12.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .testTag("families_compare_ai_button")
+                                ) {
+                                    Icon(Icons.Rounded.CompareArrows, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Compare Family In & Out Balances with AI")
+                                }
                             }
                         }
                     }
@@ -167,7 +186,7 @@ fun FamiliesScreen(
                     OutlinedTextField(
                         value = search,
                         onValueChange = { search = it },
-                        placeholder = { Text("نام، FN، والد یا ایڈریس تلاش کریں...") },
+                        placeholder = { Text("Search name, FN, father, or address...") },
                         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
@@ -191,7 +210,7 @@ fun FamiliesScreen(
                                 modifier = Modifier.size(44.dp)
                             )
                             Text(
-                                text = "ابھی کوئی فیملی پروفائل محفوظ نہیں",
+                                text = "No family profiles saved yet",
                                 style = MaterialTheme.typography.titleMedium,
                                 textAlign = TextAlign.Center
                             )
@@ -247,7 +266,7 @@ fun FamiliesScreen(
                                             )
                                             if (family.fatherName.isNotBlank()) {
                                                 Text(
-                                                    text = "والد: ${family.fatherName}",
+                                                    text = "Father: ${family.fatherName}",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -261,12 +280,12 @@ fun FamiliesScreen(
                                                 showFamilyDialog = true
                                             }
                                         ) {
-                                            Icon(Icons.Rounded.Edit, contentDescription = "ترمیم")
+                                            Icon(Icons.Rounded.Edit, contentDescription = "Edit Family")
                                         }
                                         IconButton(onClick = { onDeleteFamily(family.id) }) {
                                             Icon(
                                                 Icons.Rounded.DeleteOutline,
-                                                contentDescription = "حذف",
+                                                contentDescription = "Delete Family",
                                                 tint = MaterialTheme.colorScheme.error
                                             )
                                         }
@@ -297,7 +316,7 @@ fun FamiliesScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "${famActs.size} اندراجات • In: ${formatNeondraAmount(totalIn)} • Out: ${formatNeondraAmount(totalOut)}",
+                                        text = "${famActs.size} entries • In: ${formatNeondraAmount(totalIn)} • Out: ${formatNeondraAmount(totalOut)}",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -308,7 +327,7 @@ fun FamiliesScreen(
                                     ) {
                                         Icon(Icons.Rounded.PostAdd, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("نیا اندراج")
+                                        Text("New Entry")
                                     }
                                 }
                             }
@@ -336,35 +355,35 @@ private fun FamilyEditorDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (initial == null) "نئی فیملی شامل کریں" else "فیملی معلومات میں ترمیم (خودکار مطابقت)")
+            Text(if (initial == null) "Add New Family" else "Edit Family Profile")
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = fn,
                     onValueChange = { fn = it },
-                    label = { Text("فیملی آئی ڈی (FN) *") },
+                    label = { Text("Family ID (FN) *") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("نام (Name) *") },
+                    label = { Text("Name *") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = father,
                     onValueChange = { father = it },
-                    label = { Text("والد (Father)") },
+                    label = { Text("Father Name") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
-                    label = { Text("ایڈریس (Address)") },
+                    label = { Text("Address") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -381,7 +400,7 @@ private fun FamilyEditorDialog(
             TextButton(
                 onClick = {
                     if (fn.trim().isEmpty() || name.trim().isEmpty()) {
-                        error = "نام اور فیملی آئی ڈی (FN) لازمی ہیں۔"
+                        error = "Name and Family ID (FN) are required."
                         return@TextButton
                     }
                     onConfirm(
@@ -396,11 +415,11 @@ private fun FamilyEditorDialog(
                     )
                 }
             ) {
-                Text("محفوظ کریں")
+                Text("Save")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("منسوخ") }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }

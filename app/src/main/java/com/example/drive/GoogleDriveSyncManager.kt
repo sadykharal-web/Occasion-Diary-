@@ -7,6 +7,7 @@ import android.content.Intent
 import android.util.Log
 import com.example.data.ActivityCategory
 import com.example.data.ActivityRecord
+import com.example.data.EventEntry
 import com.example.data.FamilyProfile
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.Identity
@@ -28,6 +29,7 @@ data class DriveBackupPayload(
     val categories: List<ActivityCategory>,
     val families: List<FamilyProfile>,
     val activities: List<ActivityRecord>,
+    val events: List<EventEntry> = emptyList(),
     val exportedAtMillis: Long
 )
 
@@ -47,7 +49,8 @@ data class DriveSyncStatus(
 
 object GoogleDriveSyncManager {
     private const val TAG = "GoogleDriveSync"
-    private const val BACKUP_FILE_NAME = "Neondra_Roznamcha_Backup.json"
+    const val BACKUP_FILE_NAME = "Occasion_Diary_Backup.json"
+    private const val LEGACY_BACKUP_FILE_NAME = "Neondra_Roznamcha_Backup.json"
     private const val DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file"
     private const val PREFS_NAME = "drive_sync_prefs"
 
@@ -96,19 +99,19 @@ object GoogleDriveSyncManager {
                 if (pending != null) {
                     DriveAuthState.NeedsUserConsent(pending)
                 } else {
-                    DriveAuthState.Error("Google Drive اجازت کا ڈائیلاگ دستیاب نہیں ہو سکا۔")
+                    DriveAuthState.Error("Unable to open the Google Drive permission prompt.")
                 }
             } else {
                 val token = result.accessToken
                 if (!token.isNullOrBlank()) {
                     DriveAuthState.Authorized(token)
                 } else {
-                    DriveAuthState.Error("Google Drive رسائی ٹوکن موصول نہیں ہوا۔")
+                    DriveAuthState.Error("No Google Drive access token received.")
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Drive authorization failed", e)
-            DriveAuthState.Error(e.localizedMessage ?: "Google Drive اجازت ناکام ہو گئی۔")
+            DriveAuthState.Error(e.localizedMessage ?: "Google Drive authorization failed.")
         }
     }
 
@@ -137,7 +140,8 @@ object GoogleDriveSyncManager {
         accessToken: String,
         categories: List<ActivityCategory>,
         families: List<FamilyProfile>,
-        activities: List<ActivityRecord>
+        activities: List<ActivityRecord>,
+        events: List<EventEntry> = emptyList()
     ): Result<Long> = withContext(Dispatchers.IO) {
         try {
             val nowMillis = System.currentTimeMillis()
@@ -146,14 +150,15 @@ object GoogleDriveSyncManager {
                 exportedAtMillis = nowMillis,
                 categories = categories,
                 families = families,
-                activities = activities
+                activities = activities,
+                events = events
             )
 
-            val existingFileId = findBackupFileId(accessToken)
+            val existingFileId = findBackupFileId(accessToken, BACKUP_FILE_NAME)
             val metadataJson = JSONObject().apply {
                 put("name", BACKUP_FILE_NAME)
                 put("mimeType", "application/json")
-                put("description", "Neondra Roznamcha auto backup for ${userEmail ?: userId}")
+                put("description", "Occasion Diary auto backup for ${userEmail ?: userId}")
             }.toString()
 
             val multipartBody = MultipartBody.Builder()
@@ -189,7 +194,7 @@ object GoogleDriveSyncManager {
                 if (!response.isSuccessful) {
                     Log.e(TAG, "Drive upload failed: ${response.code} $bodyString")
                     return@withContext Result.failure(
-                        IllegalStateException("Google Drive اپلوڈ ناکام (${response.code})")
+                        IllegalStateException("Google Drive upload failed (HTTP ${response.code})")
                     )
                 }
             }
@@ -205,9 +210,10 @@ object GoogleDriveSyncManager {
     suspend fun downloadBackupFromDrive(accessToken: String): Result<DriveBackupPayload> =
         withContext(Dispatchers.IO) {
             try {
-                val fileId = findBackupFileId(accessToken)
+                val fileId = findBackupFileId(accessToken, BACKUP_FILE_NAME)
+                    ?: findBackupFileId(accessToken, LEGACY_BACKUP_FILE_NAME)
                     ?: return@withContext Result.failure(
-                        IllegalStateException("آپ کے Google Drive میں ابھی کوئی بیک اپ فائل موجود نہیں۔")
+                        IllegalStateException("No backup file was found in your Google Drive yet.")
                     )
 
                 val request = Request.Builder()
@@ -220,7 +226,7 @@ object GoogleDriveSyncManager {
                     val raw = response.body?.string().orEmpty()
                     if (!response.isSuccessful) {
                         return@withContext Result.failure(
-                            IllegalStateException("Google Drive ڈاؤنلوڈ ناکام (${response.code})")
+                            IllegalStateException("Google Drive download failed (HTTP ${response.code})")
                         )
                     }
                     Result.success(parseBackupJson(raw))
@@ -231,8 +237,8 @@ object GoogleDriveSyncManager {
             }
         }
 
-    private fun findBackupFileId(accessToken: String): String? {
-        val query = "name = '$BACKUP_FILE_NAME' and trashed = false"
+    private fun findBackupFileId(accessToken: String, fileName: String): String? {
+        val query = "name = '$fileName' and trashed = false"
         val encodedQuery = URLEncoder.encode(query, "UTF-8")
         val url = "https://www.googleapis.com/drive/v3/files?q=$encodedQuery&spaces=drive&fields=files(id,name,modifiedTime)&pageSize=5"
 
@@ -245,7 +251,7 @@ object GoogleDriveSyncManager {
         httpClient.newCall(request).execute().use { response ->
             val raw = response.body?.string().orEmpty()
             if (!response.isSuccessful) {
-                throw IllegalStateException("Google Drive فہرست چیک ناکام (${response.code})")
+                throw IllegalStateException("Google Drive file lookup failed (HTTP ${response.code})")
             }
             val json = JSONObject(raw)
             val files = json.optJSONArray("files") ?: return null
@@ -259,11 +265,12 @@ object GoogleDriveSyncManager {
         exportedAtMillis: Long,
         categories: List<ActivityCategory>,
         families: List<FamilyProfile>,
-        activities: List<ActivityRecord>
+        activities: List<ActivityRecord>,
+        events: List<EventEntry>
     ): String {
         val root = JSONObject()
-        root.put("app", "NeondraRoznamcha")
-        root.put("version", 2)
+        root.put("app", "OccasionDiary")
+        root.put("version", 3)
         root.put("userEmail", userEmail ?: "")
         root.put("exportedAtMillis", exportedAtMillis)
 
@@ -319,6 +326,23 @@ object GoogleDriveSyncManager {
             )
         }
         root.put("activities", actsArray)
+
+        val eventsArray = JSONArray()
+        events.forEach { evt ->
+            eventsArray.put(
+                JSONObject().apply {
+                    put("id", evt.id)
+                    put("title", evt.title)
+                    put("description", evt.description)
+                    put("eventDateMillis", evt.eventDateMillis)
+                    put("category", evt.category)
+                    put("location", evt.location)
+                    if (!evt.familyDocId.isNullOrBlank()) put("familyDocId", evt.familyDocId)
+                    put("familyName", evt.familyName)
+                }
+            )
+        }
+        root.put("events", eventsArray)
 
         return root.toString(2)
     }
@@ -386,10 +410,30 @@ object GoogleDriveSyncManager {
             }
         }
 
+        val events = buildList {
+            val arr = root.optJSONArray("events") ?: JSONArray()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                add(
+                    EventEntry(
+                        id = obj.optString("id"),
+                        title = obj.optString("title"),
+                        description = obj.optString("description"),
+                        eventDateMillis = obj.optLong("eventDateMillis", System.currentTimeMillis()),
+                        category = obj.optString("category", "Wedding"),
+                        location = obj.optString("location"),
+                        familyDocId = obj.optString("familyDocId").takeIf { it.isNotBlank() },
+                        familyName = obj.optString("familyName")
+                    )
+                )
+            }
+        }
+
         return DriveBackupPayload(
             categories = categories,
             families = families,
             activities = activities,
+            events = events,
             exportedAtMillis = exportedAt
         )
     }

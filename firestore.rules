@@ -113,6 +113,31 @@ service cloud.firestore {
              data.updatedAt <= request.time;
     }
 
+    // Entity 4: EventEntry validation helper
+    function isValidEventEntry(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.title is string &&
+             data.title.size() >= 1 &&
+             data.title.size() <= 120 &&
+             data.description is string &&
+             data.description.size() <= 1000 &&
+             data.eventDateMillis is int &&
+             data.eventDateMillis >= 0 &&
+             data.category is string &&
+             data.category.size() <= 80 &&
+             data.location is string &&
+             data.location.size() <= 200 &&
+             (!('familyDocId' in data) || (data.familyDocId is string && data.familyDocId.size() <= 128)) &&
+             data.familyName is string &&
+             data.familyName.size() <= 100 &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
     match /users/{userId}/families/{familyDocId} {
       allow get: if isOwner(userId) && isValidId(familyDocId);
       allow list: if isOwner(userId);
@@ -203,6 +228,36 @@ service cloud.firestore {
                        );
 
       allow delete: if isOwner(userId) && isValidId(activityId);
+    }
+
+    match /users/{userId}/events/{eventId} {
+      allow get: if isOwner(userId) && isValidId(eventId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(eventId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'title', 'description', 'eventDateMillis',
+                         'category', 'location', 'familyName', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'title', 'description', 'eventDateMillis',
+                         'category', 'location', 'familyDocId', 'familyName',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidEventEntry(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(eventId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidEventEntry(incoming(), userId) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'title', 'description', 'eventDateMillis',
+                         'category', 'location', 'familyDocId', 'familyName', 'updatedAt'
+                       ]);
+
+      allow delete: if isOwner(userId) && isValidId(eventId);
     }
   }
 }

@@ -98,8 +98,8 @@ fun ActivityDetailScreen(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("اندراج حذف کریں؟") },
-            text = { Text("کیا آپ واقعی \"${record.name}\" کا یہ اندراج مستقل طور پر حذف کرنا چاہتے ہیں؟") },
+            title = { Text("Delete Entry?") },
+            text = { Text("Are you sure you want to permanently delete this entry for \"${record.name}\"?") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -107,12 +107,12 @@ fun ActivityDetailScreen(
                         onDelete()
                     }
                 ) {
-                    Text("حذف کریں", color = MaterialTheme.colorScheme.error)
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("منسوخ")
+                    Text("Cancel")
                 }
             }
         )
@@ -136,7 +136,7 @@ fun ActivityDetailScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "واپس"
+                            contentDescription = "Back"
                         )
                     }
                 },
@@ -147,7 +147,7 @@ fun ActivityDetailScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.DeleteOutline,
-                            contentDescription = "حذف کریں",
+                            contentDescription = "Delete Entry",
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -163,7 +163,7 @@ fun ActivityDetailScreen(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Edit,
-                    contentDescription = "ترمیم کریں"
+                    contentDescription = "Edit Entry"
                 )
             }
         }
@@ -182,7 +182,6 @@ fun ActivityDetailScreen(
                     .padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Clean screenshot-aligned detail card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(22.dp),
@@ -237,7 +236,7 @@ fun ActivityDetailScreen(
                             ) {
                                 DirectionPill(direction = record.parsedDirection)
                                 Text(
-                                    text = record.parsedDirection.urduLabel,
+                                    text = record.parsedDirection.displayLabel,
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             }
@@ -245,7 +244,7 @@ fun ActivityDetailScreen(
 
                         DetailFieldRow(
                             label = "Home",
-                            value = record.homeItems.ifBlank { "کوئی شے درج نہیں" }
+                            value = record.homeItems.ifBlank { "No items recorded" }
                         )
 
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
@@ -300,7 +299,7 @@ fun ActivityDetailScreen(
                                 )
                                 Column {
                                     Text(
-                                        text = "یاد دہانی (Reminder)",
+                                        text = "Reminder",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -308,7 +307,7 @@ fun ActivityDetailScreen(
                                         text = if (record.reminderEnabled) {
                                             "${formatReminderOffsetLabel(record.reminderMinutesBefore)} (${formatDisplayDate(record.reminderAtMillis)})"
                                         } else {
-                                            "فی الحال بند ہے"
+                                            "Currently off"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -359,9 +358,9 @@ fun ActivityDetailScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (record.calendarSynced) {
-                                    "دوبارہ کیلنڈر میں کھولیں (Synced)"
+                                    "Open in Calendar Again (Synced)"
                                 } else {
-                                    "ڈیوائس کیلنڈر میں شامل کریں"
+                                    "Add to Device Calendar"
                                 }
                             )
                         }
@@ -389,12 +388,12 @@ fun ActivityDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "اس فیملی کا مجموعی حساب (${relatedRecords.size} اندراجات)",
+                                text = "Family Balance Summary (${relatedRecords.size} entries)",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "کل In: ${formatNeondraAmount(familyIn)}  •  کل Out: ${formatNeondraAmount(familyOut)}  •  بقایا: ${formatNeondraAmount(familyIn - familyOut)}",
+                                text = "Total In: ${formatNeondraAmount(familyIn)}  •  Total Out: ${formatNeondraAmount(familyOut)}  •  Net: ${formatNeondraAmount(familyIn - familyOut)}",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
@@ -410,7 +409,7 @@ fun ActivityDetailScreen(
                 ) {
                     Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("معلومات میں ترمیم کریں")
+                    Text("Edit Entry")
                 }
 
                 Spacer(modifier = Modifier.height(72.dp))

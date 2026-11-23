@@ -5,10 +5,14 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.ai.AiAssistantRepository
+import com.example.ai.AiBalanceComparisonResult
+import com.example.ai.AiSearchResult
 import com.example.data.ActivityCategory
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
+import com.example.data.EventEntry
 import com.example.data.FamilyProfile
 import com.example.data.LedgerRepository
 import com.example.data.LedgerSummary
@@ -29,16 +33,17 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 enum class LedgerFilter(val label: String) {
-    ALL("سب"),
-    IN("آمد (In)"),
-    OUT("ادائیگی (Out)"),
-    REMINDERS("یاد دہانیاں")
+    ALL("All"),
+    IN("In (Received)"),
+    OUT("Out (Given)"),
+    REMINDERS("Reminders")
 }
 
 data class LedgerDashboardData(
     val activities: List<ActivityRecord> = emptyList(),
     val families: List<FamilyProfile> = emptyList(),
     val categories: List<ActivityCategory> = emptyList(),
+    val events: List<EventEntry> = emptyList(),
     val catalog: DropdownCatalog = DropdownCatalog(),
     val summary: LedgerSummary = LedgerSummary()
 )
@@ -46,7 +51,8 @@ data class LedgerDashboardData(
 class LedgerViewModel(
     private val repository: LedgerRepository,
     private val currentUserId: String,
-    private val userEmail: String? = null
+    private val userEmail: String? = null,
+    private val aiRepository: AiAssistantRepository = AiAssistantRepository()
 ) : ViewModel() {
 
     private val _searchQuery = MutableStateFlow("")
@@ -73,6 +79,15 @@ class LedgerViewModel(
     private val _pendingDriveConsent = MutableStateFlow<PendingIntent?>(null)
     val pendingDriveConsent: StateFlow<PendingIntent?> = _pendingDriveConsent.asStateFlow()
 
+    private val _aiSearchState = MutableStateFlow<UiState<AiSearchResult>?>(null)
+    val aiSearchState: StateFlow<UiState<AiSearchResult>?> = _aiSearchState.asStateFlow()
+
+    private val _aiComparisonState = MutableStateFlow<UiState<AiBalanceComparisonResult>?>(null)
+    val aiComparisonState: StateFlow<UiState<AiBalanceComparisonResult>?> = _aiComparisonState.asStateFlow()
+
+    private val _selectedCompareFamilyIds = MutableStateFlow<Set<String>>(emptySet())
+    val selectedCompareFamilyIds: StateFlow<Set<String>> = _selectedCompareFamilyIds.asStateFlow()
+
     private var pendingDriveActionAfterConsent: DrivePendingAction? = null
 
     private enum class DrivePendingAction {
@@ -83,8 +98,9 @@ class LedgerViewModel(
     val dashboardState: StateFlow<UiState<LedgerDashboardData>> = combine(
         repository.observeActivities(currentUserId),
         repository.observeFamilies(currentUserId),
-        repository.observeCategories(currentUserId)
-    ) { activities, families, categories ->
+        repository.observeCategories(currentUserId),
+        repository.observeEvents(currentUserId)
+    ) { activities, families, categories, events ->
         val mergedNames = (families.map { it.name } + activities.map { it.name })
             .map { it.trim() }
             .filter { it.isNotEmpty() }
@@ -112,7 +128,8 @@ class LedgerViewModel(
         val mergedEvents = (
             categories.map { it.name } +
                 DropdownCatalog.DEFAULT_EVENT_TYPES +
-                activities.map { it.eventType }
+                activities.map { it.eventType } +
+                events.map { it.category }
             )
             .map { it.trim() }
             .filter { it.isNotEmpty() }
@@ -148,7 +165,8 @@ class LedgerViewModel(
             totalEntries = activities.size,
             activeRemindersCount = activeRemindersCount,
             totalFamiliesCount = families.size,
-            totalCategoriesCount = categories.size
+            totalCategoriesCount = categories.size,
+            totalEventsCount = events.size
         )
 
         UiState.Success(
@@ -156,6 +174,7 @@ class LedgerViewModel(
                 activities = activities,
                 families = families,
                 categories = categories,
+                events = events,
                 catalog = catalog,
                 summary = summary
             )
@@ -168,7 +187,7 @@ class LedgerViewModel(
             if (firestoreError == null && error is CancellationException) throw error
             val rootError = firestoreError ?: error
             Log.w(TAG, "Error observing ledger dashboard", rootError)
-            emit(UiState.Error(rootError.localizedMessage ?: "ڈیٹا لوڈ کرنے میں مسئلہ پیش آیا۔"))
+            emit(UiState.Error(rootError.localizedMessage ?: "Failed to load dashboard data."))
         }
         .stateIn(
             scope = viewModelScope,
@@ -206,6 +225,130 @@ class LedgerViewModel(
     fun consumePendingDriveConsent() {
         _pendingDriveConsent.value = null
     }
+
+    // --- EventEntry Operations ---
+
+    fun saveEvent(
+        context: Context,
+        entry: EventEntry,
+        onSaved: (EventEntry) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            _isSaving.value = true
+            val result = repository.saveEvent(entry)
+            _isSaving.value = false
+            result.onSuccess { saved ->
+                _actionMessage.value = if (entry.id.isBlank()) {
+                    "Event \"${saved.title}\" saved to Firestore."
+                } else {
+                    "Event \"${saved.title}\" updated."
+                }
+                triggerAutoDriveBackupIfEnabled(context)
+                onSaved(saved)
+            }.onFailure { err ->
+                _actionMessage.value = err.localizedMessage ?: "Failed to save event."
+            }
+        }
+    }
+
+    fun deleteEvent(context: Context, eventId: String) {
+        viewModelScope.launch {
+            repository.deleteEvent(eventId)
+                .onSuccess {
+                    _actionMessage.value = "Event deleted."
+                    triggerAutoDriveBackupIfEnabled(context)
+                }
+                .onFailure { err ->
+                    _actionMessage.value = err.localizedMessage ?: "Failed to delete event."
+                }
+        }
+    }
+
+    // --- Firebase AI Logic Search & Family Balance Comparison ---
+
+    fun runAiSearch(query: String) {
+        val data = (dashboardState.value as? UiState.Success)?.data
+        if (data == null) {
+            _aiSearchState.value = UiState.Error("Your records are still loading. Please try again in a moment.")
+            return
+        }
+        viewModelScope.launch {
+            _aiSearchState.value = UiState.Loading
+            val result = aiRepository.searchFamiliesAndEvents(
+                query = query,
+                families = data.families,
+                activities = data.activities,
+                events = data.events
+            )
+            _aiSearchState.value = result.fold(
+                onSuccess = { UiState.Success(it) },
+                onFailure = { UiState.Error(it.localizedMessage ?: "AI search failed.") }
+            )
+        }
+    }
+
+    fun clearAiSearch() {
+        _aiSearchState.value = null
+    }
+
+    fun toggleFamilyForComparison(familyDocId: String) {
+        val current = _selectedCompareFamilyIds.value
+        _selectedCompareFamilyIds.value = if (familyDocId in current) {
+            current - familyDocId
+        } else {
+            current + familyDocId
+        }
+    }
+
+    fun selectTopFamiliesForComparison(limit: Int = 3) {
+        val data = (dashboardState.value as? UiState.Success)?.data ?: return
+        val topIds = data.families
+            .sortedByDescending { fam ->
+                data.activities.count {
+                    it.familyDocId == fam.id ||
+                        (it.familyId.isNotBlank() && it.familyId == fam.familyId && it.name.equals(fam.name, ignoreCase = true))
+                }
+            }
+            .take(limit)
+            .map { it.id }
+            .toSet()
+        _selectedCompareFamilyIds.value = topIds
+    }
+
+    fun runAiBalanceComparison(familyIdsOverride: Set<String>? = null) {
+        val data = (dashboardState.value as? UiState.Success)?.data
+        if (data == null) {
+            _aiComparisonState.value = UiState.Error("Your records are still loading. Please try again.")
+            return
+        }
+        val targetIds = familyIdsOverride ?: _selectedCompareFamilyIds.value
+        if (familyIdsOverride != null) {
+            _selectedCompareFamilyIds.value = familyIdsOverride
+        }
+        val selected = data.families.filter { it.id in targetIds }
+        if (selected.size < 2) {
+            _aiComparisonState.value = UiState.Error("Please select at least 2 families to compare their In and Out balances.")
+            return
+        }
+        viewModelScope.launch {
+            _aiComparisonState.value = UiState.Loading
+            val result = aiRepository.compareFamilyBalances(
+                selectedFamilies = selected,
+                activities = data.activities,
+                events = data.events
+            )
+            _aiComparisonState.value = result.fold(
+                onSuccess = { UiState.Success(it) },
+                onFailure = { UiState.Error(it.localizedMessage ?: "AI balance comparison failed.") }
+            )
+        }
+    }
+
+    fun clearAiComparison() {
+        _aiComparisonState.value = null
+    }
+
+    // --- Google Drive Sync ---
 
     fun setAutoDriveSync(context: Context, enabled: Boolean) {
         GoogleDriveSyncManager.setAutoSyncEnabled(context, currentUserId, enabled)
@@ -279,7 +422,7 @@ class LedgerViewModel(
 
     fun onDriveConsentGranted(context: Context, accessToken: String?) {
         if (accessToken.isNullOrBlank()) {
-            _actionMessage.value = "Google Drive کی اجازت موصول نہیں ہوئی۔"
+            _actionMessage.value = "Google Drive permission was not granted."
             pendingDriveActionAfterConsent = null
             return
         }
@@ -308,22 +451,23 @@ class LedgerViewModel(
             accessToken = accessToken,
             categories = data.categories,
             families = data.families,
-            activities = data.activities
+            activities = data.activities,
+            events = data.events
         )
         result.onSuccess { syncedAt ->
             _driveSyncStatus.value = _driveSyncStatus.value.copy(
                 isSyncing = false,
                 lastSyncMillis = syncedAt,
-                lastSyncedFileName = "Neondra_Roznamcha_Backup.json",
-                statusMessage = "Google Drive پر محفوظ ہو گیا"
+                lastSyncedFileName = GoogleDriveSyncManager.BACKUP_FILE_NAME,
+                statusMessage = "Backed up to Google Drive"
             )
-            _actionMessage.value = "تمام ڈیٹا آپ کے Google Drive میں کامیابی سے محفوظ ہو گیا۔"
+            _actionMessage.value = "All data backed up to Google Drive successfully."
         }.onFailure { err ->
             _driveSyncStatus.value = _driveSyncStatus.value.copy(
                 isSyncing = false,
-                statusMessage = err.localizedMessage ?: "Drive بیک اپ ناکام"
+                statusMessage = err.localizedMessage ?: "Drive backup failed"
             )
-            _actionMessage.value = err.localizedMessage ?: "Google Drive اپلوڈ ناکام ہو گیا۔"
+            _actionMessage.value = err.localizedMessage ?: "Google Drive upload failed."
         }
     }
 
@@ -337,25 +481,26 @@ class LedgerViewModel(
                 payload = backup,
                 existingCategories = data.categories,
                 existingFamilies = data.families,
-                existingActivities = data.activities
+                existingActivities = data.activities,
+                existingEvents = data.events
             )
             restoreRes.onSuccess { count ->
                 _driveSyncStatus.value = _driveSyncStatus.value.copy(
                     isSyncing = false,
-                    statusMessage = "$count ریکارڈز Google Drive سے بحال ہو گئے"
+                    statusMessage = "Restored $count records from Google Drive"
                 )
                 _actionMessage.value = if (count > 0) {
-                    "Google Drive سے $count ریکارڈز کامیابی سے بحال کر دیے گئے۔"
+                    "Successfully restored $count records from Google Drive."
                 } else {
-                    "آپ کا تمام ڈیٹا پہلے ہی اپ ٹو ڈیٹ ہے۔"
+                    "All of your data is already up to date."
                 }
             }.onFailure { err ->
                 _driveSyncStatus.value = _driveSyncStatus.value.copy(isSyncing = false)
-                _actionMessage.value = err.localizedMessage ?: "ریکارڈ بحال کرنے میں خرابی۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to restore records."
             }
         }.onFailure { err ->
             _driveSyncStatus.value = _driveSyncStatus.value.copy(isSyncing = false)
-            _actionMessage.value = err.localizedMessage ?: "Google Drive سے فائل نہ مل سکی۔"
+            _actionMessage.value = err.localizedMessage ?: "Could not find backup file on Google Drive."
         }
     }
 
@@ -371,13 +516,14 @@ class LedgerViewModel(
                 accessToken = token,
                 categories = data.categories,
                 families = data.families,
-                activities = data.activities
+                activities = data.activities,
+                events = data.events
             )
             result.onSuccess { syncedAt ->
                 _driveSyncStatus.value = _driveSyncStatus.value.copy(
                     lastSyncMillis = syncedAt,
-                    lastSyncedFileName = "Neondra_Roznamcha_Backup.json",
-                    statusMessage = "Google Drive خودکار مطابقت مکمل"
+                    lastSyncedFileName = GoogleDriveSyncManager.BACKUP_FILE_NAME,
+                    statusMessage = "Google Drive auto-sync complete"
                 )
             }
         }
@@ -389,7 +535,7 @@ class LedgerViewModel(
         viewModelScope.launch {
             repository.seedDefaultCategoriesIfEmpty(currentCats)
                 .onSuccess {
-                    _actionMessage.value = "بنیادی سرگرمی کیٹیگریز شامل کر دی گئیں۔"
+                    _actionMessage.value = "Default occasion categories added."
                 }
         }
     }
@@ -410,11 +556,11 @@ class LedgerViewModel(
             )
             _isSaving.value = false
             result.onSuccess { saved ->
-                _actionMessage.value = "کیٹیگری محفوظ کر دی گئی۔"
+                _actionMessage.value = "Category saved."
                 triggerAutoDriveBackupIfEnabled(context)
                 onSaved(saved)
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "کیٹیگری محفوظ کرنے میں خرابی۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to save category."
             }
         }
     }
@@ -423,11 +569,11 @@ class LedgerViewModel(
         viewModelScope.launch {
             repository.deleteCategory(categoryId)
                 .onSuccess {
-                    _actionMessage.value = "کیٹیگری حذف کر دی گئی۔"
+                    _actionMessage.value = "Category deleted."
                     triggerAutoDriveBackupIfEnabled(context)
                 }
                 .onFailure { err ->
-                    _actionMessage.value = err.localizedMessage ?: "کیٹیگری حذف کرنے میں خرابی۔"
+                    _actionMessage.value = err.localizedMessage ?: "Failed to delete category."
                 }
         }
     }
@@ -455,11 +601,11 @@ class LedgerViewModel(
                 } else {
                     ReminderScheduler.cancelReminder(context.applicationContext, saved.id)
                 }
-                _actionMessage.value = "اندراج محفوظ اور فیملی لسٹ کے ساتھ مطابقت پذیر ہو گیا۔"
+                _actionMessage.value = "Entry saved and synced with your Family Directory."
                 triggerAutoDriveBackupIfEnabled(context)
                 onSaved(saved)
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "محفوظ کرنے میں خرابی پیش آئی۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to save entry."
             }
         }
     }
@@ -481,11 +627,11 @@ class LedgerViewModel(
             val result = repository.saveFamilyAndSyncActivities(profile, linked)
             _isSaving.value = false
             result.onSuccess {
-                _actionMessage.value = "فیملی پروفائل اور تمام متعلقہ اندراجات خودکار اپڈیٹ ہو گئے۔"
+                _actionMessage.value = "Family profile and linked entries updated."
                 triggerAutoDriveBackupIfEnabled(context)
                 onSaved()
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "فیملی محفوظ کرنے میں خرابی پیش آئی۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to save family profile."
             }
         }
     }
@@ -517,14 +663,14 @@ class LedgerViewModel(
                 )
                 if (enabled) {
                     ReminderScheduler.scheduleReminder(context.applicationContext, updated)
-                    _actionMessage.value = "یاد دہانی فعال کر دی گئی۔"
+                    _actionMessage.value = "Reminder enabled."
                 } else {
                     ReminderScheduler.cancelReminder(context.applicationContext, record.id)
-                    _actionMessage.value = "یاد دہانی بند کر دی گئی۔"
+                    _actionMessage.value = "Reminder turned off."
                 }
                 triggerAutoDriveBackupIfEnabled(context)
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "یاد دہانی اپڈیٹ نہ ہو سکی۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to update reminder."
             }
         }
     }
@@ -533,7 +679,7 @@ class LedgerViewModel(
         viewModelScope.launch {
             repository.markCalendarSynced(recordId, true)
                 .onSuccess {
-                    _actionMessage.value = "کیلنڈر انضمام کے لیے ریکارڈ نشان زد ہو گیا۔"
+                    _actionMessage.value = "Marked entry as synced to device calendar."
                     triggerAutoDriveBackupIfEnabled(context)
                 }
         }
@@ -546,11 +692,11 @@ class LedgerViewModel(
             _isSaving.value = false
             result.onSuccess {
                 ReminderScheduler.cancelReminder(context.applicationContext, activityId)
-                _actionMessage.value = "اندراج حذف کر دیا گیا۔"
+                _actionMessage.value = "Entry deleted."
                 triggerAutoDriveBackupIfEnabled(context)
                 onDeleted()
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "حذف کرنے میں خرابی پیش آئی۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to delete entry."
             }
         }
     }
@@ -559,11 +705,11 @@ class LedgerViewModel(
         viewModelScope.launch {
             repository.deleteFamily(familyDocId)
                 .onSuccess {
-                    _actionMessage.value = "فیملی پروفائل حذف کر دیا گیا۔"
+                    _actionMessage.value = "Family profile deleted."
                     triggerAutoDriveBackupIfEnabled(context)
                 }
                 .onFailure { err ->
-                    _actionMessage.value = err.localizedMessage ?: "حذف کرنے میں خرابی پیش آئی۔"
+                    _actionMessage.value = err.localizedMessage ?: "Failed to delete family profile."
                 }
         }
     }

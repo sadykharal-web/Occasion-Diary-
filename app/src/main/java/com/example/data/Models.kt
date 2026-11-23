@@ -23,9 +23,9 @@ import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
 
-enum class ActivityDirection(val wireValue: String, val urduLabel: String, val shortLabel: String) {
-    IN("IN", "آمد / وصولی (In)", "In"),
-    OUT("OUT", "ادائیگی / خرچ (Out)", "Out");
+enum class ActivityDirection(val wireValue: String, val displayLabel: String, val shortLabel: String) {
+    IN("IN", "In (Received)", "In"),
+    OUT("OUT", "Out (Given)", "Out");
 
     companion object {
         fun fromWire(raw: String?): ActivityDirection {
@@ -93,52 +93,68 @@ data class ActivityRecord(
         get() = ActivityDirection.fromWire(direction)
 }
 
+@Keep
+@IgnoreExtraProperties
+data class EventEntry(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val title: String = "",
+    val description: String = "",
+    val eventDateMillis: Long = System.currentTimeMillis(),
+    val category: String = "Wedding",
+    val location: String = "",
+    val familyDocId: String? = null,
+    val familyName: String = "",
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
 data class CategoryColorOption(val hex: String, val label: String)
 data class CategoryIconOption(val key: String, val label: String, val icon: ImageVector)
 data class DefaultCategorySeed(val name: String, val colorHex: String, val iconKey: String)
 
 object CategoryStyleCatalog {
     val COLOR_PALETTE = listOf(
-        CategoryColorOption("#0F5C4D", "زمرد سبز"),
-        CategoryColorOption("#B87314", "سنہری"),
-        CategoryColorOption("#B83B2B", "سرخ مرجانی"),
-        CategoryColorOption("#1976D2", "نیلا"),
-        CategoryColorOption("#6A4C93", "جامنی"),
-        CategoryColorOption("#00897B", "فیروزی"),
-        CategoryColorOption("#D81B60", "گلابی"),
-        CategoryColorOption("#5D4037", "بھورا"),
-        CategoryColorOption("#2E7D32", "گہرا سبز"),
-        CategoryColorOption("#EF6C00", "نارنجی"),
-        CategoryColorOption("#28666E", "گہرا نیلا سبز"),
-        CategoryColorOption("#455A64", "سلیٹی")
+        CategoryColorOption("#0F5C4D", "Emerald"),
+        CategoryColorOption("#B87314", "Amber Gold"),
+        CategoryColorOption("#B83B2B", "Coral Red"),
+        CategoryColorOption("#1976D2", "Royal Blue"),
+        CategoryColorOption("#6A4C93", "Plum"),
+        CategoryColorOption("#00897B", "Teal"),
+        CategoryColorOption("#D81B60", "Rose"),
+        CategoryColorOption("#5D4037", "Warm Brown"),
+        CategoryColorOption("#2E7D32", "Forest Green"),
+        CategoryColorOption("#EF6C00", "Tangerine"),
+        CategoryColorOption("#28666E", "Deep Cyan"),
+        CategoryColorOption("#455A64", "Slate")
     )
 
     val ICON_OPTIONS = listOf(
-        CategoryIconOption("celebration", "تقریب", Icons.Rounded.Celebration),
-        CategoryIconOption("favorite", "خوشی / محبت", Icons.Rounded.Favorite),
-        CategoryIconOption("groups", "خاندان", Icons.Rounded.Groups),
-        CategoryIconOption("mosque", "دینی / تعزیت", Icons.Rounded.Mosque),
-        CategoryIconOption("work", "کاروبار / دفتر", Icons.Rounded.Work),
-        CategoryIconOption("payments", "مالی / نقدی", Icons.Rounded.AccountBalanceWallet),
-        CategoryIconOption("restaurant", "دعوت / ضیافت", Icons.Rounded.Restaurant),
-        CategoryIconOption("shopping", "خریداری / تحفہ", Icons.Rounded.ShoppingBag),
-        CategoryIconOption("home", "گھریلو", Icons.Rounded.Home),
-        CategoryIconOption("school", "تعلیم", Icons.Rounded.School),
-        CategoryIconOption("medical", "صحت", Icons.Rounded.MedicalServices),
-        CategoryIconOption("flight", "سفر", Icons.Rounded.Flight),
-        CategoryIconOption("sparkles", "خاص", Icons.Rounded.AutoAwesome),
-        CategoryIconOption("event", "دیگر سرگرمی", Icons.Rounded.Event)
+        CategoryIconOption("celebration", "Celebration", Icons.Rounded.Celebration),
+        CategoryIconOption("favorite", "Joy & Gift", Icons.Rounded.Favorite),
+        CategoryIconOption("groups", "Family", Icons.Rounded.Groups),
+        CategoryIconOption("mosque", "Religious / Condolence", Icons.Rounded.Mosque),
+        CategoryIconOption("work", "Work / Meeting", Icons.Rounded.Work),
+        CategoryIconOption("payments", "Finance / Cash", Icons.Rounded.AccountBalanceWallet),
+        CategoryIconOption("restaurant", "Dinner / Feast", Icons.Rounded.Restaurant),
+        CategoryIconOption("shopping", "Shopping / Gift", Icons.Rounded.ShoppingBag),
+        CategoryIconOption("home", "Home", Icons.Rounded.Home),
+        CategoryIconOption("school", "Education", Icons.Rounded.School),
+        CategoryIconOption("medical", "Health", Icons.Rounded.MedicalServices),
+        CategoryIconOption("flight", "Travel", Icons.Rounded.Flight),
+        CategoryIconOption("sparkles", "Special", Icons.Rounded.AutoAwesome),
+        CategoryIconOption("event", "General Event", Icons.Rounded.Event)
     )
 
     val DEFAULT_SEEDS = listOf(
-        DefaultCategorySeed("شادی", "#D81B60", "celebration"),
-        DefaultCategorySeed("ولیمہ", "#0F5C4D", "restaurant"),
-        DefaultCategorySeed("عقیقہ", "#00897B", "favorite"),
-        DefaultCategorySeed("ختنہ", "#B87314", "sparkles"),
-        DefaultCategorySeed("فوتگی / تعزیت", "#455A64", "mosque"),
-        DefaultCategorySeed("سالگرہ", "#6A4C93", "celebration"),
-        DefaultCategorySeed("میٹنگ", "#1976D2", "work"),
-        DefaultCategorySeed("ذاتی کام", "#5D4037", "home")
+        DefaultCategorySeed("Wedding", "#D81B60", "celebration"),
+        DefaultCategorySeed("Walima", "#0F5C4D", "restaurant"),
+        DefaultCategorySeed("Aqiqah", "#00897B", "favorite"),
+        DefaultCategorySeed("Gathering", "#B87314", "sparkles"),
+        DefaultCategorySeed("Condolence", "#455A64", "mosque"),
+        DefaultCategorySeed("Birthday", "#6A4C93", "celebration"),
+        DefaultCategorySeed("Meeting", "#1976D2", "work"),
+        DefaultCategorySeed("Personal", "#5D4037", "home")
     )
 
     fun parseColorOrDefault(hex: String?): Color {
@@ -192,7 +208,8 @@ data class LedgerSummary(
     val totalEntries: Int = 0,
     val activeRemindersCount: Int = 0,
     val totalFamiliesCount: Int = 0,
-    val totalCategoriesCount: Int = 0
+    val totalCategoriesCount: Int = 0,
+    val totalEventsCount: Int = 0
 )
 
 sealed interface UiState<out T> {

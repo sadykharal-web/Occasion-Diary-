@@ -13,10 +13,8 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -102,8 +100,8 @@ fun CategoriesScreen(
         val cat = deletingCategory!!
         AlertDialog(
             onDismissRequest = { deletingCategory = null },
-            title = { Text("کیٹیگری حذف کریں؟") },
-            text = { Text("کیا آپ واقعی \"${cat.name}\" کیٹیگری حذف کرنا چاہتے ہیں؟") },
+            title = { Text("Delete Category?") },
+            text = { Text("Are you sure you want to delete the \"${cat.name}\" category?") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -111,11 +109,11 @@ fun CategoriesScreen(
                         onDeleteCategory(cat.id)
                     }
                 ) {
-                    Text("حذف کریں", color = MaterialTheme.colorScheme.error)
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deletingCategory = null }) { Text("منسوخ") }
+                TextButton(onClick = { deletingCategory = null }) { Text("Cancel") }
             }
         )
     }
@@ -124,10 +122,10 @@ fun CategoriesScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("سرگرمی کیٹیگریز (Categories)", fontWeight = FontWeight.Bold) },
+                title = { Text("Activity Categories", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag("categories_back_button")) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "واپس")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -142,7 +140,7 @@ fun CategoriesScreen(
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.testTag("add_category_fab")
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = "نئی کیٹیگری شامل کریں")
+                Icon(Icons.Rounded.Add, contentDescription = "Add New Category")
             }
         }
     ) { innerPadding ->
@@ -181,12 +179,12 @@ fun CategoriesScreen(
                             )
                             Column {
                                 Text(
-                                    text = "اپنی مرضی کی کیٹیگریز (${categories.size})",
+                                    text = "Custom Categories (${categories.size})",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "ہر سرگرمی کے لیے الگ رنگ اور آئیکن مقرر کریں۔ نام تبدیل کرنے پر متعلقہ تمام اندراجات خودکار اپڈیٹ ہوں گے۔",
+                                    text = "Assign a distinct color and icon to each occasion. Renaming a category updates all linked entries automatically.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -218,13 +216,13 @@ fun CategoriesScreen(
                                     modifier = Modifier.size(44.dp)
                                 )
                                 Text(
-                                    text = "ابھی کوئی کسٹم کیٹیگری موجود نہیں",
+                                    text = "No custom categories yet",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center
                                 )
                                 OutlinedButton(onClick = onSeedDefaults) {
-                                    Text("بنیادی کیٹیگریز لوڈ کریں (شادی، ولیمہ، میٹنگ...)")
+                                    Text("Load Default Categories (Wedding, Reception, Meeting...)")
                                 }
                             }
                         }
@@ -301,7 +299,7 @@ private fun CategoryRowCard(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "$usageCount اندراجات • ${category.colorHex}",
+                        text = "$usageCount entries • ${category.colorHex}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -310,12 +308,12 @@ private fun CategoryRowCard(
 
             Row {
                 IconButton(onClick = onEdit, modifier = Modifier.testTag("edit_category_${category.id}")) {
-                    Icon(Icons.Rounded.Edit, contentDescription = "ترمیم")
+                    Icon(Icons.Rounded.Edit, contentDescription = "Edit Category")
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.testTag("delete_category_${category.id}")) {
                     Icon(
                         Icons.Rounded.DeleteOutline,
-                        contentDescription = "حذف",
+                        contentDescription = "Delete Category",
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -351,7 +349,7 @@ fun CategoryEditorDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = if (initial == null) "نئی کیٹیگری بنائیں" else "کیٹیگری میں ترمیم",
+                text = if (initial == null) "Create New Category" else "Edit Category",
                 fontWeight = FontWeight.Bold
             )
         },
@@ -362,9 +360,9 @@ fun CategoryEditorDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("پیش نظارہ:", style = MaterialTheme.typography.labelMedium)
+                    Text("Preview:", style = MaterialTheme.typography.labelMedium)
                     CategoryBadge(
-                        label = name.ifBlank { "کیٹیگری نام" },
+                        label = name.ifBlank { "Category Name" },
                         color = previewColor,
                         icon = previewIcon
                     )
@@ -373,8 +371,8 @@ fun CategoryEditorDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("کیٹیگری کا نام *") },
-                    placeholder = { Text("مثلاً: شادی، دفتر، سفر، تعلیم") },
+                    label = { Text("Category Name *") },
+                    placeholder = { Text("e.g. Wedding, Office, Travel, Education") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
@@ -382,7 +380,7 @@ fun CategoryEditorDialog(
                         .testTag("category_name_input")
                 )
 
-                Text("رنگ منتخب کریں:", style = MaterialTheme.typography.labelLarge)
+                Text("Select Color:", style = MaterialTheme.typography.labelLarge)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -417,7 +415,7 @@ fun CategoryEditorDialog(
                     }
                 }
 
-                Text("آئیکن منتخب کریں:", style = MaterialTheme.typography.labelLarge)
+                Text("Select Icon:", style = MaterialTheme.typography.labelLarge)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -463,7 +461,7 @@ fun CategoryEditorDialog(
                 onClick = {
                     val clean = name.trim()
                     if (clean.isEmpty()) {
-                        error = "کیٹیگری کا نام لازمی ہے۔"
+                        error = "Category name is required."
                         return@TextButton
                     }
                     onConfirm(
@@ -478,11 +476,11 @@ fun CategoryEditorDialog(
                 },
                 modifier = Modifier.testTag("save_category_button")
             ) {
-                Text("محفوظ کریں")
+                Text("Save")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("منسوخ") }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }

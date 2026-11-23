@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,8 +23,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.EventNote
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
@@ -54,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.ActivityRecord
+import com.example.data.EventEntry
 import com.example.data.UiState
 import com.example.ui.components.CategoryBadge
 import com.example.ui.components.DirectionPill
@@ -77,6 +79,8 @@ fun LedgerScreen(
     selectedCategoryFilter: String?,
     onCategoryFilterChange: (String?) -> Unit,
     onManageCategoriesClick: () -> Unit,
+    onNewEventClick: () -> Unit,
+    onEventClick: (EventEntry) -> Unit,
     onActivityClick: (ActivityRecord) -> Unit,
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -92,7 +96,7 @@ fun LedgerScreen(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Add,
-                    contentDescription = "نیا اندراج شامل کریں"
+                    contentDescription = "Add New Entry"
                 )
             }
         }
@@ -175,18 +179,91 @@ fun LedgerScreen(
                             HeroLedgerSummaryCard(summary = data.summary)
                         }
 
+                        if (data.events.isNotEmpty()) {
+                            item {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Saved Events (${data.events.size})",
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                        AssistChip(
+                                            onClick = onNewEventClick,
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Event,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            },
+                                            label = { Text("New Event") },
+                                            modifier = Modifier.testTag("ledger_new_event_chip")
+                                        )
+                                    }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .horizontalScroll(rememberScrollState()),
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        data.events.take(8).forEach { evt ->
+                                            val (evtColor, evtIcon) = data.catalog.resolveCategoryVisual(evt.category)
+                                            Card(
+                                                shape = RoundedCornerShape(16.dp),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = MaterialTheme.colorScheme.surface
+                                                ),
+                                                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                                                modifier = Modifier
+                                                    .widthIn(min = 180.dp, max = 230.dp)
+                                                    .clickable { onEventClick(evt) }
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(12.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                                ) {
+                                                    CategoryBadge(
+                                                        label = evt.category.ifBlank { "Event" },
+                                                        color = evtColor,
+                                                        icon = evtIcon
+                                                    )
+                                                    Text(
+                                                        text = evt.title,
+                                                        style = MaterialTheme.typography.titleSmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Text(
+                                                        text = formatDisplayDate(evt.eventDateMillis),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         item {
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = onSearchQueryChange,
-                                placeholder = { Text("نام، FN، والد، ایڈریس یا کیٹیگری تلاش کریں...") },
+                                placeholder = { Text("Search name, FN, father, address, or category...") },
                                 leadingIcon = {
                                     Icon(Icons.Rounded.Search, contentDescription = null)
                                 },
                                 trailingIcon = {
                                     if (searchQuery.isNotEmpty()) {
                                         IconButton(onClick = { onSearchQueryChange("") }) {
-                                            Icon(Icons.Rounded.Clear, contentDescription = "تلاش صاف کریں")
+                                            Icon(Icons.Rounded.Clear, contentDescription = "Clear search")
                                         }
                                     }
                                 },
@@ -204,8 +281,23 @@ fun LedgerScreen(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    if (data.events.isEmpty()) {
+                                        AssistChip(
+                                            onClick = onNewEventClick,
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Event,
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            },
+                                            label = { Text("New Event") },
+                                            modifier = Modifier.testTag("ledger_new_event_chip")
+                                        )
+                                    }
                                     LedgerFilter.entries.forEach { filter ->
                                         FilterChip(
                                             selected = selectedFilter == filter,
@@ -219,7 +311,6 @@ fun LedgerScreen(
                                     }
                                 }
 
-                                // Custom Activity Categories filter bar + Manage Categories button
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -236,13 +327,13 @@ fun LedgerScreen(
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         },
-                                        label = { Text("کیٹیگریز") },
+                                        label = { Text("Categories") },
                                         modifier = Modifier.testTag("manage_categories_chip")
                                     )
                                     FilterChip(
                                         selected = selectedCategoryFilter == null,
                                         onClick = { onCategoryFilterChange(null) },
-                                        label = { Text("تمام کیٹیگریز") }
+                                        label = { Text("All Categories") }
                                     )
                                     data.catalog.eventTypes.forEach { catName ->
                                         val (catColor, catIcon) = data.catalog.resolveCategoryVisual(catName)
@@ -287,7 +378,7 @@ fun LedgerScreen(
                                         FilterChip(
                                             selected = selectedAddress == null,
                                             onClick = { onAddressFilterChange(null) },
-                                            label = { Text("تمام ایڈریس") }
+                                            label = { Text("All Addresses") }
                                         )
                                         data.catalog.addresses.forEach { addr ->
                                             FilterChip(
@@ -382,7 +473,7 @@ private fun ActivitySummaryCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         val meta = buildList {
-                            if (record.fatherName.isNotBlank()) add("والد: ${record.fatherName}")
+                            if (record.fatherName.isNotBlank()) add("Father: ${record.fatherName}")
                             if (record.address.isNotBlank()) add(record.address)
                         }.joinToString(" • ")
                         if (meta.isNotEmpty()) {
@@ -460,12 +551,12 @@ private fun ActivitySummaryCard(
                         fontFamily = JakartaSansFamily
                     )
                     if (record.reminderEnabled) {
-                        ReminderStatusBadge(label = "یاد دہانی")
+                        ReminderStatusBadge(label = "Reminder")
                     }
                 }
 
                 Text(
-                    text = "نیوندرا: ${formatNeondraAmount(record.neondraAmount)}",
+                    text = "Amount: ${formatNeondraAmount(record.neondraAmount)}",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -503,16 +594,16 @@ private fun EmptyLedgerState(
                 modifier = Modifier.size(48.dp)
             )
             Text(
-                text = if (hasAnyData) "اس تلاش کے مطابق کوئی اندراج نہیں ملا" else "ابھی کوئی اندراج موجود نہیں",
+                text = if (hasAnyData) "No matching entries found" else "No Ledger Entries Yet",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             Text(
                 text = if (hasAnyData) {
-                    "فلٹر یا تلاش تبدیل کر کے دوبارہ دیکھیں۔"
+                    "Try adjusting your filters or search terms."
                 } else {
-                    "نیچے موجود (+) بٹن دبا کر پہلی تقریب، نیوندرا حساب، یا روزمرہ سرگرمی شامل کریں۔ نام، فیملی آئی ڈی اور ایڈریس کی ڈراپ ڈاؤن لسٹ خودکار بنتی جائے گی۔"
+                    "Tap the (+) button below to record your first occasion, gift, or transaction. Family names, FN IDs, and addresses sync automatically into dropdowns."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -537,7 +628,7 @@ private fun EmptyLedgerState(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            text = "پہلا اندراج شامل کریں",
+                            text = "Add First Entry",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onPrimary
                         )

@@ -31,7 +31,7 @@ class LedgerRepository(
 
     private fun requireUserId(): String {
         return auth.currentUser?.uid
-            ?: throw IllegalStateException("Google سائن ان درکار ہے۔")
+            ?: throw IllegalStateException("Google Sign-In is required.")
     }
 
     fun observeFamilies(userId: String): Flow<List<FamilyProfile>> = flow {
@@ -116,6 +116,117 @@ class LedgerRepository(
         )
     }
 
+    fun observeEvents(userId: String): Flow<List<EventEntry>> = flow {
+        require(userId.isNotBlank()) { "User ID must not be blank" }
+        val path = "users/$userId/events"
+        emitAll(
+            db.collection("users").document(userId).collection("events")
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.toObjects(
+                        EventEntry::class.java,
+                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                    ).sortedByDescending { it.eventDateMillis }
+                }
+                .catch { error ->
+                    val firestoreError = generateSequence(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    val exceptionToLog = firestoreError ?: (error as? Exception)
+                    if (exceptionToLog != null && auth.currentUser?.uid == userId) {
+                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
+                    }
+                    throw error
+                }
+        )
+    }
+
+    suspend fun saveEvent(entry: EventEntry): Result<EventEntry> {
+        var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/events"
+        return try {
+            val uid = requireUserId()
+            val cleanTitle = entry.title.trim().take(120)
+            val cleanDescription = entry.description.trim().take(1000)
+            val cleanCategory = entry.category.trim().take(80)
+            val cleanLocation = entry.location.trim().take(200)
+            val cleanFamilyDocId = entry.familyDocId?.trim()?.take(128)?.ifEmpty { null }
+            val cleanFamilyName = entry.familyName.trim().take(100)
+            val safeDateMillis = entry.eventDateMillis.coerceAtLeast(0L)
+
+            require(cleanTitle.isNotEmpty()) { "Please enter an event title." }
+
+            val col = db.collection("users").document(uid).collection("events")
+            val isNew = entry.id.isBlank()
+            val ref = if (isNew) col.document() else col.document(entry.id)
+            logPath = ref.path
+
+            if (isNew) {
+                val createPayload = buildMap<String, Any> {
+                    put("userId", uid)
+                    put("title", cleanTitle)
+                    put("description", cleanDescription)
+                    put("eventDateMillis", safeDateMillis)
+                    put("category", cleanCategory)
+                    put("location", cleanLocation)
+                    if (cleanFamilyDocId != null) put("familyDocId", cleanFamilyDocId)
+                    put("familyName", cleanFamilyName)
+                    put("createdAt", FieldValue.serverTimestamp())
+                    put("updatedAt", FieldValue.serverTimestamp())
+                }
+                ref.set(createPayload).await()
+            } else {
+                val updatePayload = buildMap<String, Any> {
+                    put("title", cleanTitle)
+                    put("description", cleanDescription)
+                    put("eventDateMillis", safeDateMillis)
+                    put("category", cleanCategory)
+                    put("location", cleanLocation)
+                    if (cleanFamilyDocId != null) put("familyDocId", cleanFamilyDocId)
+                    put("familyName", cleanFamilyName)
+                    put("updatedAt", FieldValue.serverTimestamp())
+                }
+                ref.update(updatePayload).await()
+            }
+
+            Result.success(
+                entry.copy(
+                    id = ref.id,
+                    userId = uid,
+                    title = cleanTitle,
+                    description = cleanDescription,
+                    eventDateMillis = safeDateMillis,
+                    category = cleanCategory,
+                    location = cleanLocation,
+                    familyDocId = cleanFamilyDocId,
+                    familyName = cleanFamilyName
+                )
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, logPath)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteEvent(eventId: String): Result<Unit> {
+        var docPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/events/$eventId"
+        return try {
+            val uid = requireUserId()
+            require(eventId.isNotBlank()) { "Event ID must not be blank." }
+            val ref = db.collection("users").document(uid).collection("events").document(eventId)
+            docPath = ref.path
+            ref.delete().await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, docPath)
+            Result.failure(e)
+        }
+    }
+
     suspend fun seedDefaultCategoriesIfEmpty(existingCategories: List<ActivityCategory>): Result<Unit> {
         if (existingCategories.isNotEmpty()) return Result.success(Unit)
         var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/categories"
@@ -159,9 +270,9 @@ class LedgerRepository(
             val cleanName = category.name.trim().take(80)
             val cleanColor = category.colorHex.trim().take(9)
             val cleanIcon = category.iconKey.trim().take(40)
-            require(cleanName.isNotEmpty()) { "کیٹیگری کا نام درج کریں۔" }
+            require(cleanName.isNotEmpty()) { "Please enter a category name." }
             require(cleanColor.matches(Regex("^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"))) {
-                "رنگ کا ہیکس کوڈ درست نہیں۔"
+                "Invalid color hex code."
             }
 
             val userDoc = db.collection("users").document(uid)
@@ -231,7 +342,7 @@ class LedgerRepository(
         var docPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/categories/$categoryId"
         return try {
             val uid = requireUserId()
-            require(categoryId.isNotBlank()) { "Category ID must not be blank" }
+            require(categoryId.isNotBlank()) { "Category ID must not be blank." }
             val ref = db.collection("users").document(uid).collection("categories").document(categoryId)
             docPath = ref.path
             ref.delete().await()
@@ -260,9 +371,9 @@ class LedgerRepository(
             val cleanDetail = record.eventDetail.trim().take(250)
             val cleanHome = record.homeItems.trim().take(1000)
 
-            require(cleanName.isNotEmpty()) { "براہِ کرم نام درج کریں۔" }
-            require(cleanEvent.isNotEmpty()) { "براہِ کرم تقریب یا سرگرمی منتخب کریں۔" }
-            require(record.neondraAmount in 0L..1_000_000_000L) { "نیوندرا رقم درست حد میں ہونی چاہیے۔" }
+            require(cleanName.isNotEmpty()) { "Please enter a person or family name." }
+            require(cleanEvent.isNotEmpty()) { "Please select an event or activity category." }
+            require(record.neondraAmount in 0L..1_000_000_000L) { "Amount must be within valid bounds." }
 
             val userDoc = db.collection("users").document(uid)
             val familiesCol = userDoc.collection("families")
@@ -419,8 +530,8 @@ class LedgerRepository(
             val cleanAddress = profile.address.trim().take(200)
             val cleanPhone = profile.phone?.trim()?.take(30)?.ifEmpty { null }
 
-            require(cleanFn.isNotEmpty()) { "فیملی آئی ڈی (FN) درج کریں۔" }
-            require(cleanName.isNotEmpty()) { "نام درج کریں۔" }
+            require(cleanFn.isNotEmpty()) { "Please enter a Family ID (FN)." }
+            require(cleanName.isNotEmpty()) { "Please enter a family name." }
 
             val userDoc = db.collection("users").document(uid)
             val familiesCol = userDoc.collection("families")
@@ -493,7 +604,8 @@ class LedgerRepository(
         payload: DriveBackupPayload,
         existingCategories: List<ActivityCategory>,
         existingFamilies: List<FamilyProfile>,
-        existingActivities: List<ActivityRecord>
+        existingActivities: List<ActivityRecord>,
+        existingEvents: List<EventEntry> = emptyList()
     ): Result<Int> {
         var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}"
         return try {
@@ -565,6 +677,28 @@ class LedgerRepository(
                         put("reminderAtMillis", act.reminderAtMillis.coerceAtLeast(0L))
                         put("reminderMinutesBefore", act.reminderMinutesBefore.coerceIn(0L, 10080L))
                         put("calendarSynced", act.calendarSynced)
+                        put("createdAt", FieldValue.serverTimestamp())
+                        put("updatedAt", FieldValue.serverTimestamp())
+                    }
+                    batch.set(ref, map)
+                    importedCount++
+                }
+            }
+
+            val existingEventIds = existingEvents.map { it.id }.toSet()
+            payload.events.forEach { evt ->
+                val validId = evt.id.takeIf { it.matches(Regex("^[a-zA-Z0-9_\\-]+$")) }
+                if (validId != null && validId !in existingEventIds && evt.title.isNotBlank()) {
+                    val ref = userDoc.collection("events").document(validId)
+                    val map = buildMap<String, Any> {
+                        put("userId", uid)
+                        put("title", evt.title.trim().take(120))
+                        put("description", evt.description.trim().take(1000))
+                        put("eventDateMillis", evt.eventDateMillis.coerceAtLeast(0L))
+                        put("category", evt.category.trim().take(80))
+                        put("location", evt.location.trim().take(200))
+                        if (!evt.familyDocId.isNullOrBlank()) put("familyDocId", evt.familyDocId.trim().take(128))
+                        put("familyName", evt.familyName.trim().take(100))
                         put("createdAt", FieldValue.serverTimestamp())
                         put("updatedAt", FieldValue.serverTimestamp())
                     }

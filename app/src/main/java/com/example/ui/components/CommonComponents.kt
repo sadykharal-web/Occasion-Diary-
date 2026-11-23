@@ -71,7 +71,7 @@ fun formatNeondraAmount(amount: Long): String {
 }
 
 fun formatDisplayDate(millis: Long): String {
-    return SimpleDateFormat("dd MMMM yyyy", Locale.ENGLISH).format(Date(millis))
+    return SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(millis))
 }
 
 fun formatDisplayTime(millis: Long): String {
@@ -80,12 +80,12 @@ fun formatDisplayTime(millis: Long): String {
 
 fun formatReminderOffsetLabel(minutesBefore: Long): String {
     return when (minutesBefore) {
-        0L -> "عین تقریب کے وقت"
-        60L -> "1 گھنٹہ پہلے"
-        180L -> "3 گھنٹے پہلے"
-        1440L -> "1 دن پہلے"
-        2880L -> "2 دن پہلے"
-        else -> "$minutesBefore منٹ پہلے"
+        0L -> "At event time"
+        60L -> "1 hour before"
+        180L -> "3 hours before"
+        1440L -> "1 day before"
+        2880L -> "2 days before"
+        else -> "$minutesBefore mins before"
     }
 }
 
@@ -172,7 +172,7 @@ fun DirectionPill(
 
 @Composable
 fun ReminderStatusBadge(
-    label: String = "یاد دہانی فعال",
+    label: String = "Reminder On",
     modifier: Modifier = Modifier
 ) {
     val isDark = isSystemInDarkTheme()
@@ -230,13 +230,13 @@ fun HeroLedgerSummaryCard(
             ) {
                 Column {
                     Text(
-                        text = "خالص نیوندرا حساب (Net)",
+                        text = "Net Balance (In - Out)",
                         style = MaterialTheme.typography.labelLarge,
                         color = Color.White.copy(alpha = 0.84f)
                     )
                     val prefix = if (summary.netBalance >= 0) "+" else ""
                     Text(
-                        text = "$prefix${formatNeondraAmount(summary.netBalance)} روپے",
+                        text = "$prefix${formatNeondraAmount(summary.netBalance)} PKR",
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
@@ -257,7 +257,7 @@ fun HeroLedgerSummaryCard(
                             fontFamily = JakartaSansFamily
                         )
                         Text(
-                            text = "اندراجات",
+                            text = "Entries",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White.copy(alpha = 0.85f)
                         )
@@ -272,19 +272,24 @@ fun HeroLedgerSummaryCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 SummaryStatColumn(
-                    label = "کل آمد (In)",
+                    label = "Total In",
                     value = formatNeondraAmount(summary.totalIn),
                     modifier = Modifier.weight(1f)
                 )
                 SummaryStatColumn(
-                    label = "کل ادائیگی (Out)",
+                    label = "Total Out",
                     value = formatNeondraAmount(summary.totalOut),
                     modifier = Modifier.weight(1f)
                 )
                 SummaryStatColumn(
-                    label = "یاد دہانیاں",
+                    label = "Events",
+                    value = "${summary.totalEventsCount}",
+                    modifier = Modifier.weight(0.7f)
+                )
+                SummaryStatColumn(
+                    label = "Reminders",
                     value = "${summary.activeRemindersCount}",
-                    modifier = Modifier.weight(0.8f)
+                    modifier = Modifier.weight(0.75f)
                 )
             }
         }
@@ -370,7 +375,7 @@ fun AutoCompleteDropdownField(
                         IconButton(onClick = { onValueChange("") }) {
                             Icon(
                                 imageVector = Icons.Rounded.Clear,
-                                contentDescription = "صاف کریں",
+                                contentDescription = "Clear",
                                 modifier = Modifier.size(18.dp)
                             )
                         }

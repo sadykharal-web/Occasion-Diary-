@@ -151,7 +151,7 @@ fun onGoogleSignInClicked(
             onAuthCancelled()
         } catch (e: Exception) {
             Log.e("Auth", "Google Sign-In failed", e)
-            onAuthError(e.localizedMessage ?: "سائن ان ناکام ہو گیا، دوبارہ کوشش کریں۔")
+            onAuthError(e.localizedMessage ?: "Sign-in failed. Please try again.")
         }
     }
 }

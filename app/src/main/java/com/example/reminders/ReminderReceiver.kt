@@ -18,8 +18,8 @@ import com.example.R
 class ReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val activityId = intent.getStringExtra(EXTRA_ACTIVITY_ID).orEmpty()
-        val title = intent.getStringExtra(EXTRA_TITLE) ?: "تقریب کی یاد دہانی"
-        val body = intent.getStringExtra(EXTRA_BODY) ?: "آپ کی طے شدہ سرگرمی کا وقت ہو گیا ہے۔"
+        val title = intent.getStringExtra(EXTRA_TITLE) ?: "Event Reminder"
+        val body = intent.getStringExtra(EXTRA_BODY) ?: "Your scheduled occasion is coming up."
 
         ensureNotificationChannel(context)
 

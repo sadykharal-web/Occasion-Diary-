@@ -61,6 +61,27 @@
         "reminderAtMillis", "reminderMinutesBefore", "calendarSynced",
         "createdAt", "updatedAt"
       ]
+    },
+    "EventEntry": {
+      "title": "EventEntry",
+      "description": "Standalone event entry storing title, date/time, description, category, location, and optional linked family.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "title": { "type": "string", "description": "Event title." },
+        "description": { "type": "string", "description": "Event description or notes." },
+        "eventDateMillis": { "type": "integer", "description": "Event date and time in epoch milliseconds." },
+        "category": { "type": "string", "description": "Optional category label." },
+        "location": { "type": "string", "description": "Optional event venue or address." },
+        "familyDocId": { "type": "string", "description": "Optional linked FamilyProfile document ID." },
+        "familyName": { "type": "string", "description": "Optional linked family name." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp when created." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp when last updated." }
+      },
+      "required": [
+        "userId", "title", "description", "eventDateMillis",
+        "category", "location", "familyName", "createdAt", "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -74,7 +95,11 @@
     },
     "/users/{userId}/activities/{activityId}": {
       "schema": { "$ref": "#/entities/ActivityRecord" },
-      "description": "Per-user daily activities, event gifts, Neondra ledger entries, and reminders."
+      "description": "Per-user daily activities, event gifts, ledger entries, and reminders."
+    },
+    "/users/{userId}/events/{eventId}": {
+      "schema": { "$ref": "#/entities/EventEntry" },
+      "description": "Per-user events created via the New Event form."
     }
   }
 }

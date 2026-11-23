@@ -58,8 +58,8 @@ object ReminderScheduler {
             if (record.familyId.isNotBlank()) " (FN ${record.familyId})" else ""
         val details = buildList {
             if (record.eventDetail.isNotBlank()) add(record.eventDetail)
-            if (record.address.isNotBlank()) add("پتہ: ${record.address}")
-            add("${record.parsedDirection.shortLabel} • نیوندرا: $formattedNeondra")
+            if (record.address.isNotBlank()) add("Address: ${record.address}")
+            add("${record.parsedDirection.shortLabel} • Amount: $formattedNeondra")
             if (record.homeItems.isNotBlank()) add(record.homeItems)
         }.joinToString("\n")
 

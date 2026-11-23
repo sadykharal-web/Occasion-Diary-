@@ -226,4 +226,90 @@ test("Cross-user isolation: Alice cannot access or modify Bob's categories or ac
   await assertFails(
     aliceDb.collection("users").doc(BOB_UID).collection("categories").doc("bob_cat").delete()
   );
+  await assertFails(aliceDb.collection("users").doc(BOB_UID).collection("events").get());
+});
+
+test("Authenticated owner: valid EventEntry create, update, list, validation, and delete succeed", async () => {
+  const unauthDb = testEnv.unauthenticatedContext().firestore();
+  await assertFails(unauthDb.collection("users").doc(ALICE_UID).collection("events").get());
+
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const created = new Date(Date.now() - 10000);
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("events").doc("evt_1").set({
+      userId: ALICE_UID,
+      title: "Family Wedding Reception",
+      description: "Dinner and gift exchange at Community Hall.",
+      eventDateMillis: 1771027200000,
+      category: "Wedding",
+      location: "Lahore",
+      familyDocId: "fam_11",
+      familyName: "Rajab Ali",
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("events").get()
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("events").doc("evt_1").update({
+      title: "Updated Reception Event",
+      description: "Moved to 8 PM.",
+      updatedAt: new Date(Date.now() - 1000),
+    })
+  );
+
+  // Reject empty title
+  await assertFails(
+    aliceDb.collection("users").doc(ALICE_UID).collection("events").doc("evt_bad").set({
+      userId: ALICE_UID,
+      title: "",
+      description: "Missing title",
+      eventDateMillis: 1771027200000,
+      category: "Wedding",
+      location: "",
+      familyName: "",
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  // Reject ghost id field
+  await assertFails(
+    aliceDb.collection("users").doc(ALICE_UID).collection("events").doc("evt_ghost").set({
+      id: "evt_ghost",
+      userId: ALICE_UID,
+      title: "Ghost ID",
+      description: "",
+      eventDateMillis: 1771027200000,
+      category: "Wedding",
+      location: "",
+      familyName: "",
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  // Reject future timestamp
+  await assertFails(
+    aliceDb.collection("users").doc(ALICE_UID).collection("events").doc("evt_future").set({
+      userId: ALICE_UID,
+      title: "Future timestamp",
+      description: "",
+      eventDateMillis: 1771027200000,
+      category: "Wedding",
+      location: "",
+      familyName: "",
+      createdAt: new Date(Date.now() + 60000),
+      updatedAt: created,
+    })
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("events").doc("evt_1").delete()
+  );
 });

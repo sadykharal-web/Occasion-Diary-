@@ -1,6 +1,7 @@
 package com.example
 
 import com.example.data.ActivityDirection
+import com.example.data.EventEntry
 import com.example.ui.components.formatNeondraAmount
 import com.example.ui.components.formatReminderOffsetLabel
 import org.junit.Assert.assertEquals
@@ -25,9 +26,25 @@ class LedgerLogicTest {
     }
 
     @Test
-    fun `formatReminderOffsetLabel returns Urdu labels`() {
-        assertEquals("عین تقریب کے وقت", formatReminderOffsetLabel(0L))
-        assertEquals("1 گھنٹہ پہلے", formatReminderOffsetLabel(60L))
-        assertEquals("1 دن پہلے", formatReminderOffsetLabel(1440L))
+    fun `formatReminderOffsetLabel returns English labels`() {
+        assertEquals("At event time", formatReminderOffsetLabel(0L))
+        assertEquals("1 hour before", formatReminderOffsetLabel(60L))
+        assertEquals("1 day before", formatReminderOffsetLabel(1440L))
+    }
+
+    @Test
+    fun `EventEntry stores title date and description defaults properly`() {
+        val event = EventEntry(
+            id = "evt_1",
+            userId = "user_1",
+            title = "Family Dinner",
+            description = "Annual family dinner at Pearl Hall",
+            eventDateMillis = 1764000000000L,
+            category = "Dinner"
+        )
+        assertEquals("Family Dinner", event.title)
+        assertEquals("Annual family dinner at Pearl Hall", event.description)
+        assertEquals(1764000000000L, event.eventDateMillis)
+        assertEquals("Dinner", event.category)
     }
 }
