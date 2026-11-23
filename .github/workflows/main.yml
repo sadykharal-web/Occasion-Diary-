@@ -41,9 +41,13 @@ jobs:
             SDKMANAGER=$(command -v sdkmanager || true)
           fi
           if [ -n "$SDKMANAGER" ]; then
+            set +o pipefail
             yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" --licenses > /dev/null 2>&1 || true
             yes | "$SDKMANAGER" --sdk_root="$SDK_ROOT" "platforms;android-36.1" "build-tools;36.0.0" || true
+            set -o pipefail
           fi
+          echo "Installed platforms:"
+          ls -la "$SDK_ROOT/platforms" || true
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=$SDK_ROOT" >> "$GITHUB_ENV"
 
@@ -64,15 +68,33 @@ jobs:
         run: |
           set -o pipefail
           gradle --version
-          if ! gradle :app:assembleDebug --no-daemon --stacktrace --console=plain 2>&1 | tee gradle-build.log; then
+          if ! gradle :app:assembleDebug \
+            --no-daemon \
+            --no-configuration-cache \
+            --stacktrace \
+            --console=plain \
+            -Dorg.gradle.workers.max=2 \
+            -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" \
+            2>&1 | tee gradle-build.log; then
             echo "### Gradle Build Failure" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -n 60 gradle-build.log >> "$GITHUB_STEP_SUMMARY"
+            tail -n 80 gradle-build.log >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            LAST_ERR=$(grep -E "^(> |e: |FAILURE:|What went wrong:|Caused by:|\* What went wrong:)" gradle-build.log | head -n 10 | tr '\n' ' ')
-            echo "::error::Gradle assembleDebug failed: $LAST_ERR"
+            ERR_TAIL=$(grep -E "^(e: |> Task .* FAILED|FAILURE:|\* What went wrong:|What went wrong:|Caused by:|Execution failed)" gradle-build.log | tail -n 15 | tr '\n' ' ')
+            if [ -z "$ERR_TAIL" ]; then
+              ERR_TAIL=$(tail -n 20 gradle-build.log | tr '\n' ' ')
+            fi
+            echo "::error::Gradle assembleDebug failed: $ERR_TAIL"
             exit 1
           fi
+
+      - name: Upload Build Failure Log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: gradle-build.log
+          if-no-files-found: ignore
 
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
@@ -84,10 +106,21 @@ jobs:
       - name: Run unit tests
         run: |
           set -o pipefail
-          if ! gradle :app:testDebugUnitTest --tests "com.example.LedgerLogicTest" --tests "com.example.ExampleUnitTest" --no-daemon --stacktrace --console=plain 2>&1 | tee gradle-test.log; then
+          if ! gradle :app:testDebugUnitTest \
+            --tests "com.example.LedgerLogicTest" \
+            --tests "com.example.ExampleUnitTest" \
+            --no-daemon \
+            --no-configuration-cache \
+            --stacktrace \
+            --console=plain \
+            -Dorg.gradle.workers.max=2 \
+            -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" \
+            2>&1 | tee gradle-test.log; then
             echo "### Unit Test Failure" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -n 60 gradle-test.log >> "$GITHUB_STEP_SUMMARY"
+            tail -n 80 gradle-test.log >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
+            ERR_TAIL=$(grep -E "^(e: |> Task .* FAILED|FAILURE:|\* What went wrong:|What went wrong:|Caused by:|Execution failed)" gradle-test.log | tail -n 15 | tr '\n' ' ')
+            echo "::error::Unit tests failed: $ERR_TAIL"
             exit 1
           fi

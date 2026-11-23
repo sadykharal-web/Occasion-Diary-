@@ -376,8 +376,9 @@ fun NewEventFormContent(
                     it.id == opt.payloadTag || it.name.equals(opt.primaryValue, ignoreCase = true)
                 }
                 selectedFamilyDocId = matched?.id
-                if (location.isBlank() && !matched?.address.isNullOrBlank()) {
-                    location = matched!!.address
+                val matchedAddress = matched?.address
+                if (location.isBlank() && !matchedAddress.isNullOrBlank()) {
+                    location = matchedAddress
                 }
             },
             leadingIcon = { Icon(Icons.Rounded.Groups, contentDescription = null) }
