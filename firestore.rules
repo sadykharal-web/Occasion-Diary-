@@ -1,0 +1,164 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global hardened helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Entity 1: FamilyProfile validation helper
+    function isValidFamilyProfile(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.familyId is string &&
+             data.familyId.size() >= 1 &&
+             data.familyId.size() <= 40 &&
+             data.name is string &&
+             data.name.size() >= 1 &&
+             data.name.size() <= 100 &&
+             data.fatherName is string &&
+             data.fatherName.size() <= 100 &&
+             data.address is string &&
+             data.address.size() <= 200 &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    // Entity 2: ActivityRecord validation helper
+    function isValidActivityRecord(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             (!('familyDocId' in data) || (data.familyDocId is string && data.familyDocId.size() <= 128)) &&
+             data.familyId is string &&
+             data.familyId.size() <= 40 &&
+             data.name is string &&
+             data.name.size() >= 1 &&
+             data.name.size() <= 100 &&
+             data.fatherName is string &&
+             data.fatherName.size() <= 100 &&
+             data.address is string &&
+             data.address.size() <= 200 &&
+             data.eventType is string &&
+             data.eventType.size() >= 1 &&
+             data.eventType.size() <= 80 &&
+             data.eventDetail is string &&
+             data.eventDetail.size() <= 250 &&
+             data.eventDateMillis is int &&
+             data.eventDateMillis >= 0 &&
+             data.direction is string &&
+             (data.direction == 'IN' || data.direction == 'OUT') &&
+             data.homeItems is string &&
+             data.homeItems.size() <= 1000 &&
+             data.neondraAmount is int &&
+             data.neondraAmount >= 0 &&
+             data.neondraAmount <= 1000000000 &&
+             data.reminderEnabled is bool &&
+             data.reminderAtMillis is int &&
+             data.reminderAtMillis >= 0 &&
+             data.reminderMinutesBefore is int &&
+             data.reminderMinutesBefore >= 0 &&
+             data.reminderMinutesBefore <= 10080 &&
+             data.calendarSynced is bool &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    match /users/{userId}/families/{familyDocId} {
+      allow get: if isOwner(userId) && isValidId(familyDocId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(familyDocId) &&
+                       incoming().keys().hasAll(['userId', 'familyId', 'name', 'fatherName', 'address', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'familyId', 'name', 'fatherName', 'address', 'phone', 'createdAt', 'updatedAt']) &&
+                       isValidFamilyProfile(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(familyDocId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidFamilyProfile(incoming(), userId) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['familyId', 'name', 'fatherName', 'address', 'phone', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(familyDocId);
+    }
+
+    match /users/{userId}/activities/{activityId} {
+      allow get: if isOwner(userId) && isValidId(activityId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(activityId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'familyId', 'name', 'fatherName', 'address',
+                         'eventType', 'eventDetail', 'eventDateMillis', 'direction',
+                         'homeItems', 'neondraAmount', 'reminderEnabled',
+                         'reminderAtMillis', 'reminderMinutesBefore', 'calendarSynced',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'familyDocId', 'familyId', 'name', 'fatherName', 'address',
+                         'eventType', 'eventDetail', 'eventDateMillis', 'direction',
+                         'homeItems', 'neondraAmount', 'reminderEnabled',
+                         'reminderAtMillis', 'reminderMinutesBefore', 'calendarSynced',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidActivityRecord(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(activityId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidActivityRecord(incoming(), userId) &&
+                       (
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'familyDocId', 'familyId', 'name', 'fatherName', 'address',
+                           'eventType', 'eventDetail', 'eventDateMillis', 'direction',
+                           'homeItems', 'neondraAmount', 'reminderEnabled',
+                           'reminderAtMillis', 'reminderMinutesBefore', 'calendarSynced',
+                           'updatedAt'
+                         ]) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'reminderEnabled', 'reminderAtMillis', 'reminderMinutesBefore', 'updatedAt'
+                         ]) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'calendarSynced', 'updatedAt'
+                         ]) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'familyId', 'name', 'fatherName', 'address', 'updatedAt'
+                         ])
+                       );
+
+      allow delete: if isOwner(userId) && isValidId(activityId);
+    }
+  }
+}
