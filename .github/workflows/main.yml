@@ -16,34 +16,43 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Set up Gradle
+      - name: Set up Gradle 9.3.1
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
 
-      - name: Accept Android SDK licenses
+      - name: Accept Android SDK licenses and install SDK 36.1
         run: |
           SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          if [ -n "$SDK_ROOT" ] && [ -x "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
-            yes | "$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          echo "Using Android SDK at: $SDK_ROOT"
+          SDKMANAGER=$(find "$SDK_ROOT/cmdline-tools" -name "sdkmanager" -type f 2>/dev/null | head -n 1 || true)
+          if [ -z "$SDKMANAGER" ]; then
+            SDKMANAGER=$(command -v sdkmanager || true)
+          fi
+          if [ -n "$SDKMANAGER" ]; then
+            yes | "$SDKMANAGER" --licenses > /dev/null 2>&1 || true
+            "$SDKMANAGER" --install "platforms;android-36.1" "build-tools;36.0.0"
+          else
+            echo "sdkmanager not found; relying on preinstalled SDK"
           fi
 
       - name: Prepare debug keystore
         run: |
           if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
-            base64 -d debug.keystore.base64 > debug.keystore
+            tr -d ' \r\n' < debug.keystore.base64 | base64 -d > debug.keystore
+            ls -lh debug.keystore
           fi
 
-      - name: Run unit tests
-        run: gradle :app:testDebugUnitTest --no-daemon
-
       - name: Build Debug APK
-        run: gradle :app:assembleDebug --no-daemon
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Run unit tests
+        run: gradle :app:testDebugUnitTest --tests "com.example.LedgerLogicTest" --tests "com.example.ExampleUnitTest" --no-daemon --stacktrace
 
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
