@@ -1,6 +1,8 @@
 {
-  "name": "نیوندرا روزنامچہ",
+  "name": "Occasion Diary",
   "description": "روزمرہ سرگرمیوں، تقاریب، نیوندرا حساب کتاب، یاد دہانیوں اور کیلنڈر انضمام کے لیے خودکار موبائل ایپ",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }
