@@ -50,7 +50,28 @@ service cloud.firestore {
              data.updatedAt <= request.time;
     }
 
-    // Entity 2: ActivityRecord validation helper
+    // Entity 2: ActivityCategory validation helper
+    function isValidActivityCategory(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.userId == request.auth.uid &&
+             data.name is string &&
+             data.name.size() >= 1 &&
+             data.name.size() <= 80 &&
+             data.colorHex is string &&
+             data.colorHex.size() >= 4 &&
+             data.colorHex.size() <= 9 &&
+             data.colorHex.matches('^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$') &&
+             data.iconKey is string &&
+             data.iconKey.size() >= 1 &&
+             data.iconKey.size() <= 40 &&
+             data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    // Entity 3: ActivityRecord validation helper
     function isValidActivityRecord(data, userId) {
       return data.userId is string &&
              data.userId == userId &&
@@ -112,6 +133,26 @@ service cloud.firestore {
       allow delete: if isOwner(userId) && isValidId(familyDocId);
     }
 
+    match /users/{userId}/categories/{categoryId} {
+      allow get: if isOwner(userId) && isValidId(categoryId);
+      allow list: if isOwner(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(categoryId) &&
+                       incoming().keys().hasAll(['userId', 'name', 'colorHex', 'iconKey', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'name', 'colorHex', 'iconKey', 'createdAt', 'updatedAt']) &&
+                       isValidActivityCategory(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(categoryId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidActivityCategory(incoming(), userId) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['name', 'colorHex', 'iconKey', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(categoryId);
+    }
+
     match /users/{userId}/activities/{activityId} {
       allow get: if isOwner(userId) && isValidId(activityId);
       allow list: if isOwner(userId);
@@ -155,6 +196,9 @@ service cloud.firestore {
                          ]) ||
                          incoming().diff(existing()).affectedKeys().hasOnly([
                            'familyId', 'name', 'fatherName', 'address', 'updatedAt'
+                         ]) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'eventType', 'updatedAt'
                          ])
                        );
 

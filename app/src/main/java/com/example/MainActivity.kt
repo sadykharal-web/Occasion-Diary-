@@ -1,9 +1,15 @@
 package com.example
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -11,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Book
@@ -19,10 +26,14 @@ import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.CloudUpload
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -46,6 +57,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -67,10 +79,12 @@ import com.example.data.DropdownCatalog
 import com.example.data.FamilyProfile
 import com.example.data.LedgerRepository
 import com.example.data.UiState
+import com.example.drive.GoogleDriveSyncManager
 import com.example.reminders.ReminderReceiver
 import com.example.ui.screens.ActivityDetailScreen
 import com.example.ui.screens.ActivityEditorScreen
 import com.example.ui.screens.CalendarScreen
+import com.example.ui.screens.CategoriesScreen
 import com.example.ui.screens.FamiliesScreen
 import com.example.ui.screens.LedgerScreen
 import com.example.ui.screens.RemindersScreen
@@ -87,6 +101,7 @@ const val ROUTE_FAMILIES = "families"
 const val ROUTE_REMINDERS = "reminders"
 const val ROUTE_DETAIL = "detail"
 const val ROUTE_EDITOR = "editor"
+const val ROUTE_CATEGORIES = "categories"
 
 private enum class TopTab(
     val route: String,
@@ -111,6 +126,12 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 @Composable
@@ -166,17 +187,55 @@ private fun AuthenticatedAppShell(
                 }
                 val databaseId = app.getString(R.string.firestore_database_id)
                 val db = FirebaseFirestore.getInstance(databaseId)
-                LedgerViewModel(LedgerRepository(db), currentUserId)
+                LedgerViewModel(LedgerRepository(db), currentUserId, userEmail)
             }
         }
     )
+
+    LaunchedEffect(currentUserId) {
+        viewModel.initDrivePrefs(context)
+    }
 
     val dashboardState by viewModel.dashboardState.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val selectedAddress by viewModel.selectedAddress.collectAsStateWithLifecycle()
+    val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsStateWithLifecycle()
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
     val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
+    val driveSyncStatus by viewModel.driveSyncStatus.collectAsStateWithLifecycle()
+    val pendingDriveConsent by viewModel.pendingDriveConsent.collectAsStateWithLifecycle()
+
+    var didAttemptCategorySeed by remember(currentUserId) { mutableStateOf(false) }
+    LaunchedEffect(dashboardState) {
+        val data = (dashboardState as? UiState.Success)?.data
+        if (!didAttemptCategorySeed && data != null) {
+            didAttemptCategorySeed = true
+            if (data.categories.isEmpty()) {
+                viewModel.seedDefaultCategoriesIfEmpty()
+            }
+        }
+    }
+
+    val driveConsentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val activity = context.findActivity()
+        if (result.resultCode == Activity.RESULT_OK && activity != null) {
+            val token = GoogleDriveSyncManager.extractTokenFromConsentResult(activity, result.data)
+            viewModel.onDriveConsentGranted(context, token)
+        } else {
+            viewModel.onDriveConsentGranted(context, null)
+        }
+    }
+
+    LaunchedEffect(pendingDriveConsent) {
+        val pendingIntent = pendingDriveConsent ?: return@LaunchedEffect
+        viewModel.consumePendingDriveConsent()
+        driveConsentLauncher.launch(
+            IntentSenderRequest.Builder(pendingIntent.intentSender).build()
+        )
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(actionMessage) {
@@ -213,6 +272,34 @@ private fun AuthenticatedAppShell(
                                 text = stringResource(R.string.app_name),
                                 fontWeight = FontWeight.Bold
                             )
+                        },
+                        actions = {
+                            IconButton(
+                                onClick = { navController.navigate(ROUTE_CATEGORIES) },
+                                modifier = Modifier.testTag("topbar_categories_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Category,
+                                    contentDescription = "کیٹیگریز منظم کریں"
+                                )
+                            }
+                            IconButton(
+                                onClick = { viewModel.syncToGoogleDrive(context, interactive = true) },
+                                enabled = !driveSyncStatus.isSyncing,
+                                modifier = Modifier.testTag("topbar_drive_sync_button")
+                            ) {
+                                if (driveSyncStatus.isSyncing) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Rounded.CloudUpload,
+                                        contentDescription = "Google Drive پر محفوظ کریں"
+                                    )
+                                }
+                            }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.background
@@ -298,6 +385,11 @@ private fun AuthenticatedAppShell(
                             onFilterChange = viewModel::setFilter,
                             selectedAddress = selectedAddress,
                             onAddressFilterChange = viewModel::setAddressFilter,
+                            selectedCategoryFilter = selectedCategoryFilter,
+                            onCategoryFilterChange = viewModel::setCategoryFilter,
+                            onManageCategoriesClick = {
+                                navController.navigate(ROUTE_CATEGORIES)
+                            },
                             onActivityClick = { act ->
                                 selectedActivityId = act.id
                                 navController.navigate(ROUTE_DETAIL)
@@ -325,7 +417,7 @@ private fun AuthenticatedAppShell(
                                 navController.navigate(ROUTE_EDITOR)
                             },
                             onCalendarSynced = { actId ->
-                                viewModel.markCalendarSynced(actId)
+                                viewModel.markCalendarSynced(context, actId)
                             }
                         )
                     }
@@ -333,8 +425,8 @@ private fun AuthenticatedAppShell(
                     composable(ROUTE_FAMILIES) {
                         FamiliesScreen(
                             state = dashboardState,
-                            onSaveFamily = { fam -> viewModel.saveFamily(fam) },
-                            onDeleteFamily = { id -> viewModel.deleteFamily(id) },
+                            onSaveFamily = { fam -> viewModel.saveFamily(context, fam) },
+                            onDeleteFamily = { id -> viewModel.deleteFamily(context, id) },
                             onNewActivityForFamily = { fam ->
                                 editingActivity = null
                                 prefilledFamily = fam
@@ -349,6 +441,19 @@ private fun AuthenticatedAppShell(
                             state = dashboardState,
                             userEmail = userEmail,
                             userDisplayName = userDisplayName,
+                            driveSyncStatus = driveSyncStatus,
+                            onSyncToDriveClick = {
+                                viewModel.syncToGoogleDrive(context, interactive = true)
+                            },
+                            onRestoreFromDriveClick = {
+                                viewModel.restoreFromGoogleDrive(context)
+                            },
+                            onAutoDriveSyncToggle = { enabled ->
+                                viewModel.setAutoDriveSync(context, enabled)
+                            },
+                            onManageCategoriesClick = {
+                                navController.navigate(ROUTE_CATEGORIES)
+                            },
                             onActivityClick = { act ->
                                 selectedActivityId = act.id
                                 navController.navigate(ROUTE_DETAIL)
@@ -358,6 +463,26 @@ private fun AuthenticatedAppShell(
                             },
                             onSignOutClick = {
                                 signOut(credentialManager = credentialManager, scope = scope)
+                            }
+                        )
+                    }
+
+                    composable(ROUTE_CATEGORIES) {
+                        CategoriesScreen(
+                            state = dashboardState,
+                            onBack = { navController.popBackStack() },
+                            onSaveCategory = { category, previousName ->
+                                viewModel.saveCategory(
+                                    context = context,
+                                    category = category,
+                                    previousName = previousName
+                                )
+                            },
+                            onDeleteCategory = { categoryId ->
+                                viewModel.deleteCategory(context, categoryId)
+                            },
+                            onSeedDefaults = {
+                                viewModel.seedDefaultCategoriesIfEmpty()
                             }
                         )
                     }
@@ -380,6 +505,7 @@ private fun AuthenticatedAppShell(
                             ActivityDetailScreen(
                                 record = selectedRecord,
                                 relatedRecords = related,
+                                catalog = catalog,
                                 onBack = { navController.popBackStack() },
                                 onEdit = {
                                     editingActivity = selectedRecord
@@ -396,7 +522,7 @@ private fun AuthenticatedAppShell(
                                     viewModel.toggleReminder(context, selectedRecord, enabled)
                                 },
                                 onCalendarSynced = {
-                                    viewModel.markCalendarSynced(selectedRecord.id)
+                                    viewModel.markCalendarSynced(context, selectedRecord.id)
                                 }
                             )
                         }
@@ -410,6 +536,13 @@ private fun AuthenticatedAppShell(
                             catalog = catalog,
                             isSaving = isSaving,
                             onBack = { navController.popBackStack() },
+                            onQuickCreateCategory = { newCategory ->
+                                viewModel.saveCategory(
+                                    context = context,
+                                    category = newCategory,
+                                    previousName = null
+                                )
+                            },
                             onSave = { record, _ ->
                                 viewModel.saveActivity(context, record) { saved ->
                                     selectedActivityId = saved.id

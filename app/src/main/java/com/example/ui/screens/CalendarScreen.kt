@@ -52,8 +52,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
+import com.example.data.DropdownCatalog
 import com.example.data.UiState
 import com.example.reminders.CalendarIntentHelper
+import com.example.ui.components.CategoryBadge
 import com.example.ui.components.DirectionPill
 import com.example.ui.components.formatDisplayDate
 import com.example.ui.components.formatDisplayTime
@@ -85,7 +87,9 @@ fun CalendarScreen(
         mutableLongStateOf(dayStartMillis(System.currentTimeMillis()))
     }
 
-    val activities = (state as? UiState.Success)?.data?.activities ?: emptyList()
+    val dashboardData = (state as? UiState.Success)?.data
+    val activities = dashboardData?.activities ?: emptyList()
+    val catalog = dashboardData?.catalog ?: DropdownCatalog()
 
     val eventsByDay = remember(activities) {
         activities.groupBy { dayStartMillis(it.eventDateMillis) }
@@ -391,9 +395,20 @@ fun CalendarScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    if (event.eventType.isNotBlank()) {
+                                        val (catColor, catIcon) = catalog.resolveCategoryVisual(event.eventType)
+                                        CategoryBadge(
+                                            label = event.eventType,
+                                            color = catColor,
+                                            icon = catIcon
+                                        )
+                                    }
                                     Text(
-                                        text = "${event.eventType} • ${event.name}",
+                                        text = event.name,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )

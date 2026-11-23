@@ -5,157 +5,72 @@
       "description": "Synchronized family directory entry storing Name, Family ID (FN), Father Name, and Address for automatic cascading dropdowns.",
       "type": "object",
       "properties": {
-        "userId": {
-          "type": "string",
-          "description": "Owner Firebase Auth UID."
-        },
-        "familyId": {
-          "type": "string",
-          "description": "Family Number / ID (FN), e.g., 11."
-        },
-        "name": {
-          "type": "string",
-          "description": "Primary person or family head name."
-        },
-        "fatherName": {
-          "type": "string",
-          "description": "Father name."
-        },
-        "address": {
-          "type": "string",
-          "description": "Village, neighborhood, or street address."
-        },
-        "phone": {
-          "type": "string",
-          "description": "Optional contact phone number."
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Server timestamp when created (clients must submit FieldValue.serverTimestamp())."
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Server timestamp when last updated (clients must submit FieldValue.serverTimestamp())."
-        }
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "familyId": { "type": "string", "description": "Family Number / ID (FN), e.g., 11." },
+        "name": { "type": "string", "description": "Primary person or family head name." },
+        "fatherName": { "type": "string", "description": "Father name." },
+        "address": { "type": "string", "description": "Village, neighborhood, or street address." },
+        "phone": { "type": "string", "description": "Optional contact phone number." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp when created." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp when last updated." }
       },
-      "required": [
-        "userId",
-        "familyId",
-        "name",
-        "fatherName",
-        "address",
-        "createdAt",
-        "updatedAt"
-      ]
+      "required": ["userId", "familyId", "name", "fatherName", "address", "createdAt", "updatedAt"]
+    },
+    "ActivityCategory": {
+      "title": "ActivityCategory",
+      "description": "Custom user-defined activity/event category with assigned color and icon.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "name": { "type": "string", "description": "Category display name." },
+        "colorHex": { "type": "string", "description": "Hex color string like #0F5C4D." },
+        "iconKey": { "type": "string", "description": "Material icon identifier key." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp when created." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp when last updated." }
+      },
+      "required": ["userId", "name", "colorHex", "iconKey", "createdAt", "updatedAt"]
     },
     "ActivityRecord": {
       "title": "ActivityRecord",
       "description": "Daily activity, event, Neondra ledger, home items, and reminder record.",
       "type": "object",
       "properties": {
-        "userId": {
-          "type": "string",
-          "description": "Owner Firebase Auth UID."
-        },
-        "familyDocId": {
-          "type": "string",
-          "description": "Optional linked FamilyProfile document ID for bidirectional sync."
-        },
-        "familyId": {
-          "type": "string",
-          "description": "Family Number / ID (FN)."
-        },
-        "name": {
-          "type": "string",
-          "description": "Person name."
-        },
-        "fatherName": {
-          "type": "string",
-          "description": "Father name."
-        },
-        "address": {
-          "type": "string",
-          "description": "Address."
-        },
-        "eventType": {
-          "type": "string",
-          "description": "Event or activity category (e.g., شادی, ولیمہ, میٹنگ)."
-        },
-        "eventDetail": {
-          "type": "string",
-          "description": "Event detail (E-Detail), e.g., علی رضا بن رجب علی."
-        },
-        "eventDateMillis": {
-          "type": "integer",
-          "description": "Event date and time in epoch milliseconds."
-        },
-        "direction": {
-          "type": "string",
-          "enum": ["IN", "OUT"],
-          "description": "Transaction / activity direction: IN or OUT."
-        },
-        "homeItems": {
-          "type": "string",
-          "description": "Home gifts, cash, sweets, clothes, or activity notes."
-        },
-        "neondraAmount": {
-          "type": "integer",
-          "description": "Neondra numeric amount."
-        },
-        "reminderEnabled": {
-          "type": "boolean",
-          "description": "Whether a local reminder alarm is active."
-        },
-        "reminderAtMillis": {
-          "type": "integer",
-          "description": "Epoch millis when reminder should fire (0 if disabled)."
-        },
-        "reminderMinutesBefore": {
-          "type": "integer",
-          "description": "Reminder offset in minutes before event time."
-        },
-        "calendarSynced": {
-          "type": "boolean",
-          "description": "Whether the user exported/synced this entry to device calendar."
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Server timestamp when created (clients must submit FieldValue.serverTimestamp())."
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Server timestamp when last updated (clients must submit FieldValue.serverTimestamp())."
-        }
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "familyDocId": { "type": "string", "description": "Optional linked FamilyProfile document ID." },
+        "familyId": { "type": "string", "description": "Family Number / ID (FN)." },
+        "name": { "type": "string", "description": "Person name." },
+        "fatherName": { "type": "string", "description": "Father name." },
+        "address": { "type": "string", "description": "Address." },
+        "eventType": { "type": "string", "description": "Event or activity category name." },
+        "eventDetail": { "type": "string", "description": "Event detail (E-Detail)." },
+        "eventDateMillis": { "type": "integer", "description": "Event date and time in epoch milliseconds." },
+        "direction": { "type": "string", "enum": ["IN", "OUT"], "description": "IN or OUT." },
+        "homeItems": { "type": "string", "description": "Home gifts, cash, sweets, clothes, or notes." },
+        "neondraAmount": { "type": "integer", "description": "Neondra numeric amount." },
+        "reminderEnabled": { "type": "boolean", "description": "Whether a local reminder alarm is active." },
+        "reminderAtMillis": { "type": "integer", "description": "Epoch millis when reminder should fire." },
+        "reminderMinutesBefore": { "type": "integer", "description": "Reminder offset in minutes before event time." },
+        "calendarSynced": { "type": "boolean", "description": "Whether exported to device calendar." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp when created." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp when last updated." }
       },
       "required": [
-        "userId",
-        "familyId",
-        "name",
-        "fatherName",
-        "address",
-        "eventType",
-        "eventDetail",
-        "eventDateMillis",
-        "direction",
-        "homeItems",
-        "neondraAmount",
-        "reminderEnabled",
-        "reminderAtMillis",
-        "reminderMinutesBefore",
-        "calendarSynced",
-        "createdAt",
-        "updatedAt"
+        "userId", "familyId", "name", "fatherName", "address",
+        "eventType", "eventDetail", "eventDateMillis", "direction",
+        "homeItems", "neondraAmount", "reminderEnabled",
+        "reminderAtMillis", "reminderMinutesBefore", "calendarSynced",
+        "createdAt", "updatedAt"
       ]
     }
   },
   "firestore": {
     "/users/{userId}/families/{familyDocId}": {
       "schema": { "$ref": "#/entities/FamilyProfile" },
-      "description": "Per-user synchronized directory of family profiles (Name, FN, Father, Address)."
+      "description": "Per-user synchronized directory of family profiles."
+    },
+    "/users/{userId}/categories/{categoryId}": {
+      "schema": { "$ref": "#/entities/ActivityCategory" },
+      "description": "Per-user custom activity categories with colors and icons."
     },
     "/users/{userId}/activities/{activityId}": {
       "schema": { "$ref": "#/entities/ActivityRecord" },

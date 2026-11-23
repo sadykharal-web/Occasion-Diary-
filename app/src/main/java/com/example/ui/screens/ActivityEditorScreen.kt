@@ -28,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AccessTime
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
@@ -47,6 +48,7 @@ import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,6 +77,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.example.data.ActivityCategory
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
@@ -111,6 +114,7 @@ fun ActivityEditorScreen(
     catalog: DropdownCatalog,
     isSaving: Boolean,
     onBack: () -> Unit,
+    onQuickCreateCategory: (ActivityCategory) -> Unit,
     onSave: (ActivityRecord, openCalendarAfterSave: Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -135,7 +139,7 @@ fun ActivityEditorScreen(
         mutableStateOf(initialRecord?.address ?: prefilledFamily?.address ?: "")
     }
     var eventType by remember {
-        mutableStateOf(initialRecord?.eventType ?: "شادی")
+        mutableStateOf(initialRecord?.eventType ?: catalog.eventTypes.firstOrNull() ?: "شادی")
     }
     var eventDetail by remember {
         mutableStateOf(initialRecord?.eventDetail ?: "")
@@ -172,6 +176,7 @@ fun ActivityEditorScreen(
     var validationError by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    var showQuickCategoryDialog by remember { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -179,7 +184,18 @@ fun ActivityEditorScreen(
         reminderEnabled = granted
     }
 
-    // Auto-built Dropdown Options from catalog
+    if (showQuickCategoryDialog) {
+        CategoryEditorDialog(
+            initial = null,
+            onDismiss = { showQuickCategoryDialog = false },
+            onConfirm = { newCat ->
+                showQuickCategoryDialog = false
+                eventType = newCat.name
+                onQuickCreateCategory(newCat)
+            }
+        )
+    }
+
     val nameOptions = remember(catalog.families, catalog.names) {
         val fromFamilies = catalog.families.map { fam ->
             DropdownOptionItem(
@@ -335,7 +351,6 @@ fun ActivityEditorScreen(
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // Section 1: Auto-Synchronized Identity & Dropdowns
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -431,7 +446,6 @@ fun ActivityEditorScreen(
                     }
                 }
 
-                // Section 2: Event, Date & In/Out
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -440,21 +454,35 @@ fun ActivityEditorScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            text = "تقریب، تاریخ اور لین دین",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "کیٹیگری، تقریب اور لین دین",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            TextButton(onClick = { showQuickCategoryDialog = true }) {
+                                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("نئی کیٹیگری")
+                            }
+                        }
 
                         AutoCompleteDropdownField(
                             value = eventType,
                             onValueChange = { eventType = it },
-                            label = "تقریب / سرگرمی (Event) *",
+                            label = "تقریب / کیٹیگری (Event) *",
                             placeholder = "مثلاً: شادی، ولیمہ، میٹنگ",
                             options = eventOptions,
                             onOptionSelected = { opt -> eventType = opt.primaryValue },
-                            leadingIcon = { Icon(Icons.Rounded.Event, contentDescription = null) }
+                            leadingIcon = {
+                                val (catColor, catIcon) = catalog.resolveCategoryVisual(eventType)
+                                Icon(catIcon, contentDescription = null, tint = catColor)
+                            }
                         )
 
                         Row(
@@ -463,11 +491,24 @@ fun ActivityEditorScreen(
                                 .horizontalScroll(rememberScrollState()),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            catalog.eventTypes.take(8).forEach { ev ->
+                            catalog.eventTypes.take(12).forEach { ev ->
+                                val (catColor, catIcon) = catalog.resolveCategoryVisual(ev)
                                 FilterChip(
                                     selected = eventType == ev,
                                     onClick = { eventType = ev },
-                                    label = { Text(ev) }
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = catIcon,
+                                            contentDescription = null,
+                                            tint = catColor,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    label = { Text(ev) },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = catColor.copy(alpha = 0.16f),
+                                        selectedLabelColor = catColor
+                                    )
                                 )
                             }
                         }
@@ -567,7 +608,6 @@ fun ActivityEditorScreen(
                     }
                 }
 
-                // Section 3: Home & Neondra
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -630,7 +670,6 @@ fun ActivityEditorScreen(
                     }
                 }
 
-                // Section 4: Reminders & Device Calendar Sync
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)

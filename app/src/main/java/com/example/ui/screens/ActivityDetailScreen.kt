@@ -59,7 +59,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
+import com.example.data.DropdownCatalog
 import com.example.reminders.CalendarIntentHelper
+import com.example.ui.components.CategoryBadge
 import com.example.ui.components.DirectionPill
 import com.example.ui.components.formatDisplayDate
 import com.example.ui.components.formatDisplayTime
@@ -72,6 +74,7 @@ import com.example.ui.theme.JakartaSansFamily
 fun ActivityDetailScreen(
     record: ActivityRecord,
     relatedRecords: List<ActivityRecord>,
+    catalog: DropdownCatalog,
     onBack: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -193,7 +196,28 @@ fun ActivityDetailScreen(
                         DetailFieldRow(label = "FN", value = record.familyId.ifBlank { "—" })
                         DetailFieldRow(label = "Father", value = record.fatherName.ifBlank { "—" })
                         DetailFieldRow(label = "Address", value = record.address.ifBlank { "—" })
-                        DetailFieldRow(label = "Event", value = record.eventType)
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(
+                                text = "Event",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontFamily = JakartaSansFamily
+                            )
+                            if (record.eventType.isNotBlank()) {
+                                val (catColor, catIcon) = catalog.resolveCategoryVisual(record.eventType)
+                                CategoryBadge(
+                                    label = record.eventType,
+                                    color = catColor,
+                                    icon = catIcon
+                                )
+                            } else {
+                                Text(
+                                    text = "—",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
                         DetailFieldRow(label = "E-Detail", value = record.eventDetail.ifBlank { "—" })
                         DetailFieldRow(
                             label = "Date",

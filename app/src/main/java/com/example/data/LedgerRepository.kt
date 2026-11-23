@@ -2,6 +2,7 @@ package com.example.data
 
 import android.content.Context
 import com.example.R
+import com.example.drive.DriveBackupPayload
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
@@ -63,6 +64,32 @@ class LedgerRepository(
         )
     }
 
+    fun observeCategories(userId: String): Flow<List<ActivityCategory>> = flow {
+        require(userId.isNotBlank()) { "User ID must not be blank" }
+        val path = "users/$userId/categories"
+        emitAll(
+            db.collection("users").document(userId).collection("categories")
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.toObjects(
+                        ActivityCategory::class.java,
+                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                    ).sortedBy { it.name }
+                }
+                .catch { error ->
+                    val firestoreError = generateSequence(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    val exceptionToLog = firestoreError ?: (error as? Exception)
+                    if (exceptionToLog != null && auth.currentUser?.uid == userId) {
+                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
+                    }
+                    throw error
+                }
+        )
+    }
+
     fun observeActivities(userId: String): Flow<List<ActivityRecord>> = flow {
         require(userId.isNotBlank()) { "User ID must not be blank" }
         val path = "users/$userId/activities"
@@ -89,11 +116,134 @@ class LedgerRepository(
         )
     }
 
-    /**
-     * Atomically saves or updates an ActivityRecord AND automatically builds/synchronizes
-     * the linked FamilyProfile in /users/{uid}/families so Name, FN, Father, and Address
-     * dropdowns stay automatically synchronized.
-     */
+    suspend fun seedDefaultCategoriesIfEmpty(existingCategories: List<ActivityCategory>): Result<Unit> {
+        if (existingCategories.isNotEmpty()) return Result.success(Unit)
+        var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/categories"
+        return try {
+            val uid = requireUserId()
+            val col = db.collection("users").document(uid).collection("categories")
+            logPath = col.path
+            val batch = db.batch()
+            CategoryStyleCatalog.DEFAULT_SEEDS.forEachIndexed { idx, seed ->
+                val ref = col.document("default_${idx + 1}")
+                batch.set(
+                    ref,
+                    mapOf(
+                        "userId" to uid,
+                        "name" to seed.name,
+                        "colorHex" to seed.colorHex,
+                        "iconKey" to seed.iconKey,
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+            }
+            batch.commit().await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, logPath)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun saveCategoryAndSyncActivities(
+        category: ActivityCategory,
+        previousName: String?,
+        existingActivities: List<ActivityRecord>
+    ): Result<ActivityCategory> {
+        var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/categories"
+        return try {
+            val uid = requireUserId()
+            val cleanName = category.name.trim().take(80)
+            val cleanColor = category.colorHex.trim().take(9)
+            val cleanIcon = category.iconKey.trim().take(40)
+            require(cleanName.isNotEmpty()) { "کیٹیگری کا نام درج کریں۔" }
+            require(cleanColor.matches(Regex("^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"))) {
+                "رنگ کا ہیکس کوڈ درست نہیں۔"
+            }
+
+            val userDoc = db.collection("users").document(uid)
+            val catCol = userDoc.collection("categories")
+            val actCol = userDoc.collection("activities")
+
+            val isNew = category.id.isBlank()
+            val catRef = if (isNew) catCol.document() else catCol.document(category.id)
+            logPath = catRef.path
+
+            val batch = db.batch()
+            if (isNew) {
+                batch.set(
+                    catRef,
+                    mapOf(
+                        "userId" to uid,
+                        "name" to cleanName,
+                        "colorHex" to cleanColor,
+                        "iconKey" to cleanIcon,
+                        "createdAt" to FieldValue.serverTimestamp(),
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+            } else {
+                batch.update(
+                    catRef,
+                    mapOf(
+                        "name" to cleanName,
+                        "colorHex" to cleanColor,
+                        "iconKey" to cleanIcon,
+                        "updatedAt" to FieldValue.serverTimestamp()
+                    )
+                )
+                if (!previousName.isNullOrBlank() && !previousName.equals(cleanName, ignoreCase = false)) {
+                    existingActivities
+                        .filter { it.eventType.equals(previousName, ignoreCase = true) }
+                        .forEach { act ->
+                            batch.update(
+                                actCol.document(act.id),
+                                mapOf(
+                                    "eventType" to cleanName,
+                                    "updatedAt" to FieldValue.serverTimestamp()
+                                )
+                            )
+                        }
+                }
+            }
+            batch.commit().await()
+            Result.success(
+                category.copy(
+                    id = catRef.id,
+                    userId = uid,
+                    name = cleanName,
+                    colorHex = cleanColor,
+                    iconKey = cleanIcon
+                )
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, logPath)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteCategory(categoryId: String): Result<Unit> {
+        var docPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/categories/$categoryId"
+        return try {
+            val uid = requireUserId()
+            require(categoryId.isNotBlank()) { "Category ID must not be blank" }
+            val ref = db.collection("users").document(uid).collection("categories").document(categoryId)
+            docPath = ref.path
+            ref.delete().await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, docPath)
+            Result.failure(e)
+        }
+    }
+
     suspend fun saveActivityAndSyncFamily(
         record: ActivityRecord,
         existingFamilies: List<FamilyProfile>,
@@ -121,7 +271,6 @@ class LedgerRepository(
             val batch = db.batch()
             var resolvedFamilyDocId: String? = record.familyDocId?.takeIf { it.isNotBlank() }
 
-            // Auto-link or create/update FamilyProfile whenever FN or Name is supplied
             if (cleanFn.isNotEmpty() || cleanName.isNotEmpty()) {
                 val effectiveFn = cleanFn.ifEmpty {
                     val maxNum = existingFamilies.mapNotNull { it.familyId.toIntOrNull() }.maxOrNull() ?: 0
@@ -212,7 +361,6 @@ class LedgerRepository(
                 }
                 batch.update(actRef, updatePayload)
 
-                // Keep sibling records pointing to the same familyDocId synchronized if core identity changed
                 if (resolvedFamilyDocId != null) {
                     existingActivities
                         .filter { it.id != record.id && it.familyDocId == resolvedFamilyDocId }
@@ -258,9 +406,6 @@ class LedgerRepository(
         }
     }
 
-    /**
-     * Saves or updates a FamilyProfile and automatically synchronizes linked ActivityRecords.
-     */
     suspend fun saveFamilyAndSyncActivities(
         profile: FamilyProfile,
         linkedActivities: List<ActivityRecord>
@@ -309,7 +454,6 @@ class LedgerRepository(
                 }
                 batch.update(famRef, updateMap)
 
-                // Sync all matching activities automatically
                 linkedActivities.forEach { act ->
                     val actRef = activitiesCol.document(act.id)
                     batch.update(
@@ -337,6 +481,102 @@ class LedgerRepository(
                     phone = cleanPhone
                 )
             )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.WRITE, logPath)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun restoreFromDriveBackup(
+        payload: DriveBackupPayload,
+        existingCategories: List<ActivityCategory>,
+        existingFamilies: List<FamilyProfile>,
+        existingActivities: List<ActivityRecord>
+    ): Result<Int> {
+        var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}"
+        return try {
+            val uid = requireUserId()
+            val userDoc = db.collection("users").document(uid)
+            logPath = userDoc.path
+            val batch = db.batch()
+            var importedCount = 0
+
+            val existingCatIds = existingCategories.map { it.id }.toSet()
+            payload.categories.forEach { cat ->
+                val validId = cat.id.takeIf { it.matches(Regex("^[a-zA-Z0-9_\\-]+$")) }
+                if (validId != null && validId !in existingCatIds && cat.name.isNotBlank()) {
+                    val ref = userDoc.collection("categories").document(validId)
+                    batch.set(
+                        ref,
+                        mapOf(
+                            "userId" to uid,
+                            "name" to cat.name.trim().take(80),
+                            "colorHex" to cat.colorHex,
+                            "iconKey" to cat.iconKey,
+                            "createdAt" to FieldValue.serverTimestamp(),
+                            "updatedAt" to FieldValue.serverTimestamp()
+                        )
+                    )
+                    importedCount++
+                }
+            }
+
+            val existingFamIds = existingFamilies.map { it.id }.toSet()
+            payload.families.forEach { fam ->
+                val validId = fam.id.takeIf { it.matches(Regex("^[a-zA-Z0-9_\\-]+$")) }
+                if (validId != null && validId !in existingFamIds && fam.name.isNotBlank() && fam.familyId.isNotBlank()) {
+                    val ref = userDoc.collection("families").document(validId)
+                    val map = buildMap<String, Any> {
+                        put("userId", uid)
+                        put("familyId", fam.familyId.trim().take(40))
+                        put("name", fam.name.trim().take(100))
+                        put("fatherName", fam.fatherName.trim().take(100))
+                        put("address", fam.address.trim().take(200))
+                        if (!fam.phone.isNullOrBlank()) put("phone", fam.phone.trim().take(30))
+                        put("createdAt", FieldValue.serverTimestamp())
+                        put("updatedAt", FieldValue.serverTimestamp())
+                    }
+                    batch.set(ref, map)
+                    importedCount++
+                }
+            }
+
+            val existingActIds = existingActivities.map { it.id }.toSet()
+            payload.activities.forEach { act ->
+                val validId = act.id.takeIf { it.matches(Regex("^[a-zA-Z0-9_\\-]+$")) }
+                if (validId != null && validId !in existingActIds && act.name.isNotBlank() && act.eventType.isNotBlank()) {
+                    val ref = userDoc.collection("activities").document(validId)
+                    val map = buildMap<String, Any> {
+                        put("userId", uid)
+                        if (!act.familyDocId.isNullOrBlank()) put("familyDocId", act.familyDocId)
+                        put("familyId", act.familyId.trim().take(40))
+                        put("name", act.name.trim().take(100))
+                        put("fatherName", act.fatherName.trim().take(100))
+                        put("address", act.address.trim().take(200))
+                        put("eventType", act.eventType.trim().take(80))
+                        put("eventDetail", act.eventDetail.trim().take(250))
+                        put("eventDateMillis", act.eventDateMillis.coerceAtLeast(0L))
+                        put("direction", ActivityDirection.fromWire(act.direction).wireValue)
+                        put("homeItems", act.homeItems.trim().take(1000))
+                        put("neondraAmount", act.neondraAmount.coerceIn(0L, 1_000_000_000L))
+                        put("reminderEnabled", act.reminderEnabled)
+                        put("reminderAtMillis", act.reminderAtMillis.coerceAtLeast(0L))
+                        put("reminderMinutesBefore", act.reminderMinutesBefore.coerceIn(0L, 10080L))
+                        put("calendarSynced", act.calendarSynced)
+                        put("createdAt", FieldValue.serverTimestamp())
+                        put("updatedAt", FieldValue.serverTimestamp())
+                    }
+                    batch.set(ref, map)
+                    importedCount++
+                }
+            }
+
+            if (importedCount > 0) {
+                batch.commit().await()
+            }
+            Result.success(importedCount)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

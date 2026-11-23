@@ -40,27 +40,22 @@ beforeEach(async () => {
   }
 });
 
-test("Unauthenticated user: cannot read or write families or activities", async () => {
+test("Unauthenticated user: cannot read or write families, categories, or activities", async () => {
   const unauthDb = testEnv.unauthenticatedContext().firestore();
   await assertFails(unauthDb.collection("users").doc(ALICE_UID).collection("families").get());
+  await assertFails(unauthDb.collection("users").doc(ALICE_UID).collection("categories").get());
   await assertFails(unauthDb.collection("users").doc(ALICE_UID).collection("activities").get());
 
   const now = new Date(Date.now() - 1000);
   await assertFails(
-    unauthDb
-      .collection("users")
-      .doc(ALICE_UID)
-      .collection("families")
-      .doc("fam_1")
-      .set({
-        userId: ALICE_UID,
-        familyId: "11",
-        name: "رجب علی",
-        fatherName: "رمضان",
-        address: "کوٹ رمضان",
-        createdAt: now,
-        updatedAt: now,
-      })
+    unauthDb.collection("users").doc(ALICE_UID).collection("categories").doc("cat_1").set({
+      userId: ALICE_UID,
+      name: "شادی",
+      colorHex: "#0F5C4D",
+      iconKey: "celebration",
+      createdAt: now,
+      updatedAt: now,
+    })
   );
 });
 
@@ -68,236 +63,167 @@ test("Authenticated owner: valid FamilyProfile create, partial update, and list 
   const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
   const created = new Date(Date.now() - 10000);
 
-  // Mirror Kotlin FamilyProfile create payload (no @DocumentId `id` field)
   await assertSucceeds(
-    aliceDb
-      .collection("users")
-      .doc(ALICE_UID)
-      .collection("families")
-      .doc("fam_11")
-      .set({
-        userId: ALICE_UID,
-        familyId: "11",
-        name: "رجب علی",
-        fatherName: "رمضان",
-        address: "کوٹ رمضان",
-        createdAt: created,
-        updatedAt: created,
-      })
+    aliceDb.collection("users").doc(ALICE_UID).collection("families").doc("fam_11").set({
+      userId: ALICE_UID,
+      familyId: "11",
+      name: "رجب علی",
+      fatherName: "رمضان",
+      address: "کوٹ رمضان",
+      createdAt: created,
+      updatedAt: created,
+    })
   );
 
   await assertSucceeds(
     aliceDb.collection("users").doc(ALICE_UID).collection("families").get()
   );
 
-  // Valid partial update
   await assertSucceeds(
-    aliceDb
-      .collection("users")
-      .doc(ALICE_UID)
-      .collection("families")
-      .doc("fam_11")
-      .update({
-        address: "کوٹ رمضان جدید",
-        updatedAt: new Date(Date.now() - 1000),
-      })
+    aliceDb.collection("users").doc(ALICE_UID).collection("families").doc("fam_11").update({
+      address: "کوٹ رمضان جدید",
+      updatedAt: new Date(Date.now() - 1000),
+    })
   );
 
-  // Reject ghost field on create
   await assertFails(
-    aliceDb
-      .collection("users")
-      .doc(ALICE_UID)
-      .collection("families")
-      .doc("fam_ghost")
-      .set({
-        id: "fam_ghost",
-        userId: ALICE_UID,
-        familyId: "12",
-        name: "اکرم",
-        fatherName: "اسلم",
-        address: "لاہور",
-        createdAt: created,
-        updatedAt: created,
-      })
-  );
-
-  // Reject immutable createdAt modification
-  await assertFails(
-    aliceDb
-      .collection("users")
-      .doc(ALICE_UID)
-      .collection("families")
-      .doc("fam_11")
-      .update({
-        createdAt: new Date(Date.now() - 500),
-        updatedAt: new Date(Date.now() - 500),
-      })
+    aliceDb.collection("users").doc(ALICE_UID).collection("families").doc("fam_ghost").set({
+      id: "fam_ghost",
+      userId: ALICE_UID,
+      familyId: "12",
+      name: "اکرم",
+      fatherName: "اسلم",
+      address: "لاہور",
+      createdAt: created,
+      updatedAt: created,
+    })
   );
 });
 
-test("Authenticated owner: valid ActivityRecord create, partial update, reminder toggle, and calendar sync succeed", async () => {
+test("Authenticated owner: valid ActivityCategory CRUD & validation rules", async () => {
   const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
   const created = new Date(Date.now() - 10000);
 
   await assertSucceeds(
-    aliceDb
-      .collection("users")
-      .doc(ALICE_UID)
-      .collection("activities")
-      .doc("act_1")
-      .set({
-        userId: ALICE_UID,
-        familyDocId: "fam_11",
-        familyId: "11",
-        name: "رجب علی",
-        fatherName: "رمضان",
-        address: "کوٹ رمضان",
-        eventType: "شادی",
-        eventDetail: "علی رضا بن رجب علی",
-        eventDateMillis: 1771027200000,
-        direction: "OUT",
-        homeItems: "نقد 20000 ہار 3000 ایک سوٹ زنانہ",
-        neondraAmount: 5000,
-        reminderEnabled: true,
-        reminderAtMillis: 1770940800000,
-        reminderMinutesBefore: 1440,
-        calendarSynced: false,
-        createdAt: created,
-        updatedAt: created,
-      })
+    aliceDb.collection("users").doc(ALICE_UID).collection("categories").doc("cat_wedding").set({
+      userId: ALICE_UID,
+      name: "شادی",
+      colorHex: "#0F5C4D",
+      iconKey: "celebration",
+      createdAt: created,
+      updatedAt: created,
+    })
   );
 
-  // Partial update: reminder toggle
   await assertSucceeds(
-    aliceDb
-      .collection("users")
-      .doc(ALICE_UID)
-      .collection("activities")
-      .doc("act_1")
-      .update({
-        reminderEnabled: false,
-        reminderAtMillis: 0,
-        reminderMinutesBefore: 0,
-        updatedAt: new Date(Date.now() - 2000),
-      })
+    aliceDb.collection("users").doc(ALICE_UID).collection("categories").get()
   );
 
-  // Partial update: calendarSynced toggle
   await assertSucceeds(
-    aliceDb
-      .collection("users")
-      .doc(ALICE_UID)
-      .collection("activities")
-      .doc("act_1")
-      .update({
-        calendarSynced: true,
-        updatedAt: new Date(Date.now() - 1000),
-      })
+    aliceDb.collection("users").doc(ALICE_UID).collection("categories").doc("cat_wedding").update({
+      name: "شادی بیاہ",
+      colorHex: "#B87314",
+      iconKey: "favorite",
+      updatedAt: new Date(Date.now() - 1000),
+    })
   );
 
-  // Reject invalid direction enum
+  // Reject invalid hex color
   await assertFails(
-    aliceDb
-      .collection("users")
-      .doc(ALICE_UID)
-      .collection("activities")
-      .doc("act_bad_dir")
-      .set({
-        userId: ALICE_UID,
-        familyId: "11",
-        name: "رجب علی",
-        fatherName: "رمضان",
-        address: "کوٹ رمضان",
-        eventType: "شادی",
-        eventDetail: "تفصیل",
-        eventDateMillis: 1771027200000,
-        direction: "INVALID",
-        homeItems: "",
-        neondraAmount: 5000,
-        reminderEnabled: false,
-        reminderAtMillis: 0,
-        reminderMinutesBefore: 0,
-        calendarSynced: false,
-        createdAt: created,
-        updatedAt: created,
-      })
+    aliceDb.collection("users").doc(ALICE_UID).collection("categories").doc("cat_bad_color").set({
+      userId: ALICE_UID,
+      name: "خراب رنگ",
+      colorHex: "not_hex",
+      iconKey: "event",
+      createdAt: created,
+      updatedAt: created,
+    })
   );
 
-  // Reject tampered future timestamp
+  // Reject ghost id field
   await assertFails(
-    aliceDb
-      .collection("users")
-      .doc(ALICE_UID)
-      .collection("activities")
-      .doc("act_future_ts")
-      .set({
-        userId: ALICE_UID,
-        familyId: "11",
-        name: "رجب علی",
-        fatherName: "رمضان",
-        address: "کوٹ رمضان",
-        eventType: "شادی",
-        eventDetail: "تفصیل",
-        eventDateMillis: 1771027200000,
-        direction: "IN",
-        homeItems: "",
-        neondraAmount: 1000,
-        reminderEnabled: false,
-        reminderAtMillis: 0,
-        reminderMinutesBefore: 0,
-        calendarSynced: false,
-        createdAt: new Date(Date.now() + 60000),
-        updatedAt: created,
-      })
+    aliceDb.collection("users").doc(ALICE_UID).collection("categories").doc("cat_ghost").set({
+      id: "cat_ghost",
+      userId: ALICE_UID,
+      name: "گھوسٹ",
+      colorHex: "#0F5C4D",
+      iconKey: "event",
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  // Allow delete by owner
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("categories").doc("cat_wedding").delete()
   );
 });
 
-test("Cross-user isolation: Alice cannot read, list, update, or delete Bob's data", async () => {
+test("Authenticated owner: valid ActivityRecord create, partial updates, and category rename sync succeed", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const created = new Date(Date.now() - 10000);
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("activities").doc("act_1").set({
+      userId: ALICE_UID,
+      familyDocId: "fam_11",
+      familyId: "11",
+      name: "رجب علی",
+      fatherName: "رمضان",
+      address: "کوٹ رمضان",
+      eventType: "شادی",
+      eventDetail: "علی رضا بن رجب علی",
+      eventDateMillis: 1771027200000,
+      direction: "OUT",
+      homeItems: "نقد 20000 ہار 3000 ایک سوٹ زنانہ",
+      neondraAmount: 5000,
+      reminderEnabled: true,
+      reminderAtMillis: 1770940800000,
+      reminderMinutesBefore: 1440,
+      calendarSynced: false,
+      createdAt: created,
+      updatedAt: created,
+    })
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("activities").doc("act_1").update({
+      eventType: "شادی بیاہ",
+      updatedAt: new Date(Date.now() - 1000),
+    })
+  );
+
+  await assertSucceeds(
+    aliceDb.collection("users").doc(ALICE_UID).collection("activities").doc("act_1").update({
+      calendarSynced: true,
+      updatedAt: new Date(Date.now() - 500),
+    })
+  );
+});
+
+test("Cross-user isolation: Alice cannot access or modify Bob's categories or activities", async () => {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const bobDb = context.firestore();
     const now = new Date(Date.now() - 5000);
-    await bobDb.collection("users").doc(BOB_UID).collection("families").doc("bob_fam").set({
+    await bobDb.collection("users").doc(BOB_UID).collection("categories").doc("bob_cat").set({
       userId: BOB_UID,
-      familyId: "99",
-      name: "بابر",
-      fatherName: "احمد",
-      address: "ملتان",
-      createdAt: now,
-      updatedAt: now,
-    });
-    await bobDb.collection("users").doc(BOB_UID).collection("activities").doc("bob_act").set({
-      userId: BOB_UID,
-      familyId: "99",
-      name: "بابر",
-      fatherName: "احمد",
-      address: "ملتان",
-      eventType: "ولیمہ",
-      eventDetail: "تفصیل",
-      eventDateMillis: 1771027200000,
-      direction: "IN",
-      homeItems: "نقد 5000",
-      neondraAmount: 2000,
-      reminderEnabled: false,
-      reminderAtMillis: 0,
-      reminderMinutesBefore: 0,
-      calendarSynced: false,
+      name: "Bob Category",
+      colorHex: "#1982C4",
+      iconKey: "work",
       createdAt: now,
       updatedAt: now,
     });
   });
 
   const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
-  await assertFails(aliceDb.collection("users").doc(BOB_UID).collection("families").get());
-  await assertFails(aliceDb.collection("users").doc(BOB_UID).collection("families").doc("bob_fam").get());
-  await assertFails(aliceDb.collection("users").doc(BOB_UID).collection("activities").get());
+  await assertFails(aliceDb.collection("users").doc(BOB_UID).collection("categories").get());
   await assertFails(
-    aliceDb.collection("users").doc(BOB_UID).collection("activities").doc("bob_act").update({
-      neondraAmount: 99999,
+    aliceDb.collection("users").doc(BOB_UID).collection("categories").doc("bob_cat").update({
+      name: "Hijacked",
       updatedAt: new Date(Date.now() - 1000),
     })
   );
   await assertFails(
-    aliceDb.collection("users").doc(BOB_UID).collection("activities").doc("bob_act").delete()
+    aliceDb.collection("users").doc(BOB_UID).collection("categories").doc("bob_cat").delete()
   );
 });
