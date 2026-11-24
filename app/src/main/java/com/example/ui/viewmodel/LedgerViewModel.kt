@@ -38,6 +38,15 @@ enum class LedgerFilter(val label: String) {
     REMINDERS("Reminders")
 }
 
+data class DateRangeFilter(
+    val startDateMillis: Long? = null,
+    val endDateMillis: Long? = null,
+    val presetLabel: String? = null
+) {
+    val isActive: Boolean
+        get() = startDateMillis != null || endDateMillis != null
+}
+
 data class LedgerDashboardData(
     val activities: List<ActivityRecord> = emptyList(),
     val families: List<FamilyProfile> = emptyList(),
@@ -63,6 +72,9 @@ class LedgerViewModel(
 
     private val _selectedCategoryFilter = MutableStateFlow<String?>(null)
     val selectedCategoryFilter: StateFlow<String?> = _selectedCategoryFilter.asStateFlow()
+
+    private val _dateRangeFilter = MutableStateFlow(DateRangeFilter())
+    val dateRangeFilter: StateFlow<DateRangeFilter> = _dateRangeFilter.asStateFlow()
 
     private val _isSaving = MutableStateFlow(false)
     val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
@@ -204,6 +216,18 @@ class LedgerViewModel(
 
     fun setCategoryFilter(categoryName: String?) {
         _selectedCategoryFilter.value = categoryName
+    }
+
+    fun setDateRangeFilter(startMillis: Long?, endMillis: Long?, presetLabel: String? = null) {
+        _dateRangeFilter.value = DateRangeFilter(
+            startDateMillis = startMillis,
+            endDateMillis = endMillis,
+            presetLabel = presetLabel
+        )
+    }
+
+    fun clearDateRangeFilter() {
+        _dateRangeFilter.value = DateRangeFilter()
     }
 
     fun clearActionMessage() {

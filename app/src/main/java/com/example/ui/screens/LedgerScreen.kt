@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,6 +27,7 @@ import androidx.compose.material.icons.automirrored.rounded.EventNote
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Clear
+import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.EventAvailable
@@ -38,6 +41,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DateRangePicker
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -51,7 +56,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.material3.rememberDateRangePickerState
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -68,6 +75,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.EventEntry
 import com.example.data.UiState
@@ -78,10 +86,16 @@ import com.example.ui.components.ReminderStatusBadge
 import com.example.ui.components.formatDisplayDate
 import com.example.ui.components.formatDisplayTime
 import com.example.ui.components.formatNeondraAmount
+import com.example.ui.theme.InBadgeFgDark
+import com.example.ui.theme.InBadgeFgLight
 import com.example.ui.theme.JakartaSansFamily
+import com.example.ui.theme.OutBadgeFgDark
+import com.example.ui.theme.OutBadgeFgLight
+import com.example.ui.viewmodel.DateRangeFilter
 import com.example.ui.viewmodel.LedgerDashboardData
 import com.example.ui.viewmodel.LedgerFilter
 import java.util.Calendar
+import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
 sealed interface UpcomingOccasionItem {
@@ -108,6 +122,88 @@ fun localDayStartMillis(millis: Long): Long {
         set(Calendar.MILLISECOND, 0)
     }
     return cal.timeInMillis
+}
+
+fun localDayEndMillis(millis: Long): Long {
+    val cal = Calendar.getInstance().apply {
+        timeInMillis = millis
+        set(Calendar.HOUR_OF_DAY, 23)
+        set(Calendar.MINUTE, 59)
+        set(Calendar.SECOND, 59)
+        set(Calendar.MILLISECOND, 999)
+    }
+    return cal.timeInMillis
+}
+
+fun utcPickerMillisToLocalDayStart(utcMillis: Long): Long {
+    val utcCal = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        timeInMillis = utcMillis
+    }
+    return Calendar.getInstance().apply {
+        set(
+            utcCal.get(Calendar.YEAR),
+            utcCal.get(Calendar.MONTH),
+            utcCal.get(Calendar.DAY_OF_MONTH),
+            0,
+            0,
+            0
+        )
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
+fun localDayStartToUtcPickerMillis(localMillis: Long): Long {
+    val localCal = Calendar.getInstance().apply {
+        timeInMillis = localMillis
+    }
+    return Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        set(
+            localCal.get(Calendar.YEAR),
+            localCal.get(Calendar.MONTH),
+            localCal.get(Calendar.DAY_OF_MONTH),
+            0,
+            0,
+            0
+        )
+        set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+}
+
+fun filterLedgerActivities(
+    activities: List<ActivityRecord>,
+    searchQuery: String,
+    selectedFilter: LedgerFilter,
+    selectedAddress: String?,
+    selectedCategoryFilter: String?,
+    dateRangeFilter: DateRangeFilter
+): List<ActivityRecord> {
+    val q = searchQuery.trim()
+    val rangeStart = dateRangeFilter.startDateMillis?.let(::localDayStartMillis)
+    val rangeEnd = (dateRangeFilter.endDateMillis ?: dateRangeFilter.startDateMillis)?.let(::localDayEndMillis)
+
+    return activities.filter { act ->
+        val matchesDirection = when (selectedFilter) {
+            LedgerFilter.ALL -> true
+            LedgerFilter.IN -> act.parsedDirection == ActivityDirection.IN
+            LedgerFilter.OUT -> act.parsedDirection == ActivityDirection.OUT
+            LedgerFilter.REMINDERS -> act.reminderEnabled
+        }
+        val matchesAddress = selectedAddress == null ||
+            act.address.equals(selectedAddress, ignoreCase = true)
+        val matchesCategory = selectedCategoryFilter == null ||
+            act.eventType.equals(selectedCategoryFilter, ignoreCase = true)
+        val matchesDateRange = (rangeStart == null || act.eventDateMillis >= rangeStart) &&
+            (rangeEnd == null || act.eventDateMillis <= rangeEnd)
+        val matchesSearch = q.isEmpty() ||
+            act.name.contains(q, ignoreCase = true) ||
+            act.familyId.contains(q, ignoreCase = true) ||
+            act.fatherName.contains(q, ignoreCase = true) ||
+            act.address.contains(q, ignoreCase = true) ||
+            act.eventType.contains(q, ignoreCase = true) ||
+            act.eventDetail.contains(q, ignoreCase = true) ||
+            act.homeItems.contains(q, ignoreCase = true)
+        matchesDirection && matchesAddress && matchesCategory && matchesDateRange && matchesSearch
+    }
 }
 
 fun formatRelativeDayBadge(
@@ -180,6 +276,9 @@ fun LedgerScreen(
     onAddressFilterChange: (String?) -> Unit,
     selectedCategoryFilter: String?,
     onCategoryFilterChange: (String?) -> Unit,
+    dateRangeFilter: DateRangeFilter = DateRangeFilter(),
+    onDateRangeChange: (startMillis: Long?, endMillis: Long?, presetLabel: String?) -> Unit = { _, _, _ -> },
+    onClearDateRange: () -> Unit = {},
     onManageCategoriesClick: () -> Unit,
     onNewEventClick: () -> Unit,
     onEventClick: (EventEntry) -> Unit,
@@ -189,6 +288,22 @@ fun LedgerScreen(
     modifier: Modifier = Modifier
 ) {
     var showAllSavedEvents by remember { mutableStateOf(false) }
+    var showDateRangeDialog by remember { mutableStateOf(false) }
+
+    if (showDateRangeDialog) {
+        LedgerDateRangePickerDialog(
+            initialFilter = dateRangeFilter,
+            onDismiss = { showDateRangeDialog = false },
+            onClear = {
+                onClearDateRange()
+                showDateRangeDialog = false
+            },
+            onApply = { startMillis, endMillis ->
+                onDateRangeChange(startMillis, endMillis, null)
+                showDateRangeDialog = false
+            }
+        )
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -262,30 +377,34 @@ fun LedgerScreen(
                         searchQuery,
                         selectedFilter,
                         selectedAddress,
-                        selectedCategoryFilter
+                        selectedCategoryFilter,
+                        dateRangeFilter
                     ) {
-                        val q = searchQuery.trim()
-                        data.activities.filter { act ->
-                            val matchesDirection = when (selectedFilter) {
-                                LedgerFilter.ALL -> true
-                                LedgerFilter.IN -> act.parsedDirection.wireValue == "IN"
-                                LedgerFilter.OUT -> act.parsedDirection.wireValue == "OUT"
-                                LedgerFilter.REMINDERS -> act.reminderEnabled
-                            }
-                            val matchesAddress = selectedAddress == null ||
-                                act.address.equals(selectedAddress, ignoreCase = true)
-                            val matchesCategory = selectedCategoryFilter == null ||
-                                act.eventType.equals(selectedCategoryFilter, ignoreCase = true)
-                            val matchesSearch = q.isEmpty() ||
-                                act.name.contains(q, ignoreCase = true) ||
-                                act.familyId.contains(q, ignoreCase = true) ||
-                                act.fatherName.contains(q, ignoreCase = true) ||
-                                act.address.contains(q, ignoreCase = true) ||
-                                act.eventType.contains(q, ignoreCase = true) ||
-                                act.eventDetail.contains(q, ignoreCase = true) ||
-                                act.homeItems.contains(q, ignoreCase = true)
-                            matchesDirection && matchesAddress && matchesCategory && matchesSearch
-                        }
+                        filterLedgerActivities(
+                            activities = data.activities,
+                            searchQuery = searchQuery,
+                            selectedFilter = selectedFilter,
+                            selectedAddress = selectedAddress,
+                            selectedCategoryFilter = selectedCategoryFilter,
+                            dateRangeFilter = dateRangeFilter
+                        )
+                    }
+
+                    val periodBaseActivities = remember(
+                        data.activities,
+                        searchQuery,
+                        selectedAddress,
+                        selectedCategoryFilter,
+                        dateRangeFilter
+                    ) {
+                        filterLedgerActivities(
+                            activities = data.activities,
+                            searchQuery = searchQuery,
+                            selectedFilter = LedgerFilter.ALL,
+                            selectedAddress = selectedAddress,
+                            selectedCategoryFilter = selectedCategoryFilter,
+                            dateRangeFilter = dateRangeFilter
+                        )
                     }
 
                     LazyColumn(
@@ -475,6 +594,14 @@ fun LedgerScreen(
                                         )
                                     }
                                 }
+
+                                DateRangeFilterBar(
+                                    dateRangeFilter = dateRangeFilter,
+                                    periodActivities = periodBaseActivities,
+                                    onOpenPicker = { showDateRangeDialog = true },
+                                    onApplyPreset = onDateRangeChange,
+                                    onClearDateRange = onClearDateRange
+                                )
 
                                 Row(
                                     modifier = Modifier
@@ -1210,3 +1337,318 @@ private fun EmptyLedgerState(
         }
     }
 }
+
+@Composable
+private fun DateRangeFilterBar(
+    dateRangeFilter: DateRangeFilter,
+    periodActivities: List<ActivityRecord>,
+    onOpenPicker: () -> Unit,
+    onApplyPreset: (startMillis: Long?, endMillis: Long?, presetLabel: String?) -> Unit,
+    onClearDateRange: () -> Unit
+) {
+    val isDark = isSystemInDarkTheme()
+    val inColor = if (isDark) InBadgeFgDark else InBadgeFgLight
+    val outColor = if (isDark) OutBadgeFgDark else OutBadgeFgLight
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            AssistChip(
+                onClick = onOpenPicker,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Rounded.DateRange,
+                        contentDescription = "Pick date range",
+                        tint = if (dateRangeFilter.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                },
+                label = {
+                    Text(
+                        text = if (dateRangeFilter.isActive && dateRangeFilter.presetLabel == null) {
+                            formatDateRangeLabel(dateRangeFilter)
+                        } else {
+                            "Pick Dates"
+                        },
+                        fontWeight = if (dateRangeFilter.isActive && dateRangeFilter.presetLabel == null) FontWeight.Bold else FontWeight.Medium
+                    )
+                },
+                modifier = Modifier.testTag("date_range_picker_button")
+            )
+
+            FilterChip(
+                selected = !dateRangeFilter.isActive,
+                onClick = onClearDateRange,
+                label = { Text("All Time") },
+                modifier = Modifier.testTag("date_range_all_time_chip")
+            )
+
+            FilterChip(
+                selected = dateRangeFilter.presetLabel == "Today",
+                onClick = {
+                    if (dateRangeFilter.presetLabel == "Today") {
+                        onClearDateRange()
+                    } else {
+                        val todayStart = localDayStartMillis(System.currentTimeMillis())
+                        onApplyPreset(todayStart, localDayEndMillis(todayStart), "Today")
+                    }
+                },
+                label = { Text("Today") },
+                modifier = Modifier.testTag("date_range_preset_today")
+            )
+
+            FilterChip(
+                selected = dateRangeFilter.presetLabel == "Last 7 Days",
+                onClick = {
+                    if (dateRangeFilter.presetLabel == "Last 7 Days") {
+                        onClearDateRange()
+                    } else {
+                        val todayEnd = localDayEndMillis(System.currentTimeMillis())
+                        val cal = Calendar.getInstance().apply {
+                            timeInMillis = localDayStartMillis(System.currentTimeMillis())
+                            add(Calendar.DAY_OF_YEAR, -6)
+                        }
+                        onApplyPreset(cal.timeInMillis, todayEnd, "Last 7 Days")
+                    }
+                },
+                label = { Text("Last 7 Days") },
+                modifier = Modifier.testTag("date_range_preset_7d")
+            )
+
+            FilterChip(
+                selected = dateRangeFilter.presetLabel == "This Month",
+                onClick = {
+                    if (dateRangeFilter.presetLabel == "This Month") {
+                        onClearDateRange()
+                    } else {
+                        val now = System.currentTimeMillis()
+                        val monthStart = Calendar.getInstance().apply {
+                            timeInMillis = localDayStartMillis(now)
+                            set(Calendar.DAY_OF_MONTH, 1)
+                        }.timeInMillis
+                        onApplyPreset(monthStart, localDayEndMillis(now), "This Month")
+                    }
+                },
+                label = { Text("This Month") },
+                modifier = Modifier.testTag("date_range_preset_month")
+            )
+
+            FilterChip(
+                selected = dateRangeFilter.presetLabel == "Last 30 Days",
+                onClick = {
+                    if (dateRangeFilter.presetLabel == "Last 30 Days") {
+                        onClearDateRange()
+                    } else {
+                        val todayEnd = localDayEndMillis(System.currentTimeMillis())
+                        val cal = Calendar.getInstance().apply {
+                            timeInMillis = localDayStartMillis(System.currentTimeMillis())
+                            add(Calendar.DAY_OF_YEAR, -29)
+                        }
+                        onApplyPreset(cal.timeInMillis, todayEnd, "Last 30 Days")
+                    }
+                },
+                label = { Text("Last 30 Days") },
+                modifier = Modifier.testTag("date_range_preset_30d")
+            )
+
+            FilterChip(
+                selected = dateRangeFilter.presetLabel == "This Year",
+                onClick = {
+                    if (dateRangeFilter.presetLabel == "This Year") {
+                        onClearDateRange()
+                    } else {
+                        val now = System.currentTimeMillis()
+                        val yearStart = Calendar.getInstance().apply {
+                            timeInMillis = localDayStartMillis(now)
+                            set(Calendar.MONTH, Calendar.JANUARY)
+                            set(Calendar.DAY_OF_MONTH, 1)
+                        }.timeInMillis
+                        onApplyPreset(yearStart, localDayEndMillis(now), "This Year")
+                    }
+                },
+                label = { Text("This Year") },
+                modifier = Modifier.testTag("date_range_preset_year")
+            )
+        }
+
+        if (dateRangeFilter.isActive) {
+            val periodIn = periodActivities
+                .filter { it.parsedDirection == ActivityDirection.IN }
+                .sumOf { it.neondraAmount }
+            val periodOut = periodActivities
+                .filter { it.parsedDirection == ActivityDirection.OUT }
+                .sumOf { it.neondraAmount }
+            val periodNet = periodIn - periodOut
+            val netPrefix = if (periodNet >= 0) "+" else ""
+
+            Surface(
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("active_date_range_summary")
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable(onClick = onOpenPicker)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.DateRange,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = formatDateRangeLabel(dateRangeFilter),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        IconButton(
+                            onClick = onClearDateRange,
+                            modifier = Modifier
+                                .size(32.dp)
+                                .testTag("date_range_clear_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Clear,
+                                contentDescription = "Clear date range",
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "In: ${formatNeondraAmount(periodIn)}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = JakartaSansFamily,
+                            color = inColor
+                        )
+                        Text(
+                            text = "Out: ${formatNeondraAmount(periodOut)}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = JakartaSansFamily,
+                            color = outColor
+                        )
+                        Text(
+                            text = "Net: $netPrefix${formatNeondraAmount(periodNet)}",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = JakartaSansFamily,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatDateRangeLabel(filter: DateRangeFilter): String {
+    val start = filter.startDateMillis
+    val end = filter.endDateMillis
+    val rangeText = when {
+        start != null && end != null -> {
+            val s = formatDisplayDate(start)
+            val e = formatDisplayDate(end)
+            if (s == e) s else "$s – $e"
+        }
+        start != null -> "From ${formatDisplayDate(start)}"
+        end != null -> "Until ${formatDisplayDate(end)}"
+        else -> "All Time"
+    }
+    return if (!filter.presetLabel.isNullOrBlank()) {
+        "${filter.presetLabel} ($rangeText)"
+    } else {
+        rangeText
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun LedgerDateRangePickerDialog(
+    initialFilter: DateRangeFilter,
+    onDismiss: () -> Unit,
+    onClear: () -> Unit,
+    onApply: (startMillis: Long?, endMillis: Long?) -> Unit
+) {
+    val pickerState = rememberDateRangePickerState(
+        initialSelectedStartDateMillis = initialFilter.startDateMillis?.let(::localDayStartToUtcPickerMillis),
+        initialSelectedEndDateMillis = (initialFilter.endDateMillis ?: initialFilter.startDateMillis)
+            ?.let(::localDayStartToUtcPickerMillis)
+    )
+
+    DatePickerDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val startLocal = pickerState.selectedStartDateMillis?.let(::utcPickerMillisToLocalDayStart)
+                    val rawEndUtc = pickerState.selectedEndDateMillis ?: pickerState.selectedStartDateMillis
+                    val endLocal = rawEndUtc?.let { localDayEndMillis(utcPickerMillisToLocalDayStart(it)) }
+                    onApply(startLocal, endLocal)
+                },
+                enabled = pickerState.selectedStartDateMillis != null,
+                modifier = Modifier.testTag("date_range_apply_button")
+            ) {
+                Text("Apply", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (initialFilter.isActive || pickerState.selectedStartDateMillis != null) {
+                    TextButton(onClick = onClear) {
+                        Text("Clear")
+                    }
+                }
+                TextButton(onClick = onDismiss) {
+                    Text("Cancel")
+                }
+            }
+        }
+    ) {
+        DateRangePicker(
+            state = pickerState,
+            title = {
+                Text(
+                    text = "Filter In & Out Entries by Period",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp)
+                )
+            },
+            showModeToggle = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 500.dp)
+        )
+    }
+}
+

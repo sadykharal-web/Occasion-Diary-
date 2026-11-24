@@ -172,5 +172,75 @@ class LedgerLogicTest {
         assertEquals(12000L, weddingBreakdown.totalOut)
         assertEquals(13000L, weddingBreakdown.netBalance)
     }
+
+    @Test
+    fun `filterLedgerActivities filters In and Out entries by inclusive date range`() {
+        val cal = java.util.Calendar.getInstance().apply {
+            set(2026, java.util.Calendar.NOVEMBER, 1, 9, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val nov1Morning = cal.timeInMillis
+        cal.set(2026, java.util.Calendar.NOVEMBER, 10, 14, 30, 0)
+        val nov10Afternoon = cal.timeInMillis
+        cal.set(2026, java.util.Calendar.NOVEMBER, 15, 23, 50, 0)
+        val nov15LateNight = cal.timeInMillis
+        cal.set(2026, java.util.Calendar.NOVEMBER, 20, 8, 0, 0)
+        val nov20Morning = cal.timeInMillis
+
+        val records = listOf(
+            ActivityRecord(id = "r1", name = "A", direction = "IN", neondraAmount = 1000L, eventDateMillis = nov1Morning),
+            ActivityRecord(id = "r2", name = "B", direction = "IN", neondraAmount = 2000L, eventDateMillis = nov10Afternoon),
+            ActivityRecord(id = "r3", name = "C", direction = "OUT", neondraAmount = 3000L, eventDateMillis = nov15LateNight),
+            ActivityRecord(id = "r4", name = "D", direction = "OUT", neondraAmount = 4000L, eventDateMillis = nov20Morning)
+        )
+
+        cal.set(2026, java.util.Calendar.NOVEMBER, 10, 0, 0, 0)
+        val rangeStart = cal.timeInMillis
+        cal.set(2026, java.util.Calendar.NOVEMBER, 15, 0, 0, 0)
+        val rangeEnd = cal.timeInMillis
+
+        val rangeFilter = com.example.ui.viewmodel.DateRangeFilter(
+            startDateMillis = rangeStart,
+            endDateMillis = rangeEnd
+        )
+
+        val allInPeriod = com.example.ui.screens.filterLedgerActivities(
+            activities = records,
+            searchQuery = "",
+            selectedFilter = com.example.ui.viewmodel.LedgerFilter.ALL,
+            selectedAddress = null,
+            selectedCategoryFilter = null,
+            dateRangeFilter = rangeFilter
+        )
+        assertEquals(listOf("r2", "r3"), allInPeriod.map { it.id })
+
+        val inOnlyInPeriod = com.example.ui.screens.filterLedgerActivities(
+            activities = records,
+            searchQuery = "",
+            selectedFilter = com.example.ui.viewmodel.LedgerFilter.IN,
+            selectedAddress = null,
+            selectedCategoryFilter = null,
+            dateRangeFilter = rangeFilter
+        )
+        assertEquals(listOf("r2"), inOnlyInPeriod.map { it.id })
+
+        val outOnlyInPeriod = com.example.ui.screens.filterLedgerActivities(
+            activities = records,
+            searchQuery = "",
+            selectedFilter = com.example.ui.viewmodel.LedgerFilter.OUT,
+            selectedAddress = null,
+            selectedCategoryFilter = null,
+            dateRangeFilter = rangeFilter
+        )
+        assertEquals(listOf("r3"), outOnlyInPeriod.map { it.id })
+    }
+
+    @Test
+    fun `utcPickerMillisToLocalDayStart round-trips local date cleanly`() {
+        val sampleLocalStart = localDayStartMillis(1_764_000_000_000L)
+        val utcMillis = com.example.ui.screens.localDayStartToUtcPickerMillis(sampleLocalStart)
+        val backToLocal = com.example.ui.screens.utcPickerMillisToLocalDayStart(utcMillis)
+        assertEquals(sampleLocalStart, backToLocal)
+    }
 }
 

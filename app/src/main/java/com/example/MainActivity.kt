@@ -152,6 +152,7 @@ fun OccasionDiaryAppShell() {
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val selectedAddress by viewModel.selectedAddress.collectAsStateWithLifecycle()
     val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsStateWithLifecycle()
+    val dateRangeFilter by viewModel.dateRangeFilter.collectAsStateWithLifecycle()
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
     val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
     val localBackupStatus by viewModel.localBackupStatus.collectAsStateWithLifecycle()
@@ -391,6 +392,9 @@ fun OccasionDiaryAppShell() {
                             onAddressFilterChange = viewModel::setAddressFilter,
                             selectedCategoryFilter = selectedCategoryFilter,
                             onCategoryFilterChange = viewModel::setCategoryFilter,
+                            dateRangeFilter = dateRangeFilter,
+                            onDateRangeChange = viewModel::setDateRangeFilter,
+                            onClearDateRange = viewModel::clearDateRangeFilter,
                             onManageCategoriesClick = {
                                 navController.navigate(ROUTE_CATEGORIES)
                             },
