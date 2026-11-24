@@ -58,8 +58,8 @@ object ReminderScheduler {
             if (record.familyId.isNotBlank()) " (FN ${record.familyId})" else ""
         val details = buildList {
             if (record.eventDetail.isNotBlank()) add(record.eventDetail)
-            if (record.address.isNotBlank()) add("Address: ${record.address}")
-            add("${record.parsedDirection.shortLabel} • Amount: $formattedNeondra")
+            if (record.address.isNotBlank()) add("پتہ: ${record.address}")
+            add("${record.parsedDirection.shortLabel} • رقم: $formattedNeondra")
             if (record.homeItems.isNotBlank()) add(record.homeItems)
         }.joinToString("\n")
 
@@ -77,13 +77,13 @@ object CalendarIntentHelper {
         val title = "${record.eventType} - ${record.name}" +
             if (record.familyId.isNotBlank()) " (FN ${record.familyId})" else ""
         val description = buildString {
-            if (record.familyId.isNotBlank()) appendLine("FN: ${record.familyId}")
-            if (record.fatherName.isNotBlank()) appendLine("Father: ${record.fatherName}")
-            if (record.address.isNotBlank()) appendLine("Address: ${record.address}")
-            if (record.eventDetail.isNotBlank()) appendLine("E-Detail: ${record.eventDetail}")
-            appendLine("In/Out: ${record.parsedDirection.shortLabel}")
-            if (record.homeItems.isNotBlank()) appendLine("Home: ${record.homeItems}")
-            appendLine("Neondra: $formattedNeondra")
+            if (record.familyId.isNotBlank()) appendLine("خاندان نمبر: ${record.familyId}")
+            if (record.fatherName.isNotBlank()) appendLine("والد کا نام: ${record.fatherName}")
+            if (record.address.isNotBlank()) appendLine("پتہ: ${record.address}")
+            if (record.eventDetail.isNotBlank()) appendLine("تفصیل: ${record.eventDetail}")
+            appendLine("قسم: ${record.parsedDirection.displayLabel}")
+            if (record.homeItems.isNotBlank()) appendLine("تحائف / اشیاء: ${record.homeItems}")
+            appendLine("رقم: $formattedNeondra")
         }.trim()
 
         val beginMillis = record.eventDateMillis

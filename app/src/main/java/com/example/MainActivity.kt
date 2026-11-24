@@ -44,6 +44,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -53,9 +54,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -118,7 +121,9 @@ class MainActivity : ComponentActivity() {
         ReminderReceiver.ensureNotificationChannel(this)
         setContent {
             MyApplicationTheme {
-                OccasionDiaryAppShell()
+                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                    OccasionDiaryAppShell()
+                }
             }
         }
     }
@@ -158,6 +163,8 @@ fun OccasionDiaryAppShell() {
     val localBackupStatus by viewModel.localBackupStatus.collectAsStateWithLifecycle()
     val aiSearchState by viewModel.aiSearchState.collectAsStateWithLifecycle()
     val aiComparisonState by viewModel.aiComparisonState.collectAsStateWithLifecycle()
+    val multiFamilyAiLoading by viewModel.multiFamilyAiLoading.collectAsStateWithLifecycle()
+    val multiFamilyAiError by viewModel.multiFamilyAiError.collectAsStateWithLifecycle()
     val selectedCompareFamilyIds by viewModel.selectedCompareFamilyIds.collectAsStateWithLifecycle()
     val selectedSingleFamilyId by viewModel.selectedSingleFamilyId.collectAsStateWithLifecycle()
     val singleFamilyComparisonState by viewModel.singleFamilyComparisonState.collectAsStateWithLifecycle()
@@ -279,7 +286,7 @@ fun OccasionDiaryAppShell() {
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Category,
-                                    contentDescription = "Manage Categories"
+                                    contentDescription = "اقسام کا انتظام"
                                 )
                             }
                             IconButton(
@@ -297,7 +304,7 @@ fun OccasionDiaryAppShell() {
                                 } else {
                                     Icon(
                                         imageVector = Icons.Rounded.Download,
-                                        contentDescription = "Export Offline Backup"
+                                        contentDescription = "آف لائن بیک اپ محفوظ کریں"
                                     )
                                 }
                             }
@@ -493,6 +500,8 @@ fun OccasionDiaryAppShell() {
                             dashboardState = dashboardState,
                             aiSearchState = aiSearchState,
                             aiComparisonState = aiComparisonState,
+                            multiFamilyAiLoading = multiFamilyAiLoading,
+                            multiFamilyAiError = multiFamilyAiError,
                             selectedCompareFamilyIds = selectedCompareFamilyIds,
                             selectedSingleFamilyId = selectedSingleFamilyId,
                             singleFamilyComparisonState = singleFamilyComparisonState,
@@ -508,6 +517,7 @@ fun OccasionDiaryAppShell() {
                             onToggleFamilyCompare = viewModel::toggleFamilyForComparison,
                             onSelectTopFamilies = { viewModel.selectTopFamiliesForComparison(3) },
                             onRunAiComparison = { viewModel.runAiBalanceComparison() },
+                            onRunMultiFamilyAiAnalysis = viewModel::runMultiFamilyOnlineAiAnalysis,
                             onClearAiComparison = viewModel::clearAiComparison,
                             onActivityClick = { act ->
                                 selectedActivityId = act.id

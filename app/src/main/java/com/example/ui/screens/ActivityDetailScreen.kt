@@ -67,7 +67,6 @@ import com.example.ui.components.formatDisplayDate
 import com.example.ui.components.formatDisplayTime
 import com.example.ui.components.formatNeondraAmount
 import com.example.ui.components.formatReminderOffsetLabel
-import com.example.ui.theme.JakartaSansFamily
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,8 +97,8 @@ fun ActivityDetailScreen(
     if (showDeleteConfirm) {
         AlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("Delete Entry?") },
-            text = { Text("Are you sure you want to permanently delete this entry for \"${record.name}\"?") },
+            title = { Text("اندراج حذف کریں؟") },
+            text = { Text("کیا آپ واقعی \"${record.name}\" کا یہ اندراج ہمیشہ کے لیے حذف کرنا چاہتے ہیں؟") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -107,12 +106,12 @@ fun ActivityDetailScreen(
                         onDelete()
                     }
                 ) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                    Text("حذف کریں", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text("Cancel")
+                    Text("منسوخ کریں")
                 }
             }
         )
@@ -136,7 +135,7 @@ fun ActivityDetailScreen(
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = "واپس"
                         )
                     }
                 },
@@ -147,7 +146,7 @@ fun ActivityDetailScreen(
                     ) {
                         Icon(
                             imageVector = Icons.Rounded.DeleteOutline,
-                            contentDescription = "Delete Entry",
+                            contentDescription = "اندراج حذف کریں",
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -163,7 +162,7 @@ fun ActivityDetailScreen(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Edit,
-                    contentDescription = "Edit Entry"
+                    contentDescription = "اندراج میں ترمیم"
                 )
             }
         }
@@ -192,15 +191,14 @@ fun ActivityDetailScreen(
                         modifier = Modifier.padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        DetailFieldRow(label = "FN", value = record.familyId.ifBlank { "—" })
-                        DetailFieldRow(label = "Father", value = record.fatherName.ifBlank { "—" })
-                        DetailFieldRow(label = "Address", value = record.address.ifBlank { "—" })
+                        DetailFieldRow(label = "فیملی نمبر (FN)", value = record.familyId.ifBlank { "—" })
+                        DetailFieldRow(label = "والد کا نام", value = record.fatherName.ifBlank { "—" })
+                        DetailFieldRow(label = "پتہ", value = record.address.ifBlank { "—" })
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
-                                text = "Event",
+                                text = "تقریب کی قسم",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontFamily = JakartaSansFamily
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             if (record.eventType.isNotBlank()) {
                                 val (catColor, catIcon) = catalog.resolveCategoryVisual(record.eventType)
@@ -217,18 +215,17 @@ fun ActivityDetailScreen(
                                 )
                             }
                         }
-                        DetailFieldRow(label = "E-Detail", value = record.eventDetail.ifBlank { "—" })
+                        DetailFieldRow(label = "تقریب کی تفصیل", value = record.eventDetail.ifBlank { "—" })
                         DetailFieldRow(
-                            label = "Date",
+                            label = "تاریخ اور وقت",
                             value = "${formatDisplayDate(record.eventDateMillis)} • ${formatDisplayTime(record.eventDateMillis)}"
                         )
 
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
-                                text = "In/Out",
+                                text = "آمدن / خرچ",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontFamily = JakartaSansFamily
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
@@ -243,18 +240,17 @@ fun ActivityDetailScreen(
                         }
 
                         DetailFieldRow(
-                            label = "Home",
-                            value = record.homeItems.ifBlank { "No items recorded" }
+                            label = "گھریلو اشیاء / تحائف",
+                            value = record.homeItems.ifBlank { "کوئی اشیاء درج نہیں" }
                         )
 
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
 
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
-                                text = "Neondra",
+                                text = "نیوندرا رقم",
                                 style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontFamily = JakartaSansFamily
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
                                 text = formatNeondraAmount(record.neondraAmount),
@@ -299,7 +295,7 @@ fun ActivityDetailScreen(
                                 )
                                 Column {
                                     Text(
-                                        text = "Reminder",
+                                        text = "یاددہانی",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -307,7 +303,7 @@ fun ActivityDetailScreen(
                                         text = if (record.reminderEnabled) {
                                             "${formatReminderOffsetLabel(record.reminderMinutesBefore)} (${formatDisplayDate(record.reminderAtMillis)})"
                                         } else {
-                                            "Currently off"
+                                            "فی الحال بند ہے"
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -358,9 +354,9 @@ fun ActivityDetailScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = if (record.calendarSynced) {
-                                    "Open in Calendar Again (Synced)"
+                                    "کیلنڈر میں دوبارہ کھولیں (محفوظ)"
                                 } else {
-                                    "Add to Device Calendar"
+                                    "ڈیوائس کیلنڈر میں شامل کریں"
                                 }
                             )
                         }
@@ -388,12 +384,12 @@ fun ActivityDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "Family Balance Summary (${relatedRecords.size} entries)",
+                                text = "خاندانی بیلنس کا خلاصہ (${relatedRecords.size} اندراجات)",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Total In: ${formatNeondraAmount(familyIn)}  •  Total Out: ${formatNeondraAmount(familyOut)}  •  Net: ${formatNeondraAmount(familyIn - familyOut)}",
+                                text = "کل آمدن: ${formatNeondraAmount(familyIn)}  •  کل خرچ: ${formatNeondraAmount(familyOut)}  •  خالص: ${formatNeondraAmount(familyIn - familyOut)}",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
@@ -409,7 +405,7 @@ fun ActivityDetailScreen(
                 ) {
                     Icon(Icons.Rounded.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Edit Entry")
+                    Text("اندراج میں ترمیم")
                 }
 
                 Spacer(modifier = Modifier.height(72.dp))
@@ -427,8 +423,7 @@ private fun DetailFieldRow(
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontFamily = JakartaSansFamily
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
             text = value,

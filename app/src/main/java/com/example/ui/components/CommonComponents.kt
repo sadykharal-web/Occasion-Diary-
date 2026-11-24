@@ -80,12 +80,12 @@ fun formatDisplayTime(millis: Long): String {
 
 fun formatReminderOffsetLabel(minutesBefore: Long): String {
     return when (minutesBefore) {
-        0L -> "At event time"
-        60L -> "1 hour before"
-        180L -> "3 hours before"
-        1440L -> "1 day before"
-        2880L -> "2 days before"
-        else -> "$minutesBefore mins before"
+        0L -> "تقریب کے وقت"
+        60L -> "1 گھنٹہ پہلے"
+        180L -> "3 گھنٹے پہلے"
+        1440L -> "1 دن پہلے"
+        2880L -> "2 دن پہلے"
+        else -> "$minutesBefore منٹ پہلے"
     }
 }
 
@@ -163,7 +163,6 @@ fun DirectionPill(
                 text = direction.shortLabel,
                 style = MaterialTheme.typography.labelMedium,
                 color = fgColor,
-                fontFamily = JakartaSansFamily,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -172,7 +171,7 @@ fun DirectionPill(
 
 @Composable
 fun ReminderStatusBadge(
-    label: String = "Reminder On",
+    label: String = "یاددہانی فعال",
     modifier: Modifier = Modifier
 ) {
     val isDark = isSystemInDarkTheme()
@@ -230,13 +229,13 @@ fun HeroLedgerSummaryCard(
             ) {
                 Column {
                     Text(
-                        text = "Net Balance (In - Out)",
+                        text = "کل بیلنس (آمدن - خرچ)",
                         style = MaterialTheme.typography.labelLarge,
                         color = Color.White.copy(alpha = 0.84f)
                     )
                     val prefix = if (summary.netBalance >= 0) "+" else ""
                     Text(
-                        text = "$prefix${formatNeondraAmount(summary.netBalance)} PKR",
+                        text = "$prefix${formatNeondraAmount(summary.netBalance)} روپے",
                         style = MaterialTheme.typography.headlineMedium,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
@@ -257,7 +256,7 @@ fun HeroLedgerSummaryCard(
                             fontFamily = JakartaSansFamily
                         )
                         Text(
-                            text = "Entries",
+                            text = "اندراجات",
                             style = MaterialTheme.typography.labelSmall,
                             color = Color.White.copy(alpha = 0.85f)
                         )
@@ -272,22 +271,22 @@ fun HeroLedgerSummaryCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 SummaryStatColumn(
-                    label = "Total In",
+                    label = "کل آمدن",
                     value = formatNeondraAmount(summary.totalIn),
                     modifier = Modifier.weight(1f)
                 )
                 SummaryStatColumn(
-                    label = "Total Out",
+                    label = "کل خرچ",
                     value = formatNeondraAmount(summary.totalOut),
                     modifier = Modifier.weight(1f)
                 )
                 SummaryStatColumn(
-                    label = "Events",
+                    label = "تقریبات",
                     value = "${summary.totalEventsCount}",
                     modifier = Modifier.weight(0.7f)
                 )
                 SummaryStatColumn(
-                    label = "Reminders",
+                    label = "یاددہانیاں",
                     value = "${summary.activeRemindersCount}",
                     modifier = Modifier.weight(0.75f)
                 )
@@ -375,7 +374,7 @@ fun AutoCompleteDropdownField(
                         IconButton(onClick = { onValueChange("") }) {
                             Icon(
                                 imageVector = Icons.Rounded.Clear,
-                                contentDescription = "Clear",
+                                contentDescription = "صاف کریں",
                                 modifier = Modifier.size(18.dp)
                             )
                         }

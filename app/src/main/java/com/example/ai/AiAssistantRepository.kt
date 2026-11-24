@@ -48,7 +48,8 @@ data class AiBalanceComparisonResult(
     val summary: String,
     val higherNetFamilyName: String,
     val familyBreakdowns: List<AiFamilyBalanceInsight>,
-    val recommendations: List<String>
+    val recommendations: List<String>,
+    val usedOnlineAi: Boolean = false
 )
 
 data class CategoryInOutBreakdown(
@@ -77,8 +78,8 @@ data class SingleFamilyInOutComparison(
 )
 
 /**
- * Combines online Gemini AI search & single-family In/Out analysis (via Firebase AI Logic
- * reading the device's offline Room SQLite snapshot) with deterministic local calculations.
+ * Combines online Gemini AI search & single/multi-family In/Out analysis (via Firebase AI Logic
+ * reading the device's offline Room SQLite snapshot) with deterministic local Urdu calculations.
  */
 class AiAssistantRepository {
 
@@ -86,7 +87,7 @@ class AiAssistantRepository {
         Schema.obj(
             properties = mapOf(
                 "answerSummary" to Schema.string(
-                    description = "Clear direct answer to the user's question based strictly on the provided offline Life Line diary records."
+                    description = "Clear direct answer in natural Urdu (اردو) based strictly on the provided offline Life Line diary records."
                 ),
                 "matchedFamilyIds" to Schema.array(
                     items = Schema.string(),
@@ -102,7 +103,7 @@ class AiAssistantRepository {
                 ),
                 "keyInsights" to Schema.array(
                     items = Schema.string(),
-                    description = "Up to 4 concise bullet insights with exact numbers, names, or dates."
+                    description = "Up to 4 concise bullet insights in natural Urdu (اردو) with exact numbers, names, or dates."
                 )
             )
         )
@@ -112,14 +113,44 @@ class AiAssistantRepository {
         Schema.obj(
             properties = mapOf(
                 "headline" to Schema.string(
-                    description = "Short headline comparing In (Received) vs Out (Given) entries for this single family."
+                    description = "Short headline in natural Urdu (اردو) comparing In (آمدن/وصول) vs Out (خرچ/دیے گئے) entries for this single family."
                 ),
                 "summary" to Schema.string(
-                    description = "Concise 2-3 sentence summary comparing the family's In entries against their Out entries, categories, and net reciprocity."
+                    description = "Concise 2-3 sentence summary in natural Urdu (اردو) comparing the family's In entries against their Out entries, categories, and net reciprocity."
                 ),
                 "insights" to Schema.array(
                     items = Schema.string(),
-                    description = "3 to 4 specific insights comparing the In and Out entries, amounts, occasions, and next steps."
+                    description = "3 to 4 specific insights in natural Urdu (اردو) comparing In and Out entries, amounts, occasions, and next steps."
+                )
+            )
+        )
+    }
+
+    private val multiFamilySchema by lazy {
+        Schema.obj(
+            properties = mapOf(
+                "headline" to Schema.string(
+                    description = "Short headline in natural Urdu (اردو) summarizing the In vs Out balance comparison across the selected families."
+                ),
+                "summary" to Schema.string(
+                    description = "Concise 2-3 sentence summary in natural Urdu (اردو) comparing total In, total Out, and net balances across the selected families."
+                ),
+                "familyInsights" to Schema.array(
+                    items = Schema.obj(
+                        properties = mapOf(
+                            "familyDocId" to Schema.string(
+                                description = "Exact familyDocId from the provided selected families list."
+                            ),
+                            "insight" to Schema.string(
+                                description = "One concise Urdu (اردو) insight sentence for this specific family's In vs Out balance."
+                            )
+                        )
+                    ),
+                    description = "One insight entry per selected family."
+                ),
+                "recommendations" to Schema.array(
+                    items = Schema.string(),
+                    description = "2 to 3 practical recommendations in natural Urdu (اردو) regarding reciprocity and upcoming occasions."
                 )
             )
         )
@@ -147,6 +178,17 @@ class AiAssistantRepository {
         )
     }
 
+    private val multiFamilyModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = MODEL_NAME,
+            generationConfig = generationConfig {
+                responseMimeType = "application/json"
+                responseSchema = multiFamilySchema
+                temperature = 0.25f
+            }
+        )
+    }
+
     suspend fun searchFamiliesAndEventsOnline(
         query: String,
         families: List<FamilyProfile>,
@@ -155,7 +197,7 @@ class AiAssistantRepository {
     ): Result<AiSearchResult> {
         val cleanQuery = query.trim()
         if (cleanQuery.isEmpty()) {
-            return Result.failure(IllegalArgumentException("Please enter a search query."))
+            return Result.failure(IllegalArgumentException("براہ کرم تلاش کے لیے کوئی سوال یا لفظ لکھیں۔"))
         }
 
         if (!isFirebaseConfigured()) {
@@ -171,7 +213,7 @@ class AiAssistantRepository {
             }
             val rawJson = response.text
                 ?.takeIf { it.isNotBlank() }
-                ?: throw IllegalStateException("AI returned an empty response.")
+                ?: throw IllegalStateException("اے آئی نے کوئی جواب نہیں دیا۔")
 
             val json = JSONObject(rawJson)
             val validFamilyIds = families.map { it.id }.toSet()
@@ -183,7 +225,7 @@ class AiAssistantRepository {
             val matchedEvts = json.optStringList("matchedEventIds").filter { it in validEventIds }
             val insights = json.optStringList("keyInsights").take(5)
             val answer = json.optString("answerSummary").ifBlank {
-                "Online AI analyzed ${families.size} families, ${events.size} occasions, and ${activities.size} ledger entries."
+                "آن لائن اے آئی نے ${families.size} خاندانوں، ${events.size} تقریبات، اور ${activities.size} کھاتہ اندراجات کا تجزیہ کیا۔"
             }
 
             Result.success(
@@ -200,14 +242,14 @@ class AiAssistantRepository {
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Online AI search timed out", e)
             Result.failure(
-                IllegalStateException("Online AI search timed out after 60 seconds. Check your internet connection and retry.")
+                IllegalStateException("آن لائن اے آئی تلاش کا وقت 60 سیکنڈ بعد ختم ہو گیا۔ انٹرنیٹ چیک کر کے دوبارہ کوشش کریں۔")
             )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Online AI search failed", e)
             Result.failure(
-                IllegalStateException(e.localizedMessage ?: "Online AI search failed. Please verify internet connectivity.")
+                IllegalStateException(e.localizedMessage ?: "آن لائن اے آئی تلاش ناکام ہو گئی۔ براہ کرم انٹرنیٹ کنکشن چیک کریں۔")
             )
         }
     }
@@ -231,7 +273,7 @@ class AiAssistantRepository {
         val netBalance = totalIn - totalOut
 
         val categoryBreakdowns = famActs
-            .groupBy { it.eventType.trim().ifEmpty { "General" } }
+            .groupBy { it.eventType.trim().ifEmpty { "عام" } }
             .map { (catName, records) ->
                 val catIn = records.filter { it.parsedDirection == ActivityDirection.IN }
                 val catOut = records.filter { it.parsedDirection == ActivityDirection.OUT }
@@ -246,34 +288,34 @@ class AiAssistantRepository {
             .sortedByDescending { it.totalIn + it.totalOut }
 
         val headline = when {
-            famActs.isEmpty() -> "${family.name}: No In or Out entries yet"
-            netBalance > 0L -> "${family.name}: In exceeds Out by +${fmt.format(netBalance)}"
-            netBalance < 0L -> "${family.name}: Out exceeds In by ${fmt.format(-netBalance)}"
-            else -> "${family.name}: In & Out balanced (${fmt.format(totalIn)})"
+            famActs.isEmpty() -> "${family.name}: ابھی تک آمدن یا خرچ کا کوئی اندراج موجود نہیں"
+            netBalance > 0L -> "${family.name}: آمدن خرچ سے +${fmt.format(netBalance)} روپے زیادہ ہے"
+            netBalance < 0L -> "${family.name}: خرچ آمدن سے ${fmt.format(-netBalance)} روپے زیادہ ہے"
+            else -> "${family.name}: آمدن اور خرچ برابر ہیں (${fmt.format(totalIn)} روپے)"
         }
 
         val summary = if (famActs.isEmpty()) {
-            "No ledger entries have been saved offline for ${family.name} yet."
+            "${family.name} کے لیے موبائل میں ابھی کوئی آف لائن اندراج محفوظ نہیں ہے۔"
         } else {
-            "${family.name} has ${inEntries.size} In (Received) entries totaling ${fmt.format(totalIn)} and ${outEntries.size} Out (Given) entries totaling ${fmt.format(totalOut)}, giving a net balance of ${if (netBalance >= 0) "+" else ""}${fmt.format(netBalance)}."
+            "${family.name} کی کل ${inEntries.size} آمدن (وصول) اندراجات میں ${fmt.format(totalIn)} روپے اور ${outEntries.size} خرچ (دیے گئے) اندراجات میں ${fmt.format(totalOut)} روپے درج ہیں، اور خالص بیلنس ${if (netBalance >= 0) "+" else ""}${fmt.format(netBalance)} روپے ہے۔"
         }
 
         val insights = buildList {
             if (inEntries.isNotEmpty()) {
                 val topIn = inEntries.maxByOrNull { it.neondraAmount }!!
-                add("Largest In entry: ${fmt.format(topIn.neondraAmount)} for ${topIn.eventType}${if (topIn.eventDetail.isNotBlank()) " (${topIn.eventDetail})" else ""}.")
+                add("سب سے بڑی آمدن (وصول): ${topIn.eventType}${if (topIn.eventDetail.isNotBlank()) " (${topIn.eventDetail})" else ""} پر ${fmt.format(topIn.neondraAmount)} روپے۔")
             } else {
-                add("No In (Received) entries recorded for ${family.name} yet.")
+                add("${family.name} کے لیے ابھی کوئی آمدن (وصول) کا اندراج درج نہیں ہے۔")
             }
             if (outEntries.isNotEmpty()) {
                 val topOut = outEntries.maxByOrNull { it.neondraAmount }!!
-                add("Largest Out entry: ${fmt.format(topOut.neondraAmount)} for ${topOut.eventType}${if (topOut.eventDetail.isNotBlank()) " (${topOut.eventDetail})" else ""}.")
+                add("سب سے بڑا خرچ (دیا گیا): ${topOut.eventType}${if (topOut.eventDetail.isNotBlank()) " (${topOut.eventDetail})" else ""} پر ${fmt.format(topOut.neondraAmount)} روپے۔")
             } else {
-                add("No Out (Given) entries recorded for ${family.name} yet.")
+                add("${family.name} کے لیے ابھی کوئی خرچ (دیا گیا) کا اندراج درج نہیں ہے۔")
             }
             if (categoryBreakdowns.isNotEmpty()) {
                 val topCat = categoryBreakdowns.first()
-                add("Top occasion category: ${topCat.categoryName} (In: ${fmt.format(topCat.totalIn)} vs Out: ${fmt.format(topCat.totalOut)}).")
+                add("سب سے اہم تقریب قسم: ${topCat.categoryName} (آمدن: ${fmt.format(topCat.totalIn)} بمقابلہ خرچ: ${fmt.format(topCat.totalOut)})۔")
             }
         }
 
@@ -311,7 +353,7 @@ class AiAssistantRepository {
             }
             val rawJson = response.text
                 ?.takeIf { it.isNotBlank() }
-                ?: throw IllegalStateException("AI returned an empty response.")
+                ?: throw IllegalStateException("اے آئی نے کوئی جواب نہیں دیا۔")
 
             val json = JSONObject(rawJson)
             val headline = json.optString("headline").ifBlank { base.headline }
@@ -329,20 +371,21 @@ class AiAssistantRepository {
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Online AI single-family analysis timed out", e)
             Result.failure(
-                IllegalStateException("Online AI analysis timed out after 60 seconds. Check your internet connection and retry.")
+                IllegalStateException("آن لائن اے آئی تجزیہ 60 سیکنڈ بعد ٹائم آؤٹ ہو گیا۔ براہ کرم انٹرنیٹ چیک کر کے دوبارہ کوشش کریں۔")
             )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Online AI single-family analysis failed", e)
             Result.failure(
-                IllegalStateException(e.localizedMessage ?: "Online AI analysis failed. Please verify internet connectivity.")
+                IllegalStateException(e.localizedMessage ?: "آن لائن اے آئی تجزیہ ناکام ہو گیا۔ براہ کرم انٹرنیٹ چیک کریں۔")
             )
         }
     }
 
     /**
      * Fast local offline filter & keyword search across Room SQLite records.
+     * Supports both Urdu and English search terms and preset queries.
      */
     fun searchFamiliesAndEvents(
         query: String,
@@ -352,13 +395,14 @@ class AiAssistantRepository {
     ): Result<AiSearchResult> {
         val cleanQuery = query.trim()
         if (cleanQuery.isEmpty()) {
-            return Result.failure(IllegalArgumentException("Please enter a search query."))
+            return Result.failure(IllegalArgumentException("براہ کرم تلاش کے لیے کوئی سوال یا لفظ لکھیں۔"))
         }
 
         val lowerQuery = cleanQuery.lowercase(Locale.ENGLISH)
         val stopWords = setOf(
             "the", "and", "with", "who", "what", "which", "has", "have", "show",
-            "find", "all", "for", "from", "are", "their", "list", "entries", "records"
+            "find", "all", "for", "from", "are", "their", "list", "entries", "records",
+            "اور", "کے", "کی", "کا", "کو", "میں", "سے", "پر", "ہیں", "ہے", "سب", "دکھائیں", "کون", "سا", "والے", "والی"
         )
         val tokens = lowerQuery
             .split(Regex("[^\\p{L}\\p{N}]+"))
@@ -376,10 +420,14 @@ class AiAssistantRepository {
             Triple(fam, Triple(inTotal, outTotal, inTotal - outTotal), famActs.size)
         }
 
-        val wantsHighestIn = "highest" in lowerQuery && "in" in lowerQuery
-        val wantsNegative = "negative" in lowerQuery || "owe" in lowerQuery || "deficit" in lowerQuery
-        val wantsPositive = "positive" in lowerQuery || "surplus" in lowerQuery
-        val wantsUpcoming = "upcoming" in lowerQuery || "future" in lowerQuery || "next" in lowerQuery
+        val wantsHighestIn = ("highest" in lowerQuery && "in" in lowerQuery) ||
+            ("سب سے زیادہ" in cleanQuery && ("آمدن" in cleanQuery || "وصول" in cleanQuery || "بیلنس" in cleanQuery)) ||
+            ("زیادہ" in cleanQuery && "آمدن" in cleanQuery)
+        val wantsNegative = "negative" in lowerQuery || "owe" in lowerQuery || "deficit" in lowerQuery ||
+            "منفی" in cleanQuery || "کم بیلنس" in cleanQuery || "واجب" in cleanQuery
+        val wantsPositive = "positive" in lowerQuery || "surplus" in lowerQuery || "مثبت" in cleanQuery
+        val wantsUpcoming = "upcoming" in lowerQuery || "future" in lowerQuery || "next" in lowerQuery ||
+            "آنے والی" in cleanQuery || "آئندہ" in cleanQuery
 
         val matchedFamilies = when {
             wantsHighestIn -> familyStats
@@ -404,7 +452,11 @@ class AiAssistantRepository {
             }
         }
 
-        val matchedEvents = if (wantsUpcoming && tokens.none { it !in setOf("upcoming", "events", "event", "occasions", "occasion") }) {
+        val genericUpcomingWords = setOf(
+            "upcoming", "events", "event", "occasions", "occasion",
+            "آنے", "آئندہ", "تقریب", "تقریبات", "ایونٹس"
+        )
+        val matchedEvents = if (wantsUpcoming && tokens.none { it !in genericUpcomingWords }) {
             events.filter { it.eventDateMillis >= todayStart }.sortedBy { it.eventDateMillis }
         } else {
             events.filter { evt ->
@@ -415,8 +467,9 @@ class AiAssistantRepository {
             }
         }
 
-        val wantsIn = "in" in tokens || "received" in tokens
-        val wantsOut = "out" in tokens || "given" in tokens || "gifts" in tokens || "cash" in tokens
+        val wantsIn = "in" in tokens || "received" in tokens || "آمدن" in cleanQuery || "وصول" in cleanQuery
+        val wantsOut = "out" in tokens || "given" in tokens || "gifts" in tokens || "cash" in tokens ||
+            "خرچ" in cleanQuery || "دیے" in cleanQuery || "دیا" in cleanQuery || "تحفے" in cleanQuery || "نقد" in cleanQuery
         val matchedActivities = activities.filter { act ->
             val haystack = "${act.name} fn${act.familyId} ${act.fatherName} ${act.address} ${act.eventType} ${act.eventDetail} ${act.homeItems} ${act.direction}".lowercase(Locale.ENGLISH)
             val textHit = tokens.any { it in haystack } || lowerQuery in haystack
@@ -432,25 +485,25 @@ class AiAssistantRepository {
                 if (top != null) {
                     val net = top.second.third
                     val sign = if (net >= 0) "+" else ""
-                    add("${top.first.name} (FN ${top.first.familyId}): In ${fmt.format(top.second.first)}, Out ${fmt.format(top.second.second)}, Net $sign${fmt.format(net)}.")
+                    add("${top.first.name} (FN ${top.first.familyId}): آمدن ${fmt.format(top.second.first)}، خرچ ${fmt.format(top.second.second)}، خالص بیلنس $sign${fmt.format(net)} روپے۔")
                 }
             }
             if (matchedEvents.isNotEmpty()) {
                 val nextEvt = matchedEvents.minByOrNull { it.eventDateMillis }!!
-                add("Next matched occasion: ${nextEvt.title} on ${dateFmt.format(Date(nextEvt.eventDateMillis))}.")
+                add("اگلی متعلقہ تقریب: ${nextEvt.title} (${dateFmt.format(Date(nextEvt.eventDateMillis))})۔")
             }
             if (matchedActivities.isNotEmpty()) {
                 val inSum = matchedActivities.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.neondraAmount }
                 val outSum = matchedActivities.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.neondraAmount }
-                add("Matched ${matchedActivities.size} ledger entries (In: ${fmt.format(inSum)} | Out: ${fmt.format(outSum)}).")
+                add("${matchedActivities.size} متعلقہ اندراجات ملے (آمدن: ${fmt.format(inSum)} | خرچ: ${fmt.format(outSum)} روپے)۔")
             }
         }
 
         val totalMatches = matchedFamilies.size + matchedEvents.size + matchedActivities.size
         val summary = if (totalMatches == 0) {
-            "No offline records matched \"$cleanQuery\". Try Online AI Search or refine your keywords."
+            "\"$cleanQuery\" کے لیے موبائل کے آف لائن ریکارڈ میں کوئی نتیجہ نہیں ملا۔ الفاظ بدل کر دوبارہ تلاش کریں۔"
         } else {
-            "Found ${matchedFamilies.size} families, ${matchedEvents.size} occasions, and ${matchedActivities.size} ledger entries matching \"$cleanQuery\" in local device storage."
+            "موبائل کے آف لائن ریکارڈ میں \"$cleanQuery\" کے مطابق ${matchedFamilies.size} خاندان، ${matchedEvents.size} تقریبات، اور ${matchedActivities.size} کھاتہ اندراجات ملے۔"
         }
 
         return Result.success(
@@ -472,7 +525,7 @@ class AiAssistantRepository {
         events: List<EventEntry>
     ): Result<AiBalanceComparisonResult> {
         if (selectedFamilies.size < 2) {
-            return Result.failure(IllegalArgumentException("Select at least 2 families to compare across families."))
+            return Result.failure(IllegalArgumentException("موازنے کے لیے کم از کم 2 خاندان منتخب کریں۔"))
         }
 
         val fmt = NumberFormat.getNumberInstance(Locale.US)
@@ -493,13 +546,13 @@ class AiAssistantRepository {
         val breakdowns = computedStats.map { stat ->
             val insight = when {
                 stat.activities.isEmpty() ->
-                    "No ledger entries recorded for ${stat.family.name} yet (${stat.events.size} linked occasions)."
+                    "${stat.family.name} کے لیے ابھی کوئی کھاتہ اندراج موجود نہیں (${stat.events.size} منسلک تقریبات)۔"
                 stat.net > 0 ->
-                    "Net surplus of +${fmt.format(stat.net)} (received ${fmt.format(stat.totalIn)} vs given ${fmt.format(stat.totalOut)} across ${stat.activities.size} entries)."
+                    "خالص بچت/وصولی +${fmt.format(stat.net)} روپے ہے (${stat.activities.size} اندراجات میں آمدن ${fmt.format(stat.totalIn)} اور خرچ ${fmt.format(stat.totalOut)} روپے)۔"
                 stat.net < 0 ->
-                    "Net given exceeds received by ${fmt.format(-stat.net)} (In: ${fmt.format(stat.totalIn)}, Out: ${fmt.format(stat.totalOut)})."
+                    "دیے گئے اخراجات آمدن سے ${fmt.format(-stat.net)} روپے زیادہ ہیں (آمدن: ${fmt.format(stat.totalIn)}، خرچ: ${fmt.format(stat.totalOut)} روپے)۔"
                 else ->
-                    "In and Out amounts are evenly balanced at ${fmt.format(stat.totalIn)} across ${stat.activities.size} entries."
+                    "${stat.activities.size} اندراجات میں آمدن اور خرچ ${fmt.format(stat.totalIn)} روپے پر برابر ہیں۔"
             }
 
             AiFamilyBalanceInsight(
@@ -517,23 +570,23 @@ class AiAssistantRepository {
 
         val recommendations = buildList {
             if (topNet != null && lowestNet != null && topNet.family.id != lowestNet.family.id) {
-                add("${topNet.family.name} leads with a net balance of ${if (topNet.net >= 0) "+" else ""}${fmt.format(topNet.net)}, compared to ${lowestNet.family.name} (${if (lowestNet.net >= 0) "+" else ""}${fmt.format(lowestNet.net)}).")
+                add("${topNet.family.name} کا خالص بیلنس سب سے زیادہ (${if (topNet.net >= 0) "+" else ""}${fmt.format(topNet.net)} روپے) ہے، جبکہ ${lowestNet.family.name} کا بیلنس ${if (lowestNet.net >= 0) "+" else ""}${fmt.format(lowestNet.net)} روپے ہے۔")
             }
             computedStats.filter { it.net > 0 }.forEach { surplus ->
-                add("Consider reciprocating at the next occasion for ${surplus.family.name} (net received +${fmt.format(surplus.net)}).")
+                add("${surplus.family.name} کی آنے والی تقریب میں نیوندرا دینے کا خیال رکھیں (خالص وصولی +${fmt.format(surplus.net)} روپے)۔")
             }
             if (isEmpty()) {
-                add("All compared families have balanced or zeroed ledgers.")
+                add("تمام منتخب خاندانوں کا حساب برابر یا صفر ہے۔")
             }
         }.take(3)
 
         val headline = if (topNet != null) {
-            "${topNet.family.name} leads Net Balance (${if (topNet.net >= 0) "+" else ""}${fmt.format(topNet.net)})"
+            "${topNet.family.name} خالص بیلنس میں سرفہرست (${if (topNet.net >= 0) "+" else ""}${fmt.format(topNet.net)} روپے)"
         } else {
-            "In vs Out Balance Comparison"
+            "آمدن بمقابلہ خرچ بیلنس کا موازنہ"
         }
 
-        val summary = "Compared ${selectedFamilies.size} families: combined In is ${fmt.format(computedStats.sumOf { it.totalIn })} and combined Out is ${fmt.format(computedStats.sumOf { it.totalOut })}."
+        val summary = "${selectedFamilies.size} خاندانوں کا موازنہ: مجموعی آمدن ${fmt.format(computedStats.sumOf { it.totalIn })} روپے اور مجموعی خرچ ${fmt.format(computedStats.sumOf { it.totalOut })} روپے ہے۔"
 
         return Result.success(
             AiBalanceComparisonResult(
@@ -541,9 +594,77 @@ class AiAssistantRepository {
                 summary = summary,
                 higherNetFamilyName = topNet?.family?.name.orEmpty(),
                 familyBreakdowns = breakdowns,
-                recommendations = recommendations
+                recommendations = recommendations,
+                usedOnlineAi = false
             )
         )
+    }
+
+    suspend fun analyzeMultiFamilyOnline(
+        selectedFamilies: List<FamilyProfile>,
+        activities: List<ActivityRecord>,
+        events: List<EventEntry>
+    ): Result<AiBalanceComparisonResult> {
+        val baseResult = compareFamilyBalances(selectedFamilies, activities, events)
+        val base = baseResult.getOrElse { return Result.failure(it) }
+        if (!isFirebaseConfigured()) {
+            return Result.failure(
+                IllegalStateException(MISSING_FIREBASE_CONFIG_MESSAGE)
+            )
+        }
+        return try {
+            val prompt = buildMultiFamilyPrompt(base, activities)
+            val response = withTimeout(AI_TIMEOUT_MILLIS) {
+                multiFamilyModel.generateContent(prompt)
+            }
+            val rawJson = response.text
+                ?.takeIf { it.isNotBlank() }
+                ?: throw IllegalStateException("اے آئی نے کوئی جواب نہیں دیا۔")
+
+            val json = JSONObject(rawJson)
+            val headline = json.optString("headline").ifBlank { base.headline }
+            val summary = json.optString("summary").ifBlank { base.summary }
+            val recommendations = json.optStringList("recommendations").ifEmpty { base.recommendations }
+
+            val insightById = mutableMapOf<String, String>()
+            val insightsArr = json.optJSONArray("familyInsights")
+            if (insightsArr != null) {
+                for (i in 0 until insightsArr.length()) {
+                    val obj = insightsArr.optJSONObject(i) ?: continue
+                    val famId = obj.optString("familyDocId").trim()
+                    val text = obj.optString("insight").trim()
+                    if (famId.isNotEmpty() && text.isNotEmpty()) {
+                        insightById[famId] = text
+                    }
+                }
+            }
+
+            val updatedBreakdowns = base.familyBreakdowns.map { item ->
+                item.copy(insight = insightById[item.familyDocId] ?: item.insight)
+            }
+
+            Result.success(
+                base.copy(
+                    headline = headline,
+                    summary = summary,
+                    familyBreakdowns = updatedBreakdowns,
+                    recommendations = recommendations,
+                    usedOnlineAi = true
+                )
+            )
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Online AI multi-family comparison timed out", e)
+            Result.failure(
+                IllegalStateException("آن لائن اے آئی موازنہ 60 سیکنڈ بعد ٹائم آؤٹ ہو گیا۔ براہ کرم انٹرنیٹ چیک کر کے دوبارہ کوشش کریں۔")
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Online AI multi-family comparison failed", e)
+            Result.failure(
+                IllegalStateException(e.localizedMessage ?: "آن لائن اے آئی موازنہ ناکام ہو گیا۔ براہ کرم انٹرنیٹ چیک کریں۔")
+            )
+        }
     }
 
     private fun activitiesForFamily(
@@ -627,6 +748,7 @@ class AiAssistantRepository {
         return """
             You are the AI assistant inside "Life Line", an offline-first family occasion and gift/neondra ledger app.
             Today's date is ${dateFmt.format(Date(System.currentTimeMillis()))}.
+            CRITICAL LANGUAGE REQUIREMENT: Write ALL human-readable response fields (`answerSummary` and every item in `keyInsights`) strictly in clear, natural URDU (اردو). Keep IDs exact.
             Answer the user's question accurately using ONLY the user's offline Room database records below.
             Return exact matching document IDs (`id` fields) in matchedFamilyIds, matchedActivityIds, and matchedEventIds.
 
@@ -674,9 +796,10 @@ class AiAssistantRepository {
         }
 
         return """
-            You are the AI analyst inside "Life Line", a family occasion and gift ledger app.
-            Compare the In (Received) entries vs Out (Given) entries WITHIN THIS SINGLE FAMILY using their offline ledger records.
-            Explain the exact reciprocity balance, which categories or occasions have more In vs Out, any notable gifts/items, and practical next steps.
+            You are the AI analyst inside "Life Line", a family occasion and gift/neondra ledger app.
+            CRITICAL LANGUAGE REQUIREMENT: Write `headline`, `summary`, and EVERY item in `insights` strictly in clear, natural URDU (اردو).
+            Compare the In (آمدن / وصول) entries vs Out (خرچ / دیے گئے) entries WITHIN THIS SINGLE FAMILY using their offline ledger records.
+            Explain the exact reciprocity balance in Urdu, which categories or occasions have more In vs Out, any notable gifts/items, and practical next steps.
 
             FAMILY:
             Name: ${base.family.name} (FN ${base.family.familyId}), Address: ${base.family.address}
@@ -689,6 +812,59 @@ class AiAssistantRepository {
 
             OUT ENTRIES (GIVEN):
             $outArr
+        """.trimIndent()
+    }
+
+    private fun buildMultiFamilyPrompt(
+        base: AiBalanceComparisonResult,
+        activities: List<ActivityRecord>
+    ): String {
+        val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val famArr = JSONArray().apply {
+            base.familyBreakdowns.forEach { fam ->
+                val famActs = activities.filter { act ->
+                    act.familyDocId == fam.familyDocId ||
+                        (act.familyId.isNotBlank() && act.familyId == fam.familyId &&
+                            act.name.equals(fam.familyName, ignoreCase = true))
+                }.sortedByDescending { it.eventDateMillis }.take(20)
+
+                val recentArr = JSONArray().apply {
+                    famActs.forEach { act ->
+                        put(
+                            JSONObject().apply {
+                                put("date", dateFmt.format(Date(act.eventDateMillis)))
+                                put("category", act.eventType)
+                                put("direction", act.direction)
+                                put("amount", act.neondraAmount)
+                                put("items", act.homeItems)
+                            }
+                        )
+                    }
+                }
+
+                put(
+                    JSONObject().apply {
+                        put("familyDocId", fam.familyDocId)
+                        put("fn", fam.familyId)
+                        put("name", fam.familyName)
+                        put("totalIn", fam.totalIn)
+                        put("totalOut", fam.totalOut)
+                        put("netBalance", fam.netBalance)
+                        put("entriesCount", fam.entriesCount)
+                        put("eventsCount", fam.eventsCount)
+                        put("recentEntries", recentArr)
+                    }
+                )
+            }
+        }
+
+        return """
+            You are the AI analyst inside "Life Line", a family occasion and gift/neondra ledger app.
+            CRITICAL LANGUAGE REQUIREMENT: Write `headline`, `summary`, every `familyInsights[].insight`, and every item in `recommendations` strictly in clear, natural URDU (اردو). Keep `familyDocId` values exact.
+            Compare the In (آمدن / وصول) and Out (خرچ / دیے گئے) balances across these selected families based on the offline data below.
+
+            SELECTED FAMILIES:
+            $famArr
         """.trimIndent()
     }
 
@@ -725,6 +901,6 @@ class AiAssistantRepository {
         const val MODEL_NAME = "gemini-3.8-flash"
         const val AI_TIMEOUT_MILLIS = 60_000L
         const val MISSING_FIREBASE_CONFIG_MESSAGE =
-            "Online AI requires google-services.json. Download the APK directly from AI Studio's Settings menu, or add GOOGLE_SERVICES_JSON as a GitHub Repository Secret. Offline Quick Filter and local Family Compare continue to work offline."
+            "آن لائن اے آئی کے لیے google-services.json ضروری ہے۔ آپ ایپ میں آف لائن تلاش اور خاندانی موازنہ بدستور استعمال کر سکتے ہیں۔"
     }
 }

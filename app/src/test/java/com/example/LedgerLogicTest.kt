@@ -33,10 +33,10 @@ class LedgerLogicTest {
     }
 
     @Test
-    fun `formatReminderOffsetLabel returns English labels`() {
-        assertEquals("At event time", formatReminderOffsetLabel(0L))
-        assertEquals("1 hour before", formatReminderOffsetLabel(60L))
-        assertEquals("1 day before", formatReminderOffsetLabel(1440L))
+    fun `formatReminderOffsetLabel returns Urdu labels`() {
+        assertEquals("تقریب کے وقت", formatReminderOffsetLabel(0L))
+        assertEquals("1 گھنٹہ پہلے", formatReminderOffsetLabel(60L))
+        assertEquals("1 دن پہلے", formatReminderOffsetLabel(1440L))
     }
 
     @Test
@@ -102,10 +102,10 @@ class LedgerLogicTest {
     fun `formatRelativeDayBadge produces clear relative labels`() {
         val now = 1_764_000_000_000L
         val today = localDayStartMillis(now) + TimeUnit.HOURS.toMillis(10)
-        assertEquals("Today", formatRelativeDayBadge(today, now))
-        assertEquals("Tomorrow", formatRelativeDayBadge(today + TimeUnit.DAYS.toMillis(1), now))
-        assertEquals("In 5 days", formatRelativeDayBadge(today + TimeUnit.DAYS.toMillis(5), now))
-        assertEquals("Past", formatRelativeDayBadge(today - TimeUnit.DAYS.toMillis(2), now))
+        assertEquals("آج", formatRelativeDayBadge(today, now))
+        assertEquals("کل", formatRelativeDayBadge(today + TimeUnit.DAYS.toMillis(1), now))
+        assertEquals("5 دن بعد", formatRelativeDayBadge(today + TimeUnit.DAYS.toMillis(5), now))
+        assertEquals("گزشتہ", formatRelativeDayBadge(today - TimeUnit.DAYS.toMillis(2), now))
     }
 
     @Test
@@ -128,8 +128,14 @@ class LedgerLogicTest {
         val highestInResult = repo.searchFamiliesAndEvents("Who has the highest In balance?", families, activities, events).getOrThrow()
         assertEquals(listOf("f1"), highestInResult.matchedFamilyIds)
 
+        val highestInUrduResult = repo.searchFamiliesAndEvents("سب سے زیادہ آمدن کس خاندان کی ہے؟", families, activities, events).getOrThrow()
+        assertEquals(listOf("f1"), highestInUrduResult.matchedFamilyIds)
+
         val upcomingResult = repo.searchFamiliesAndEvents("upcoming events", families, activities, events).getOrThrow()
         assertEquals(listOf("e1"), upcomingResult.matchedEventIds)
+
+        val upcomingUrduResult = repo.searchFamiliesAndEvents("آنے والی تقریبات", families, activities, events).getOrThrow()
+        assertEquals(listOf("e1"), upcomingUrduResult.matchedEventIds)
     }
 
     @Test

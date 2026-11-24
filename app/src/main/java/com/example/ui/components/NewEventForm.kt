@@ -119,7 +119,7 @@ fun NewEventFormContent(
         mutableStateOf(
             initialEvent?.category?.takeIf { it.isNotBlank() }
                 ?: catalog.eventTypes.firstOrNull()
-                ?: "Wedding"
+                ?: "شادی"
         )
     }
     var location by remember(initialEvent) { mutableStateOf(initialEvent?.location ?: "") }
@@ -166,11 +166,11 @@ fun NewEventFormContent(
                         showDatePicker = false
                     }
                 ) {
-                    Text("Select")
+                    Text("منتخب کریں")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showDatePicker = false }) { Text("منسوخ کریں") }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -187,7 +187,7 @@ fun NewEventFormContent(
         )
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
-            title = { Text("Select Time") },
+            title = { Text("وقت منتخب کریں") },
             text = { TimePicker(state = timeState) },
             confirmButton = {
                 TextButton(
@@ -202,11 +202,11 @@ fun NewEventFormContent(
                         showTimePicker = false
                     }
                 ) {
-                    Text("Confirm")
+                    Text("تصدیق کریں")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
+                TextButton(onClick = { showTimePicker = false }) { Text("منسوخ کریں") }
             }
         )
     }
@@ -231,15 +231,15 @@ fun NewEventFormContent(
                 )
                 Column {
                     Text(
-                        text = if (isEditing) "Edit Occasion" else "New Occasion",
+                        text = if (isEditing) "تقریب میں ترمیم" else "نئی تقریب",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
                         text = if (isEditing) {
-                            "Update occasion details on your device"
+                            "اپنے موبائل پر تقریب کی تفصیل اپ ڈیٹ کریں"
                         } else {
-                            "Save upcoming occasion details offline on your phone"
+                            "آنے والی تقریب کی تفصیل آف لائن موبائل میں محفوظ کریں"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -250,7 +250,7 @@ fun NewEventFormContent(
                 onClick = onDismiss,
                 modifier = Modifier.testTag("close_new_event_button")
             ) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close Occasion Form")
+                Icon(Icons.Rounded.Close, contentDescription = "فارم بند کریں")
             }
         }
 
@@ -260,8 +260,8 @@ fun NewEventFormContent(
                 title = it.take(120)
                 if (validationError != null) validationError = null
             },
-            label = { Text("Occasion Name *") },
-            placeholder = { Text("e.g. Cousin Wedding Reception") },
+            label = { Text("تقریب کا نام *") },
+            placeholder = { Text("مثلاً: کزن کی شادی یا دعوت") },
             leadingIcon = { Icon(Icons.Rounded.Title, contentDescription = null) },
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
@@ -271,7 +271,7 @@ fun NewEventFormContent(
         )
 
         Text(
-            text = "Occasion Date & Time",
+            text = "تقریب کی تاریخ اور وقت",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold
         )
@@ -308,8 +308,8 @@ fun NewEventFormContent(
         OutlinedTextField(
             value = description,
             onValueChange = { description = it.take(1000) },
-            label = { Text("Description") },
-            placeholder = { Text("Notes, host details, dress code, or gift ideas...") },
+            label = { Text("تفصیل") },
+            placeholder = { Text("میزبان کی تفصیل، تحائف یا اہم نوٹس...") },
             leadingIcon = { Icon(Icons.Rounded.Description, contentDescription = null) },
             minLines = 3,
             maxLines = 5,
@@ -321,7 +321,7 @@ fun NewEventFormContent(
 
         if (catalog.eventTypes.isNotEmpty()) {
             Text(
-                text = "Category",
+                text = "قسم",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold
             )
@@ -357,8 +357,8 @@ fun NewEventFormContent(
         OutlinedTextField(
             value = location,
             onValueChange = { location = it.take(200) },
-            label = { Text("Location (Optional)") },
-            placeholder = { Text("e.g. Pearl Hall, Main Boulevard") },
+            label = { Text("مقام (اختیاری)") },
+            placeholder = { Text("مثلاً: پرل ہال، مین بولیوارڈ") },
             leadingIcon = { Icon(Icons.Rounded.LocationOn, contentDescription = null) },
             singleLine = true,
             shape = RoundedCornerShape(14.dp),
@@ -375,8 +375,8 @@ fun NewEventFormContent(
                     .firstOrNull { fam -> fam.name.equals(it.trim(), ignoreCase = true) }
                     ?.id
             },
-            label = "Linked Family (Optional)",
-            placeholder = "Select or type a family name",
+            label = "منسلک خاندان (اختیاری)",
+            placeholder = "خاندان منتخب کریں یا نام لکھیں",
             options = familyOptions,
             onOptionSelected = { opt ->
                 familyName = opt.primaryValue
@@ -413,7 +413,7 @@ fun NewEventFormContent(
             onClick = {
                 val trimmedTitle = title.trim()
                 if (trimmedTitle.isEmpty()) {
-                    validationError = "Please enter an occasion name."
+                    validationError = "براہ کرم تقریب کا نام درج کریں۔"
                     return@Button
                 }
                 validationError = null
@@ -424,7 +424,7 @@ fun NewEventFormContent(
                         title = trimmedTitle,
                         description = description.trim(),
                         eventDateMillis = eventDateMillis,
-                        category = category.trim().ifEmpty { "Event" },
+                        category = category.trim().ifEmpty { "تقریب" },
                         location = location.trim(),
                         familyDocId = selectedFamilyDocId,
                         familyName = familyName.trim()
@@ -446,7 +446,7 @@ fun NewEventFormContent(
                 )
             } else {
                 Text(
-                    text = if (isEditing) "Update Occasion" else "Save Occasion",
+                    text = if (isEditing) "تقریب اپ ڈیٹ کریں" else "تقریب محفوظ کریں",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -471,7 +471,7 @@ fun NewEventFormContent(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Delete Occasion",
+                    text = "تقریب حذف کریں",
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.SemiBold
                 )

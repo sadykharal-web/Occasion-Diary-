@@ -76,7 +76,11 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-private val DAY_LABELS = listOf("Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat")
+private val DAY_LABELS = listOf("اتوار", "پیر", "منگل", "بدھ", "جمعرات", "جمعہ", "ہفتہ")
+private val URDU_MONTHS = listOf(
+    "جنوری", "فروری", "مارچ", "اپریل", "مئی", "جون",
+    "جولائی", "اگست", "ستمبر", "اکتوبر", "نومبر", "دسمبر"
+)
 
 @Composable
 fun CalendarScreen(
@@ -117,12 +121,8 @@ fun CalendarScreen(
     }
 
     val monthTitle = remember(visibleYear, visibleMonth) {
-        val cal = Calendar.getInstance().apply {
-            set(Calendar.YEAR, visibleYear)
-            set(Calendar.MONTH, visibleMonth)
-            set(Calendar.DAY_OF_MONTH, 1)
-        }
-        SimpleDateFormat("MMMM yyyy", Locale.ENGLISH).format(cal.time)
+        val monthName = URDU_MONTHS.getOrElse(visibleMonth) { "" }
+        "$monthName $visibleYear"
     }
 
     val monthCells = remember(visibleYear, visibleMonth) {
@@ -183,18 +183,17 @@ fun CalendarScreen(
                                     }
                                 }
                             ) {
-                                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, contentDescription = "Previous month")
+                                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowLeft, contentDescription = "پچھلا مہینہ")
                             }
 
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
                                     text = monthTitle,
                                     style = MaterialTheme.typography.titleLarge,
-                                    fontFamily = JakartaSansFamily,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Jump to Today",
+                                    text = "آج پر جائیں",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.clickable {
@@ -216,7 +215,7 @@ fun CalendarScreen(
                                     }
                                 }
                             ) {
-                                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "Next month")
+                                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, contentDescription = "اگلا مہینہ")
                             }
                         }
 
@@ -356,7 +355,7 @@ fun CalendarScreen(
                         )
                         val totalItems = selectedDayStandaloneEvents.size + selectedDayActivities.size
                         Text(
-                            text = "$totalItems scheduled items on this day",
+                            text = "اس دن $totalItems اندراجات / تقریبات طے ہیں",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -376,7 +375,7 @@ fun CalendarScreen(
                         ) {
                             Icon(Icons.Rounded.Event, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("New Event")
+                            Text("نئی تقریب")
                         }
 
                         OutlinedButton(
@@ -389,7 +388,7 @@ fun CalendarScreen(
                         ) {
                             Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("New Ledger")
+                            Text("نیا کھاتہ")
                         }
                     }
                 }
@@ -418,7 +417,7 @@ fun CalendarScreen(
                                 modifier = Modifier.size(36.dp)
                             )
                             Text(
-                                text = "No events or ledger records scheduled on this date",
+                                text = "اس تاریخ پر کوئی تقریب یا کھاتہ اندراج موجود نہیں",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -430,7 +429,7 @@ fun CalendarScreen(
                 if (selectedDayStandaloneEvents.isNotEmpty()) {
                     item {
                         Text(
-                            text = "Events (${selectedDayStandaloneEvents.size})",
+                            text = "تقریبات (${selectedDayStandaloneEvents.size})",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -460,7 +459,7 @@ fun CalendarScreen(
                                         verticalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         CategoryBadge(
-                                            label = evt.category.ifBlank { "Event" },
+                                            label = evt.category.ifBlank { "تقریب" },
                                             color = catColor,
                                             icon = catIcon
                                         )
@@ -477,12 +476,12 @@ fun CalendarScreen(
                                     }
                                     Row {
                                         IconButton(onClick = { onEditEvent(evt) }) {
-                                            Icon(Icons.Rounded.Edit, contentDescription = "Edit Event")
+                                            Icon(Icons.Rounded.Edit, contentDescription = "تقریب میں ترمیم")
                                         }
                                         IconButton(onClick = { onDeleteEvent(evt.id) }) {
                                             Icon(
                                                 Icons.Rounded.DeleteOutline,
-                                                contentDescription = "Delete Event",
+                                                contentDescription = "تقریب حذف کریں",
                                                 tint = MaterialTheme.colorScheme.error
                                             )
                                         }
@@ -527,7 +526,7 @@ fun CalendarScreen(
                 if (selectedDayActivities.isNotEmpty()) {
                     item {
                         Text(
-                            text = "Ledger Entries (${selectedDayActivities.size})",
+                            text = "کھاتہ اندراجات (${selectedDayActivities.size})",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -584,7 +583,7 @@ fun CalendarScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Amount: ${formatNeondraAmount(event.neondraAmount)}",
+                                        text = "رقم: ${formatNeondraAmount(event.neondraAmount)}",
                                         style = MaterialTheme.typography.labelLarge,
                                         color = MaterialTheme.colorScheme.primary
                                     )
@@ -596,7 +595,7 @@ fun CalendarScreen(
                                             ) {
                                                 Icon(
                                                     imageVector = Icons.Rounded.NotificationsActive,
-                                                    contentDescription = "Reminder On",
+                                                    contentDescription = "یاددہانی فعال",
                                                     tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                                     modifier = Modifier.padding(6.dp).size(16.dp)
                                                 )
@@ -614,7 +613,7 @@ fun CalendarScreen(
                                         ) {
                                             Icon(Icons.Rounded.CalendarToday, contentDescription = null, modifier = Modifier.size(14.dp))
                                             Spacer(modifier = Modifier.width(4.dp))
-                                            Text("Calendar", style = MaterialTheme.typography.labelMedium)
+                                            Text("کیلنڈر", style = MaterialTheme.typography.labelMedium)
                                         }
                                     }
                                 }
@@ -628,7 +627,7 @@ fun CalendarScreen(
                 item {
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "All Saved Events (${events.size})",
+                        text = "تمام محفوظ تقریبات (${events.size})",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -661,7 +660,7 @@ fun CalendarScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     CategoryBadge(
-                                        label = evt.category.ifBlank { "Event" },
+                                        label = evt.category.ifBlank { "تقریب" },
                                         color = catColor,
                                         icon = catIcon
                                     )
@@ -688,7 +687,7 @@ fun CalendarScreen(
                             IconButton(onClick = { onDeleteEvent(evt.id) }) {
                                 Icon(
                                     Icons.Rounded.DeleteOutline,
-                                    contentDescription = "Delete Event",
+                                    contentDescription = "تقریب حذف کریں",
                                     tint = MaterialTheme.colorScheme.error
                                 )
                             }

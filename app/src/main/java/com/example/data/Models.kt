@@ -19,8 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 
 enum class ActivityDirection(val wireValue: String, val displayLabel: String, val shortLabel: String) {
-    IN("IN", "In (Received)", "In"),
-    OUT("OUT", "Out (Given)", "Out");
+    IN("IN", "آمدن (وصول)", "آمدن"),
+    OUT("OUT", "خرچ (دیے گئے)", "خرچ");
 
     companion object {
         fun fromWire(raw: String?): ActivityDirection {
@@ -88,7 +88,7 @@ data class EventEntry(
     val title: String = "",
     val description: String = "",
     val eventDateMillis: Long = System.currentTimeMillis(),
-    val category: String = "Wedding",
+    val category: String = "شادی",
     val location: String = "",
     val familyDocId: String? = null,
     val familyName: String = "",
@@ -102,38 +102,49 @@ data class DefaultCategorySeed(val name: String, val colorHex: String, val iconK
 
 object CategoryStyleCatalog {
     val COLOR_PALETTE = listOf(
-        CategoryColorOption("#0F5C4D", "Emerald"),
-        CategoryColorOption("#B87314", "Amber Gold"),
-        CategoryColorOption("#B83B2B", "Coral Red"),
-        CategoryColorOption("#1976D2", "Royal Blue"),
-        CategoryColorOption("#6A4C93", "Plum"),
-        CategoryColorOption("#00897B", "Teal"),
-        CategoryColorOption("#D81B60", "Rose"),
-        CategoryColorOption("#5D4037", "Warm Brown"),
-        CategoryColorOption("#2E7D32", "Forest Green"),
-        CategoryColorOption("#EF6C00", "Tangerine"),
-        CategoryColorOption("#28666E", "Deep Cyan"),
-        CategoryColorOption("#455A64", "Slate")
+        CategoryColorOption("#0F5C4D", "زمردی سبز"),
+        CategoryColorOption("#B87314", "سنہری"),
+        CategoryColorOption("#B83B2B", "سرخ"),
+        CategoryColorOption("#1976D2", "شاہی نیلا"),
+        CategoryColorOption("#6A4C93", "جامنی"),
+        CategoryColorOption("#00897B", "فیروزی"),
+        CategoryColorOption("#D81B60", "گلابی"),
+        CategoryColorOption("#5D4037", "بھورا"),
+        CategoryColorOption("#2E7D32", "گہرا سبز"),
+        CategoryColorOption("#EF6C00", "نارنجی"),
+        CategoryColorOption("#28666E", "گہرا نیلا"),
+        CategoryColorOption("#455A64", "سرمئی")
     )
 
     val ICON_OPTIONS = listOf(
-        CategoryIconOption("celebration", "Celebration", Icons.Rounded.Celebration),
-        CategoryIconOption("favorite", "Joy & Gift", Icons.Rounded.Favorite),
-        CategoryIconOption("groups", "Family", Icons.Rounded.Groups),
-        CategoryIconOption("mosque", "Religious / Condolence", Icons.Rounded.Mosque),
-        CategoryIconOption("work", "Work / Meeting", Icons.Rounded.Work),
-        CategoryIconOption("payments", "Finance / Cash", Icons.Rounded.AccountBalanceWallet),
-        CategoryIconOption("restaurant", "Dinner / Feast", Icons.Rounded.Restaurant),
-        CategoryIconOption("shopping", "Shopping / Gift", Icons.Rounded.ShoppingBag),
-        CategoryIconOption("home", "Home", Icons.Rounded.Home),
-        CategoryIconOption("school", "Education", Icons.Rounded.School),
-        CategoryIconOption("medical", "Health", Icons.Rounded.MedicalServices),
-        CategoryIconOption("flight", "Travel", Icons.Rounded.Flight),
-        CategoryIconOption("sparkles", "Special", Icons.Rounded.AutoAwesome),
-        CategoryIconOption("event", "General Event", Icons.Rounded.Event)
+        CategoryIconOption("celebration", "جشن / شادی", Icons.Rounded.Celebration),
+        CategoryIconOption("favorite", "خوشی اور تحفہ", Icons.Rounded.Favorite),
+        CategoryIconOption("groups", "خاندان", Icons.Rounded.Groups),
+        CategoryIconOption("mosque", "مذہبی / تعزیت", Icons.Rounded.Mosque),
+        CategoryIconOption("work", "کام / میٹنگ", Icons.Rounded.Work),
+        CategoryIconOption("payments", "مالی / نقد", Icons.Rounded.AccountBalanceWallet),
+        CategoryIconOption("restaurant", "دعوت / ولیمہ", Icons.Rounded.Restaurant),
+        CategoryIconOption("shopping", "خریداری / تحفہ", Icons.Rounded.ShoppingBag),
+        CategoryIconOption("home", "گھر", Icons.Rounded.Home),
+        CategoryIconOption("school", "تعلیم", Icons.Rounded.School),
+        CategoryIconOption("medical", "صحت", Icons.Rounded.MedicalServices),
+        CategoryIconOption("flight", "سفر", Icons.Rounded.Flight),
+        CategoryIconOption("sparkles", "خاص تقریب", Icons.Rounded.AutoAwesome),
+        CategoryIconOption("event", "عام تقریب", Icons.Rounded.Event)
     )
 
     val DEFAULT_SEEDS = listOf(
+        DefaultCategorySeed("شادی", "#D81B60", "celebration"),
+        DefaultCategorySeed("ولیمہ", "#0F5C4D", "restaurant"),
+        DefaultCategorySeed("عقیقہ", "#00897B", "favorite"),
+        DefaultCategorySeed("دعوت / تقریب", "#B87314", "sparkles"),
+        DefaultCategorySeed("تعزیت / فوتگی", "#455A64", "mosque"),
+        DefaultCategorySeed("سالگرہ", "#6A4C93", "celebration"),
+        DefaultCategorySeed("میٹنگ", "#1976D2", "work"),
+        DefaultCategorySeed("ذاتی", "#5D4037", "home")
+    )
+
+    private val LEGACY_SEEDS = listOf(
         DefaultCategorySeed("Wedding", "#D81B60", "celebration"),
         DefaultCategorySeed("Walima", "#0F5C4D", "restaurant"),
         DefaultCategorySeed("Aqiqah", "#00897B", "favorite"),
@@ -156,6 +167,12 @@ object CategoryStyleCatalog {
     fun iconForKey(key: String?): ImageVector {
         return ICON_OPTIONS.firstOrNull { it.key == key }?.icon ?: Icons.Rounded.Event
     }
+
+    fun fallbackSeedFor(eventName: String): DefaultCategorySeed? {
+        val clean = eventName.trim()
+        return DEFAULT_SEEDS.firstOrNull { it.name.equals(clean, ignoreCase = true) }
+            ?: LEGACY_SEEDS.firstOrNull { it.name.equals(clean, ignoreCase = true) }
+    }
 }
 
 data class DropdownCatalog(
@@ -173,9 +190,7 @@ data class DropdownCatalog(
         if (custom != null) {
             return custom.parsedColor to custom.parsedIcon
         }
-        val seed = CategoryStyleCatalog.DEFAULT_SEEDS.firstOrNull {
-            it.name.equals(eventName.trim(), ignoreCase = true)
-        }
+        val seed = CategoryStyleCatalog.fallbackSeedFor(eventName)
         if (seed != null) {
             return CategoryStyleCatalog.parseColorOrDefault(seed.colorHex) to
                 CategoryStyleCatalog.iconForKey(seed.iconKey)

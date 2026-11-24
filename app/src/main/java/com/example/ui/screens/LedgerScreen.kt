@@ -214,11 +214,11 @@ fun formatRelativeDayBadge(
     val eventStart = localDayStartMillis(eventDateMillis)
     val deltaDays = TimeUnit.MILLISECONDS.toDays(eventStart - todayStart)
     return when {
-        deltaDays < 0L -> "Past"
-        deltaDays == 0L -> "Today"
-        deltaDays == 1L -> "Tomorrow"
-        deltaDays <= 365L -> "In $deltaDays days"
-        else -> "In ${deltaDays / 30} mo"
+        deltaDays < 0L -> "گزشتہ"
+        deltaDays == 0L -> "آج"
+        deltaDays == 1L -> "کل"
+        deltaDays <= 365L -> "$deltaDays دن بعد"
+        else -> "${deltaDays / 30} ماہ بعد"
     }
 }
 
@@ -316,7 +316,7 @@ fun LedgerScreen(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Add,
-                    contentDescription = "Add New Entry"
+                    contentDescription = "نیا اندراج شامل کریں"
                 )
             }
         }
@@ -428,14 +428,14 @@ fun LedgerScreen(
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = onSearchQueryChange,
-                                placeholder = { Text("Search occasions, name, FN, address, or category...") },
+                                placeholder = { Text("تقریب، نام، فیملی نمبر، پتہ یا قسم تلاش کریں...") },
                                 leadingIcon = {
                                     Icon(Icons.Rounded.Search, contentDescription = null)
                                 },
                                 trailingIcon = {
                                     if (searchQuery.isNotEmpty()) {
                                         IconButton(onClick = { onSearchQueryChange("") }) {
-                                            Icon(Icons.Rounded.Clear, contentDescription = "Clear search")
+                                            Icon(Icons.Rounded.Clear, contentDescription = "تلاش صاف کریں")
                                         }
                                     }
                                 },
@@ -466,12 +466,12 @@ fun LedgerScreen(
                                         )
                                         Column {
                                             Text(
-                                                text = "Upcoming Occasions (${upcomingOccasions.size})",
+                                                text = "آنے والی تقریبات (${upcomingOccasions.size})",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold
                                             )
                                             Text(
-                                                text = "Tap or swipe right on a card to edit offline",
+                                                text = "ترمیم کے لیے کارڈ پر ٹیپ یا سوائپ کریں",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -486,7 +486,7 @@ fun LedgerScreen(
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         },
-                                        label = { Text("New Occasion") },
+                                        label = { Text("نئی تقریب") },
                                         modifier = Modifier.testTag("ledger_new_event_chip")
                                     )
                                 }
@@ -499,13 +499,13 @@ fun LedgerScreen(
                                     FilterChip(
                                         selected = !showAllSavedEvents,
                                         onClick = { showAllSavedEvents = false },
-                                        label = { Text("Upcoming") },
+                                        label = { Text("آنے والی") },
                                         modifier = Modifier.testTag("filter_upcoming_only_chip")
                                     )
                                     FilterChip(
                                         selected = showAllSavedEvents,
                                         onClick = { showAllSavedEvents = true },
-                                        label = { Text("All Saved (${data.events.size})") },
+                                        label = { Text("تمام محفوظ (${data.events.size})") },
                                         modifier = Modifier.testTag("filter_all_saved_events_chip")
                                     )
                                 }
@@ -530,7 +530,7 @@ fun LedgerScreen(
                                     is UpcomingOccasionItem.Event -> {
                                         val (evtColor, evtIcon) = data.catalog.resolveCategoryVisual(item.entry.category)
                                         SwipeToEditContainer(
-                                            editLabel = "Edit Occasion",
+                                            editLabel = "تقریب میں ترمیم",
                                             onEdit = { onEventClick(item.entry) }
                                         ) {
                                             UpcomingEventOccasionCard(
@@ -547,7 +547,7 @@ fun LedgerScreen(
                                     is UpcomingOccasionItem.Activity -> {
                                         val (actColor, actIcon) = data.catalog.resolveCategoryVisual(item.record.eventType)
                                         SwipeToEditContainer(
-                                            editLabel = "Edit Occasion",
+                                            editLabel = "اندراج میں ترمیم",
                                             onEdit = { onEditActivityClick(item.record) }
                                         ) {
                                             UpcomingActivityOccasionCard(
@@ -570,7 +570,7 @@ fun LedgerScreen(
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Text(
-                                    text = "Ledger Entries (${filteredList.size})",
+                                    text = "کھاتہ اندراجات (${filteredList.size})",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -619,13 +619,13 @@ fun LedgerScreen(
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         },
-                                        label = { Text("Categories") },
+                                        label = { Text("اقسام") },
                                         modifier = Modifier.testTag("manage_categories_chip")
                                     )
                                     FilterChip(
                                         selected = selectedCategoryFilter == null,
                                         onClick = { onCategoryFilterChange(null) },
-                                        label = { Text("All Categories") }
+                                        label = { Text("تمام اقسام") }
                                     )
                                     data.catalog.eventTypes.forEach { catName ->
                                         val (catColor, catIcon) = data.catalog.resolveCategoryVisual(catName)
@@ -670,7 +670,7 @@ fun LedgerScreen(
                                         FilterChip(
                                             selected = selectedAddress == null,
                                             onClick = { onAddressFilterChange(null) },
-                                            label = { Text("All Addresses") }
+                                            label = { Text("تمام پتے") }
                                         )
                                         data.catalog.addresses.forEach { addr ->
                                             FilterChip(
@@ -700,7 +700,7 @@ fun LedgerScreen(
                             ) { activity ->
                                 val (catColor, catIcon) = data.catalog.resolveCategoryVisual(activity.eventType)
                                 SwipeToEditContainer(
-                                    editLabel = "Edit Entry",
+                                    editLabel = "ترمیم کریں",
                                     onEdit = { onEditActivityClick(activity) }
                                 ) {
                                     ActivitySummaryCard(
@@ -777,8 +777,8 @@ private fun RelativeDayPill(
     label: String,
     modifier: Modifier = Modifier
 ) {
-    val isUrgent = label == "Today" || label == "Tomorrow"
-    val isPast = label == "Past"
+    val isUrgent = label == "آج" || label == "کل"
+    val isPast = label == "گزشتہ"
     val containerColor = when {
         isUrgent -> MaterialTheme.colorScheme.tertiaryContainer
         isPast -> MaterialTheme.colorScheme.surfaceVariant
@@ -839,7 +839,7 @@ private fun UpcomingEventOccasionCard(
                 ) {
                     RelativeDayPill(label = relativeBadge)
                     CategoryBadge(
-                        label = event.category.ifBlank { "Occasion" },
+                        label = event.category.ifBlank { "تقریب" },
                         color = categoryColor,
                         icon = categoryIcon
                     )
@@ -852,7 +852,7 @@ private fun UpcomingEventOccasionCard(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Edit,
-                        contentDescription = "Edit occasion",
+                        contentDescription = "تقریب میں ترمیم",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -1001,7 +1001,7 @@ private fun UpcomingActivityOccasionCard(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Edit,
-                        contentDescription = "Edit ledger occasion",
+                        contentDescription = "تقریب میں ترمیم",
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -1079,16 +1079,16 @@ private fun EmptyUpcomingOccasionsCard(
                 modifier = Modifier.size(36.dp)
             )
             Text(
-                text = "No upcoming occasions yet",
+                text = "ابھی کوئی آنے والی تقریب نہیں",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             Text(
                 text = if (hasSavedEvents) {
-                    "All saved events are in the past. Tap \"All Saved\" above or create a new upcoming occasion."
+                    "تمام محفوظ تقریبات گزر چکی ہیں۔ اوپر \"تمام محفوظ\" دبائیں یا نئی تقریب شامل کریں۔"
                 } else {
-                    "Add a wedding, birthday, walima, or family gathering to track it offline on your phone."
+                    "فون میں آف لائن محفوظ رکھنے کے لیے شادی، ولیمہ، سالگرہ یا خاندانی دعوت شامل کریں۔"
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1105,12 +1105,12 @@ private fun EmptyUpcomingOccasionsCard(
                 ) {
                     Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Add Occasion")
+                    Text("تقریب شامل کریں")
                 }
                 if (hasSavedEvents) {
                     AssistChip(
                         onClick = onShowAllSaved,
-                        label = { Text("View Past") }
+                        label = { Text("گزشتہ دیکھیں") }
                     )
                 }
             }
@@ -1172,7 +1172,7 @@ private fun ActivitySummaryCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         val meta = buildList {
-                            if (record.fatherName.isNotBlank()) add("Father: ${record.fatherName}")
+                            if (record.fatherName.isNotBlank()) add("ولدیت: ${record.fatherName}")
                             if (record.address.isNotBlank()) add(record.address)
                         }.joinToString(" • ")
                         if (meta.isNotEmpty()) {
@@ -1250,12 +1250,12 @@ private fun ActivitySummaryCard(
                         fontFamily = JakartaSansFamily
                     )
                     if (record.reminderEnabled) {
-                        ReminderStatusBadge(label = "Reminder")
+                        ReminderStatusBadge(label = "یاددہانی")
                     }
                 }
 
                 Text(
-                    text = "Amount: ${formatNeondraAmount(record.neondraAmount)}",
+                    text = "رقم: ${formatNeondraAmount(record.neondraAmount)}",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -1293,16 +1293,16 @@ private fun EmptyLedgerState(
                 modifier = Modifier.size(48.dp)
             )
             Text(
-                text = if (hasAnyData) "No matching entries found" else "No Ledger Entries Yet",
+                text = if (hasAnyData) "کوئی مماثل اندراج نہیں ملا" else "ابھی تک کوئی کھاتہ اندراج نہیں",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             Text(
                 text = if (hasAnyData) {
-                    "Try adjusting your filters or search terms."
+                    "فلٹرز یا تلاش کے الفاظ تبدیل کر کے دیکھیں۔"
                 } else {
-                    "Tap the (+) button below to record your first occasion, gift, or transaction. Family names, FN IDs, and addresses sync automatically into dropdowns."
+                    "اپنی پہلی تقریب، تحفہ یا نیوندرا درج کرنے کے لیے نیچے (+) بٹن دبائیں۔ خاندان کے نام، فیملی نمبر اور پتے خودکار محفوظ ہو جائیں گے۔"
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1327,7 +1327,7 @@ private fun EmptyLedgerState(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            text = "Add First Entry",
+                            text = "پہلا اندراج شامل کریں",
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onPrimary
                         )
@@ -1363,7 +1363,7 @@ private fun DateRangeFilterBar(
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Rounded.DateRange,
-                        contentDescription = "Pick date range",
+                        contentDescription = "تاریخ منتخب کریں",
                         tint = if (dateRangeFilter.isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp)
                     )
@@ -1373,7 +1373,7 @@ private fun DateRangeFilterBar(
                         text = if (dateRangeFilter.isActive && dateRangeFilter.presetLabel == null) {
                             formatDateRangeLabel(dateRangeFilter)
                         } else {
-                            "Pick Dates"
+                            "تاریخ منتخب کریں"
                         },
                         fontWeight = if (dateRangeFilter.isActive && dateRangeFilter.presetLabel == null) FontWeight.Bold else FontWeight.Medium
                     )
@@ -1384,28 +1384,28 @@ private fun DateRangeFilterBar(
             FilterChip(
                 selected = !dateRangeFilter.isActive,
                 onClick = onClearDateRange,
-                label = { Text("All Time") },
+                label = { Text("تمام اوقات") },
                 modifier = Modifier.testTag("date_range_all_time_chip")
             )
 
             FilterChip(
-                selected = dateRangeFilter.presetLabel == "Today",
+                selected = dateRangeFilter.presetLabel == "آج",
                 onClick = {
-                    if (dateRangeFilter.presetLabel == "Today") {
+                    if (dateRangeFilter.presetLabel == "آج") {
                         onClearDateRange()
                     } else {
                         val todayStart = localDayStartMillis(System.currentTimeMillis())
-                        onApplyPreset(todayStart, localDayEndMillis(todayStart), "Today")
+                        onApplyPreset(todayStart, localDayEndMillis(todayStart), "آج")
                     }
                 },
-                label = { Text("Today") },
+                label = { Text("آج") },
                 modifier = Modifier.testTag("date_range_preset_today")
             )
 
             FilterChip(
-                selected = dateRangeFilter.presetLabel == "Last 7 Days",
+                selected = dateRangeFilter.presetLabel == "گزشتہ 7 دن",
                 onClick = {
-                    if (dateRangeFilter.presetLabel == "Last 7 Days") {
+                    if (dateRangeFilter.presetLabel == "گزشتہ 7 دن") {
                         onClearDateRange()
                     } else {
                         val todayEnd = localDayEndMillis(System.currentTimeMillis())
@@ -1413,17 +1413,17 @@ private fun DateRangeFilterBar(
                             timeInMillis = localDayStartMillis(System.currentTimeMillis())
                             add(Calendar.DAY_OF_YEAR, -6)
                         }
-                        onApplyPreset(cal.timeInMillis, todayEnd, "Last 7 Days")
+                        onApplyPreset(cal.timeInMillis, todayEnd, "گزشتہ 7 دن")
                     }
                 },
-                label = { Text("Last 7 Days") },
+                label = { Text("گزشتہ 7 دن") },
                 modifier = Modifier.testTag("date_range_preset_7d")
             )
 
             FilterChip(
-                selected = dateRangeFilter.presetLabel == "This Month",
+                selected = dateRangeFilter.presetLabel == "اس ماہ",
                 onClick = {
-                    if (dateRangeFilter.presetLabel == "This Month") {
+                    if (dateRangeFilter.presetLabel == "اس ماہ") {
                         onClearDateRange()
                     } else {
                         val now = System.currentTimeMillis()
@@ -1431,17 +1431,17 @@ private fun DateRangeFilterBar(
                             timeInMillis = localDayStartMillis(now)
                             set(Calendar.DAY_OF_MONTH, 1)
                         }.timeInMillis
-                        onApplyPreset(monthStart, localDayEndMillis(now), "This Month")
+                        onApplyPreset(monthStart, localDayEndMillis(now), "اس ماہ")
                     }
                 },
-                label = { Text("This Month") },
+                label = { Text("اس ماہ") },
                 modifier = Modifier.testTag("date_range_preset_month")
             )
 
             FilterChip(
-                selected = dateRangeFilter.presetLabel == "Last 30 Days",
+                selected = dateRangeFilter.presetLabel == "گزشتہ 30 دن",
                 onClick = {
-                    if (dateRangeFilter.presetLabel == "Last 30 Days") {
+                    if (dateRangeFilter.presetLabel == "گزشتہ 30 دن") {
                         onClearDateRange()
                     } else {
                         val todayEnd = localDayEndMillis(System.currentTimeMillis())
@@ -1449,17 +1449,17 @@ private fun DateRangeFilterBar(
                             timeInMillis = localDayStartMillis(System.currentTimeMillis())
                             add(Calendar.DAY_OF_YEAR, -29)
                         }
-                        onApplyPreset(cal.timeInMillis, todayEnd, "Last 30 Days")
+                        onApplyPreset(cal.timeInMillis, todayEnd, "گزشتہ 30 دن")
                     }
                 },
-                label = { Text("Last 30 Days") },
+                label = { Text("گزشتہ 30 دن") },
                 modifier = Modifier.testTag("date_range_preset_30d")
             )
 
             FilterChip(
-                selected = dateRangeFilter.presetLabel == "This Year",
+                selected = dateRangeFilter.presetLabel == "اس سال",
                 onClick = {
-                    if (dateRangeFilter.presetLabel == "This Year") {
+                    if (dateRangeFilter.presetLabel == "اس سال") {
                         onClearDateRange()
                     } else {
                         val now = System.currentTimeMillis()
@@ -1468,10 +1468,10 @@ private fun DateRangeFilterBar(
                             set(Calendar.MONTH, Calendar.JANUARY)
                             set(Calendar.DAY_OF_MONTH, 1)
                         }.timeInMillis
-                        onApplyPreset(yearStart, localDayEndMillis(now), "This Year")
+                        onApplyPreset(yearStart, localDayEndMillis(now), "اس سال")
                     }
                 },
-                label = { Text("This Year") },
+                label = { Text("اس سال") },
                 modifier = Modifier.testTag("date_range_preset_year")
             )
         }
@@ -1532,7 +1532,7 @@ private fun DateRangeFilterBar(
                         ) {
                             Icon(
                                 imageVector = Icons.Rounded.Clear,
-                                contentDescription = "Clear date range",
+                                contentDescription = "تاریخ فلٹر صاف کریں",
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier.size(18.dp)
                             )
@@ -1545,24 +1545,21 @@ private fun DateRangeFilterBar(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "In: ${formatNeondraAmount(periodIn)}",
+                            text = "آمدن: ${formatNeondraAmount(periodIn)}",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = JakartaSansFamily,
                             color = inColor
                         )
                         Text(
-                            text = "Out: ${formatNeondraAmount(periodOut)}",
+                            text = "خرچ: ${formatNeondraAmount(periodOut)}",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = JakartaSansFamily,
                             color = outColor
                         )
                         Text(
-                            text = "Net: $netPrefix${formatNeondraAmount(periodNet)}",
+                            text = "خالص: $netPrefix${formatNeondraAmount(periodNet)}",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = JakartaSansFamily,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
@@ -1581,9 +1578,9 @@ private fun formatDateRangeLabel(filter: DateRangeFilter): String {
             val e = formatDisplayDate(end)
             if (s == e) s else "$s – $e"
         }
-        start != null -> "From ${formatDisplayDate(start)}"
-        end != null -> "Until ${formatDisplayDate(end)}"
-        else -> "All Time"
+        start != null -> "${formatDisplayDate(start)} سے"
+        end != null -> "${formatDisplayDate(end)} تک"
+        else -> "تمام اوقات"
     }
     return if (!filter.presetLabel.isNullOrBlank()) {
         "${filter.presetLabel} ($rangeText)"
@@ -1619,18 +1616,18 @@ private fun LedgerDateRangePickerDialog(
                 enabled = pickerState.selectedStartDateMillis != null,
                 modifier = Modifier.testTag("date_range_apply_button")
             ) {
-                Text("Apply", fontWeight = FontWeight.Bold)
+                Text("لاگو کریں", fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (initialFilter.isActive || pickerState.selectedStartDateMillis != null) {
                     TextButton(onClick = onClear) {
-                        Text("Clear")
+                        Text("صاف کریں")
                     }
                 }
                 TextButton(onClick = onDismiss) {
-                    Text("Cancel")
+                    Text("منسوخ کریں")
                 }
             }
         }
@@ -1639,9 +1636,9 @@ private fun LedgerDateRangePickerDialog(
             state = pickerState,
             title = {
                 Text(
-                    text = "Filter In & Out Entries by Period",
+                    text = "تاریخ کے مطابق آمدن اور خرچ فلٹر کریں",
                     style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(start = 24.dp, end = 12.dp, top = 16.dp)
+                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 16.dp)
                 )
             },
             showModeToggle = true,

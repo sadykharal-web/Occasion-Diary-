@@ -84,13 +84,13 @@ val Typography = Typography(
         lineHeight = 20.sp
     ),
     labelMedium = TextStyle(
-        fontFamily = JakartaSansFamily,
+        fontFamily = NotoArabicFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 12.sp,
-        lineHeight = 16.sp
+        lineHeight = 18.sp
     ),
     labelSmall = TextStyle(
-        fontFamily = JakartaSansFamily,
+        fontFamily = NotoArabicFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 16.sp

@@ -125,12 +125,12 @@ fun RemindersScreen(
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Offline Device Storage",
+                                text = "آف لائن موبائل اسٹوریج",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Saved locally on this phone • $eventsCount occasions, ${activities.size} entries, $familiesCount families",
+                                text = "فون میں محفوظ • $eventsCount تقریبات، ${activities.size} اندراجات، $familiesCount خاندان",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -167,15 +167,15 @@ fun RemindersScreen(
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Phone File Backup & Restore",
+                                    text = "فون فائل بیک اپ اور بحالی",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     text = if (backupStatus.lastBackupMillis > 0L) {
-                                        "Last export: ${formatDisplayDate(backupStatus.lastBackupMillis)} • ${formatDisplayTime(backupStatus.lastBackupMillis)}"
+                                        "آخری بیک اپ: ${formatDisplayDate(backupStatus.lastBackupMillis)} • ${formatDisplayTime(backupStatus.lastBackupMillis)}"
                                     } else {
-                                        "Export or restore a JSON backup file directly on your device anytime."
+                                        "کسی بھی وقت اپنے فون میں JSON بیک اپ فائل محفوظ یا بحال کریں۔"
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -220,7 +220,7 @@ fun RemindersScreen(
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Export File")
+                                Text("فائل محفوظ کریں")
                             }
 
                             OutlinedButton(
@@ -238,7 +238,7 @@ fun RemindersScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Import File")
+                                Text("فائل بحال کریں")
                             }
                         }
                     }
@@ -276,12 +276,12 @@ fun RemindersScreen(
                             )
                             Column {
                                 Text(
-                                    text = "Manage Occasion Categories",
+                                    text = "تقریبات کی اقسام کا انتظام",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "$categoriesCount categories • Customize colors & icons",
+                                    text = "$categoriesCount اقسام • رنگ اور آئیکن تبدیل کریں",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -289,7 +289,7 @@ fun RemindersScreen(
                         }
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                            contentDescription = "Open Categories",
+                            contentDescription = "اقسام کھولیں",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -298,7 +298,7 @@ fun RemindersScreen(
 
             item {
                 Text(
-                    text = "Upcoming Occasions & Reminders (${reminderItems.size})",
+                    text = "آنے والی تقریبات اور یاددہانیاں (${reminderItems.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -327,7 +327,7 @@ fun RemindersScreen(
                                 modifier = Modifier.size(40.dp)
                             )
                             Text(
-                                text = "No active reminders or upcoming occasions yet",
+                                text = "ابھی کوئی فعال یاددہانی یا آنے والی تقریب نہیں",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -422,7 +422,7 @@ fun RemindersScreen(
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                             shape = RoundedCornerShape(8.dp)
                                         ) {
-                                            Text("Test Alert", style = MaterialTheme.typography.labelSmall)
+                                            Text("ٹیسٹ الرٹ", style = MaterialTheme.typography.labelSmall)
                                         }
                                     }
                                 }

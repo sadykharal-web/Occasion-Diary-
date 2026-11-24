@@ -50,13 +50,13 @@ class LedgerRepository(
         return try {
             val cleanTitle = entry.title.trim().take(120)
             val cleanDescription = entry.description.trim().take(1000)
-            val cleanCategory = entry.category.trim().take(80).ifEmpty { "Event" }
+            val cleanCategory = entry.category.trim().take(80).ifEmpty { "تقریب" }
             val cleanLocation = entry.location.trim().take(200)
             val cleanFamilyDocId = entry.familyDocId?.trim()?.take(128)?.ifEmpty { null }
             val cleanFamilyName = entry.familyName.trim().take(100)
             val safeDateMillis = entry.eventDateMillis.coerceAtLeast(0L)
 
-            require(cleanTitle.isNotEmpty()) { "Please enter an occasion name." }
+            require(cleanTitle.isNotEmpty()) { "براہ کرم تقریب کا نام درج کریں۔" }
 
             val now = System.currentTimeMillis()
             val resolvedId = entry.id.trim().ifEmpty { UUID.randomUUID().toString() }
@@ -85,7 +85,7 @@ class LedgerRepository(
 
     suspend fun deleteEvent(eventId: String): Result<Unit> {
         return try {
-            require(eventId.isNotBlank()) { "Event ID must not be blank." }
+            require(eventId.isNotBlank()) { "تقریب کی شناخت خالی نہیں ہونی چاہیے۔" }
             dao.deleteEvent(eventId)
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -127,9 +127,9 @@ class LedgerRepository(
             val cleanName = category.name.trim().take(80)
             val cleanColor = category.colorHex.trim().take(9)
             val cleanIcon = category.iconKey.trim().take(40)
-            require(cleanName.isNotEmpty()) { "Please enter a category name." }
+            require(cleanName.isNotEmpty()) { "براہ کرم کیٹیگری کا نام درج کریں۔" }
             require(cleanColor.matches(Regex("^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"))) {
-                "Invalid color hex code."
+                "غلط رنگ کا کوڈ۔"
             }
 
             val now = System.currentTimeMillis()
@@ -160,7 +160,7 @@ class LedgerRepository(
 
     suspend fun deleteCategory(categoryId: String): Result<Unit> {
         return try {
-            require(categoryId.isNotBlank()) { "Category ID must not be blank." }
+            require(categoryId.isNotBlank()) { "کیٹیگری کی شناخت خالی نہیں ہونی چاہیے۔" }
             dao.deleteCategory(categoryId)
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -184,9 +184,9 @@ class LedgerRepository(
             val cleanDetail = record.eventDetail.trim().take(250)
             val cleanHome = record.homeItems.trim().take(1000)
 
-            require(cleanName.isNotEmpty()) { "Please enter a person or family name." }
-            require(cleanEvent.isNotEmpty()) { "Please select an event or activity category." }
-            require(record.neondraAmount in 0L..1_000_000_000L) { "Amount must be within valid bounds." }
+            require(cleanName.isNotEmpty()) { "براہ کرم فرد یا خاندان کا نام درج کریں۔" }
+            require(cleanEvent.isNotEmpty()) { "براہ کرم تقریب یا کیٹیگری منتخب کریں۔" }
+            require(record.neondraAmount in 0L..1_000_000_000L) { "رقم درست حد کے اندر ہونی چاہیے۔" }
 
             val now = System.currentTimeMillis()
             var resolvedFamilyDocId: String? = record.familyDocId?.takeIf { it.isNotBlank() }
@@ -294,8 +294,8 @@ class LedgerRepository(
             val cleanAddress = profile.address.trim().take(200)
             val cleanPhone = profile.phone?.trim()?.take(30)?.ifEmpty { null }
 
-            require(cleanFn.isNotEmpty()) { "Please enter a Family ID (FN)." }
-            require(cleanName.isNotEmpty()) { "Please enter a family name." }
+            require(cleanFn.isNotEmpty()) { "براہ کرم خاندان نمبر (FN) درج کریں۔" }
+            require(cleanName.isNotEmpty()) { "براہ کرم خاندان کا نام درج کریں۔" }
 
             val now = System.currentTimeMillis()
             val isNew = profile.id.isBlank()
@@ -389,7 +389,7 @@ class LedgerRepository(
                         name = act.name.trim().take(100),
                         fatherName = act.fatherName.trim().take(100),
                         address = act.address.trim().take(200),
-                        eventType = act.eventType.trim().take(80).ifEmpty { "Wedding" },
+                        eventType = act.eventType.trim().take(80).ifEmpty { "شادی" },
                         eventDetail = act.eventDetail.trim().take(250),
                         eventDateMillis = act.eventDateMillis.coerceAtLeast(0L),
                         direction = ActivityDirection.fromWire(act.direction).wireValue,
@@ -415,7 +415,7 @@ class LedgerRepository(
                         title = evt.title.trim().take(120),
                         description = evt.description.trim().take(1000),
                         eventDateMillis = evt.eventDateMillis.coerceAtLeast(0L),
-                        category = evt.category.trim().take(80).ifEmpty { "Event" },
+                        category = evt.category.trim().take(80).ifEmpty { "تقریب" },
                         location = evt.location.trim().take(200),
                         familyDocId = evt.familyDocId?.takeIf { it.isNotBlank() },
                         familyName = evt.familyName.trim().take(100),
@@ -440,7 +440,7 @@ class LedgerRepository(
         minutesBefore: Long
     ): Result<Unit> {
         return try {
-            require(activityId.isNotBlank()) { "Activity ID must not be blank." }
+            require(activityId.isNotBlank()) { "اندراج کی شناخت خالی نہیں ہونی چاہیے۔" }
             dao.updateReminder(
                 activityId = activityId,
                 enabled = enabled,
@@ -458,7 +458,7 @@ class LedgerRepository(
 
     suspend fun markCalendarSynced(activityId: String, synced: Boolean): Result<Unit> {
         return try {
-            require(activityId.isNotBlank()) { "Activity ID must not be blank." }
+            require(activityId.isNotBlank()) { "اندراج کی شناخت خالی نہیں ہونی چاہیے۔" }
             dao.updateCalendarSynced(activityId, synced, System.currentTimeMillis())
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -470,7 +470,7 @@ class LedgerRepository(
 
     suspend fun deleteActivity(activityId: String): Result<Unit> {
         return try {
-            require(activityId.isNotBlank()) { "Activity ID must not be blank." }
+            require(activityId.isNotBlank()) { "اندراج کی شناخت خالی نہیں ہونی چاہیے۔" }
             dao.deleteActivity(activityId)
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -482,7 +482,7 @@ class LedgerRepository(
 
     suspend fun deleteFamily(familyDocId: String): Result<Unit> {
         return try {
-            require(familyDocId.isNotBlank()) { "Family ID must not be blank." }
+            require(familyDocId.isNotBlank()) { "خاندان کی شناخت خالی نہیں ہونی چاہیے۔" }
             dao.deleteFamily(familyDocId)
             Result.success(Unit)
         } catch (e: CancellationException) {
