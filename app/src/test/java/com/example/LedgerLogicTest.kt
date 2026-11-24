@@ -107,4 +107,48 @@ class LedgerLogicTest {
         assertEquals("In 5 days", formatRelativeDayBadge(today + TimeUnit.DAYS.toMillis(5), now))
         assertEquals("Past", formatRelativeDayBadge(today - TimeUnit.DAYS.toMillis(2), now))
     }
+
+    @Test
+    fun `offline smart search matches families upcoming occasions and highest In balance`() {
+        val repo = com.example.ai.AiAssistantRepository()
+        val now = System.currentTimeMillis()
+        val families = listOf(
+            com.example.data.FamilyProfile(id = "f1", familyId = "101", name = "Ali Khan", address = "Lahore"),
+            com.example.data.FamilyProfile(id = "f2", familyId = "102", name = "Bilal Ahmed", address = "Karachi")
+        )
+        val activities = listOf(
+            ActivityRecord(id = "a1", familyDocId = "f1", familyId = "101", name = "Ali Khan", direction = "IN", neondraAmount = 15000L, eventType = "Wedding", eventDateMillis = now),
+            ActivityRecord(id = "a2", familyDocId = "f2", familyId = "102", name = "Bilal Ahmed", direction = "OUT", neondraAmount = 8000L, eventType = "Walima", eventDateMillis = now)
+        )
+        val events = listOf(
+            EventEntry(id = "e1", title = "Ali Wedding", eventDateMillis = now + TimeUnit.DAYS.toMillis(3), category = "Wedding"),
+            EventEntry(id = "e2", title = "Past Function", eventDateMillis = now - TimeUnit.DAYS.toMillis(5), category = "Dinner")
+        )
+
+        val highestInResult = repo.searchFamiliesAndEvents("Who has the highest In balance?", families, activities, events).getOrThrow()
+        assertEquals(listOf("f1"), highestInResult.matchedFamilyIds)
+
+        val upcomingResult = repo.searchFamiliesAndEvents("upcoming events", families, activities, events).getOrThrow()
+        assertEquals(listOf("e1"), upcomingResult.matchedEventIds)
+    }
+
+    @Test
+    fun `offline balance comparison calculates exact In Out and Net totals`() {
+        val repo = com.example.ai.AiAssistantRepository()
+        val fam1 = com.example.data.FamilyProfile(id = "f1", familyId = "101", name = "Ali Khan")
+        val fam2 = com.example.data.FamilyProfile(id = "f2", familyId = "102", name = "Bilal Ahmed")
+        val activities = listOf(
+            ActivityRecord(id = "a1", familyDocId = "f1", name = "Ali Khan", direction = "IN", neondraAmount = 20000L),
+            ActivityRecord(id = "a2", familyDocId = "f1", name = "Ali Khan", direction = "OUT", neondraAmount = 5000L),
+            ActivityRecord(id = "a3", familyDocId = "f2", name = "Bilal Ahmed", direction = "OUT", neondraAmount = 10000L)
+        )
+
+        val comparison = repo.compareFamilyBalances(listOf(fam1, fam2), activities, emptyList()).getOrThrow()
+        assertEquals("Ali Khan", comparison.higherNetFamilyName)
+        val aliStats = comparison.familyBreakdowns.first { it.familyDocId == "f1" }
+        assertEquals(20000L, aliStats.totalIn)
+        assertEquals(5000L, aliStats.totalOut)
+        assertEquals(15000L, aliStats.netBalance)
+    }
 }
+

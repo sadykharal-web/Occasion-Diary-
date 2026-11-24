@@ -6,17 +6,15 @@
     <string name="nav_ledger">Ledger</string>
     <string name="nav_calendar">Events</string>
     <string name="nav_families">Families</string>
-    <string name="nav_ai">AI Search</string>
+    <string name="nav_ai">Search</string>
     <string name="nav_reminders">Settings</string>
 
-    <!-- Auth -->
-    <string name="sign_in_with_google">Sign in with Google</string>
-    <string name="sign_out">Sign Out</string>
-    <string name="auth_welcome_title">Welcome to Occasion Diary</string>
-    <string name="auth_welcome_subtitle">Securely sync your family directory, event logs, gift ledger, and AI insights across your devices.</string>
-    <string name="auth_feature_sync">Automatic cascading dropdowns for Names, Family IDs, and Addresses</string>
-    <string name="auth_feature_reminders">Smart event scheduling, reminders, and calendar sync</string>
-    <string name="auth_feature_ledger">Complete In and Out ledger tracking with AI balance comparisons</string>
+    <!-- Onboarding / App Highlights -->
+    <string name="app_welcome_title">Welcome to Occasion Diary</string>
+    <string name="app_welcome_subtitle">Track your family directory, upcoming occasions, and gift ledger 100% offline on your phone.</string>
+    <string name="app_feature_sync">Automatic cascading dropdowns for Names, Family IDs, and Addresses</string>
+    <string name="app_feature_reminders">Smart occasion scheduling, local alarms, and calendar export</string>
+    <string name="app_feature_ledger">Complete In and Out ledger tracking with instant balance comparisons</string>
 
     <!-- Fields -->
     <string name="field_name">Name</string>

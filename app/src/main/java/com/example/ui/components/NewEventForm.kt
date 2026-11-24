@@ -237,9 +237,9 @@ fun NewEventFormContent(
                     )
                     Text(
                         text = if (isEditing) {
-                            "Update occasion details in Firestore"
+                            "Update occasion details on your device"
                         } else {
-                            "Save upcoming occasion details to Firestore"
+                            "Save upcoming occasion details offline on your phone"
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant

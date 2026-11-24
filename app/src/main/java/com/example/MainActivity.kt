@@ -1,35 +1,19 @@
 package com.example
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Book
@@ -40,16 +24,10 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Category
-import androidx.compose.material.icons.rounded.CloudUpload
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Event
-import androidx.compose.material.icons.rounded.FileOpen
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Notifications
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -59,37 +37,26 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.credentials.CredentialManager
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -100,17 +67,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.ai.configureAppCheck
-import com.example.auth.AuthScreen
-import com.example.auth.signOut
-import com.example.config.FirebaseRuntimeConfig
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
 import com.example.data.EventEntry
 import com.example.data.FamilyProfile
 import com.example.data.LedgerRepository
 import com.example.data.UiState
-import com.example.drive.GoogleDriveSyncManager
+import com.example.data.local.OccasionDiaryDatabase
+import com.example.drive.LocalBackupManager
 import com.example.reminders.ReminderReceiver
 import com.example.ui.components.NewEventFormSheet
 import com.example.ui.screens.ActivityDetailScreen
@@ -123,10 +87,6 @@ import com.example.ui.screens.LedgerScreen
 import com.example.ui.screens.RemindersScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.LedgerViewModel
-import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.auth
-import com.google.firebase.firestore.FirebaseFirestore
 
 const val ROUTE_LEDGER = "ledger"
 const val ROUTE_CALENDAR = "calendar"
@@ -153,287 +113,11 @@ private enum class TopTab(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        FirebaseRuntimeConfig.ensureFirebaseInitialized(this)
-        configureAppCheck(this, intent)
         enableEdgeToEdge()
         ReminderReceiver.ensureNotificationChannel(this)
         setContent {
             MyApplicationTheme {
-                AppContent()
-            }
-        }
-    }
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
-
-@Composable
-fun AppContent() {
-    val context = LocalContext.current
-    var configVersion by remember { mutableIntStateOf(0) }
-    val firebaseAuth = remember(context, configVersion) {
-        val ready = FirebaseRuntimeConfig.ensureFirebaseInitialized(context)
-        if (ready) runCatching { Firebase.auth }.getOrNull() else null
-    }
-
-    if (firebaseAuth == null) {
-        FirebaseConfigMissingScreen(
-            onConfigImported = {
-                configureAppCheck(context, context.findActivity()?.intent)
-                configVersion++
-            },
-            modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
-        )
-        return
-    }
-
-    var currentUser by remember(firebaseAuth) { mutableStateOf(firebaseAuth.currentUser) }
-
-    DisposableEffect(firebaseAuth) {
-        val listener = FirebaseAuth.AuthStateListener { auth ->
-            currentUser = auth.currentUser
-        }
-        firebaseAuth.addAuthStateListener(listener)
-        onDispose {
-            firebaseAuth.removeAuthStateListener(listener)
-        }
-    }
-
-    val user = currentUser
-    if (user == null) {
-        AuthScreen(
-            onAuthSuccess = {
-                currentUser = firebaseAuth.currentUser
-            },
-            modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
-        )
-    } else {
-        key(user.uid) {
-            AuthenticatedAppShell(
-                currentUserId = user.uid,
-                userEmail = user.email,
-                userDisplayName = user.displayName
-            )
-        }
-    }
-}
-
-@Composable
-private fun FirebaseConfigMissingScreen(
-    onConfigImported: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    @Suppress("DEPRECATION")
-    val clipboard = LocalClipboardManager.current
-    var showPasteEditor by remember { mutableStateOf(false) }
-    var pastedJson by remember { mutableStateOf("") }
-    var statusMessage by remember { mutableStateOf<String?>(null) }
-    var isError by remember { mutableStateOf(false) }
-
-    val jsonPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        FirebaseRuntimeConfig.readJsonTextFromUri(context, uri)
-            .fold(
-                onSuccess = { text ->
-                    FirebaseRuntimeConfig.importGoogleServicesJson(context, text)
-                        .fold(
-                            onSuccess = {
-                                isError = false
-                                statusMessage = null
-                                onConfigImported()
-                            },
-                            onFailure = { err ->
-                                isError = true
-                                statusMessage = err.localizedMessage ?: "Invalid google-services.json file."
-                            }
-                        )
-                },
-                onFailure = { err ->
-                    isError = true
-                    statusMessage = err.localizedMessage ?: "Could not read selected file."
-                }
-            )
-    }
-
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            modifier = Modifier.widthIn(max = 540.dp)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Rounded.ErrorOutline,
-                    contentDescription = "Configuration Missing",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(48.dp)
-                )
-                Text(
-                    text = "Firebase Config Missing in This APK",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-                Text(
-                    text = "This GitHub-built APK was compiled without app/google-services.json, so Google Sign-In, Firestore, and AI cannot initialize automatically.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
-                    shape = RoundedCornerShape(16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "How to fix permanently:",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "1. Easiest: Download & install the APK directly from AI Studio's Settings menu (already bundled).",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "2. GitHub Actions: Add app/google-services.json as a Repository Secret named GOOGLE_SERVICES_JSON and re-run the workflow.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "3. Quick Fix Now: Import google-services.json below right on your phone.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
-
-                Button(
-                    onClick = {
-                        jsonPicker.launch(arrayOf("application/json", "text/*", "*/*"))
-                    },
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("import_google_services_button")
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.FileOpen,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Import google-services.json File")
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { showPasteEditor = !showPasteEditor },
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .testTag("toggle_paste_config_button")
-                    ) {
-                        Text(if (showPasteEditor) "Hide Paste Box" else "Paste JSON")
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            clipboard.setText(AnnotatedString("GOOGLE_SERVICES_JSON"))
-                            isError = false
-                            statusMessage = "Copied GOOGLE_SERVICES_JSON secret name."
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                            .testTag("copy_secret_name_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.ContentCopy,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Copy Secret")
-                    }
-                }
-
-                if (showPasteEditor) {
-                    OutlinedTextField(
-                        value = pastedJson,
-                        onValueChange = { pastedJson = it },
-                        label = { Text("Paste google-services.json content") },
-                        minLines = 4,
-                        maxLines = 8,
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("paste_google_services_input")
-                    )
-                    Button(
-                        onClick = {
-                            FirebaseRuntimeConfig.importGoogleServicesJson(context, pastedJson)
-                                .fold(
-                                    onSuccess = {
-                                        isError = false
-                                        statusMessage = null
-                                        onConfigImported()
-                                    },
-                                    onFailure = { err ->
-                                        isError = true
-                                        statusMessage = err.localizedMessage ?: "Invalid JSON format."
-                                    }
-                                )
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .testTag("apply_pasted_config_button")
-                    ) {
-                        Text("Apply Config & Continue")
-                    }
-                }
-
-                if (!statusMessage.isNullOrBlank()) {
-                    Text(
-                        text = statusMessage!!,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                OccasionDiaryAppShell()
             }
         }
     }
@@ -441,31 +125,23 @@ private fun FirebaseConfigMissingScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AuthenticatedAppShell(
-    currentUserId: String,
-    userEmail: String?,
-    userDisplayName: String?
-) {
+fun OccasionDiaryAppShell() {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val credentialManager = remember(context) { CredentialManager.create(context) }
 
     val viewModel: LedgerViewModel = viewModel(
-        key = currentUserId,
         factory = viewModelFactory {
             initializer {
                 val app = checkNotNull(this[APPLICATION_KEY]) {
                     "APPLICATION_KEY missing from CreationExtras"
                 }
-                val databaseId = app.getString(R.string.firestore_database_id)
-                val db = FirebaseFirestore.getInstance(databaseId)
-                LedgerViewModel(LedgerRepository(db), currentUserId, userEmail)
+                val db = OccasionDiaryDatabase.getInstance(app)
+                LedgerViewModel(LedgerRepository(db.dao()))
             }
         }
     )
 
-    LaunchedEffect(currentUserId) {
-        viewModel.initDrivePrefs(context)
+    LaunchedEffect(Unit) {
+        viewModel.initBackupPrefs(context)
     }
 
     val dashboardState by viewModel.dashboardState.collectAsStateWithLifecycle()
@@ -475,13 +151,12 @@ private fun AuthenticatedAppShell(
     val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsStateWithLifecycle()
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
     val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
-    val driveSyncStatus by viewModel.driveSyncStatus.collectAsStateWithLifecycle()
-    val pendingDriveConsent by viewModel.pendingDriveConsent.collectAsStateWithLifecycle()
+    val localBackupStatus by viewModel.localBackupStatus.collectAsStateWithLifecycle()
     val aiSearchState by viewModel.aiSearchState.collectAsStateWithLifecycle()
     val aiComparisonState by viewModel.aiComparisonState.collectAsStateWithLifecycle()
     val selectedCompareFamilyIds by viewModel.selectedCompareFamilyIds.collectAsStateWithLifecycle()
 
-    var didAttemptCategorySeed by remember(currentUserId) { mutableStateOf(false) }
+    var didAttemptCategorySeed by remember { mutableStateOf(false) }
     LaunchedEffect(dashboardState) {
         val data = (dashboardState as? UiState.Success)?.data
         if (!didAttemptCategorySeed && data != null) {
@@ -492,24 +167,20 @@ private fun AuthenticatedAppShell(
         }
     }
 
-    val driveConsentLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartIntentSenderForResult()
-    ) { result ->
-        val activity = context.findActivity()
-        if (result.resultCode == Activity.RESULT_OK && activity != null) {
-            val token = GoogleDriveSyncManager.extractTokenFromConsentResult(activity, result.data)
-            viewModel.onDriveConsentGranted(context, token)
-        } else {
-            viewModel.onDriveConsentGranted(context, null)
+    val exportBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportOfflineBackupToUri(context, uri)
         }
     }
 
-    LaunchedEffect(pendingDriveConsent) {
-        val pendingIntent = pendingDriveConsent ?: return@LaunchedEffect
-        viewModel.consumePendingDriveConsent()
-        driveConsentLauncher.launch(
-            IntentSenderRequest.Builder(pendingIntent.intentSender).build()
-        )
+    val importBackupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importOfflineBackupFromUri(context, uri)
+        }
     }
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -604,19 +275,21 @@ private fun AuthenticatedAppShell(
                                 )
                             }
                             IconButton(
-                                onClick = { viewModel.syncToGoogleDrive(context, interactive = true) },
-                                enabled = !driveSyncStatus.isSyncing,
-                                modifier = Modifier.testTag("topbar_drive_sync_button")
+                                onClick = {
+                                    exportBackupLauncher.launch(LocalBackupManager.DEFAULT_BACKUP_FILE_NAME)
+                                },
+                                enabled = !localBackupStatus.isBusy,
+                                modifier = Modifier.testTag("topbar_backup_export_button")
                             ) {
-                                if (driveSyncStatus.isSyncing) {
+                                if (localBackupStatus.isBusy) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(20.dp),
                                         strokeWidth = 2.dp
                                     )
                                 } else {
                                     Icon(
-                                        imageVector = Icons.Rounded.CloudUpload,
-                                        contentDescription = "Back Up to Google Drive"
+                                        imageVector = Icons.Rounded.Download,
+                                        contentDescription = "Export Offline Backup"
                                     )
                                 }
                             }
@@ -833,17 +506,12 @@ private fun AuthenticatedAppShell(
                     composable(ROUTE_REMINDERS) {
                         RemindersScreen(
                             state = dashboardState,
-                            userEmail = userEmail,
-                            userDisplayName = userDisplayName,
-                            driveSyncStatus = driveSyncStatus,
-                            onSyncToDriveClick = {
-                                viewModel.syncToGoogleDrive(context, interactive = true)
+                            backupStatus = localBackupStatus,
+                            onExportBackupClick = {
+                                exportBackupLauncher.launch(LocalBackupManager.DEFAULT_BACKUP_FILE_NAME)
                             },
-                            onRestoreFromDriveClick = {
-                                viewModel.restoreFromGoogleDrive(context)
-                            },
-                            onAutoDriveSyncToggle = { enabled ->
-                                viewModel.setAutoDriveSync(context, enabled)
+                            onImportBackupClick = {
+                                importBackupLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
                             },
                             onManageCategoriesClick = {
                                 navController.navigate(ROUTE_CATEGORIES)
@@ -854,9 +522,6 @@ private fun AuthenticatedAppShell(
                             },
                             onToggleReminder = { act, enabled ->
                                 viewModel.toggleReminder(context, act, enabled)
-                            },
-                            onSignOutClick = {
-                                signOut(credentialManager = credentialManager, scope = scope)
                             }
                         )
                     }

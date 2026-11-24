@@ -1,7 +1,7 @@
 package com.example.ui.viewmodel
 
-import android.app.PendingIntent
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,11 +17,9 @@ import com.example.data.FamilyProfile
 import com.example.data.LedgerRepository
 import com.example.data.LedgerSummary
 import com.example.data.UiState
-import com.example.drive.DriveAuthState
-import com.example.drive.DriveSyncStatus
-import com.example.drive.GoogleDriveSyncManager
+import com.example.drive.LocalBackupManager
+import com.example.drive.LocalBackupStatus
 import com.example.reminders.ReminderScheduler
-import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -50,8 +48,6 @@ data class LedgerDashboardData(
 
 class LedgerViewModel(
     private val repository: LedgerRepository,
-    private val currentUserId: String,
-    private val userEmail: String? = null,
     private val aiRepository: AiAssistantRepository = AiAssistantRepository()
 ) : ViewModel() {
 
@@ -73,11 +69,8 @@ class LedgerViewModel(
     private val _actionMessage = MutableStateFlow<String?>(null)
     val actionMessage: StateFlow<String?> = _actionMessage.asStateFlow()
 
-    private val _driveSyncStatus = MutableStateFlow(DriveSyncStatus())
-    val driveSyncStatus: StateFlow<DriveSyncStatus> = _driveSyncStatus.asStateFlow()
-
-    private val _pendingDriveConsent = MutableStateFlow<PendingIntent?>(null)
-    val pendingDriveConsent: StateFlow<PendingIntent?> = _pendingDriveConsent.asStateFlow()
+    private val _localBackupStatus = MutableStateFlow(LocalBackupStatus())
+    val localBackupStatus: StateFlow<LocalBackupStatus> = _localBackupStatus.asStateFlow()
 
     private val _aiSearchState = MutableStateFlow<UiState<AiSearchResult>?>(null)
     val aiSearchState: StateFlow<UiState<AiSearchResult>?> = _aiSearchState.asStateFlow()
@@ -88,18 +81,11 @@ class LedgerViewModel(
     private val _selectedCompareFamilyIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedCompareFamilyIds: StateFlow<Set<String>> = _selectedCompareFamilyIds.asStateFlow()
 
-    private var pendingDriveActionAfterConsent: DrivePendingAction? = null
-
-    private enum class DrivePendingAction {
-        BACKUP,
-        RESTORE
-    }
-
     val dashboardState: StateFlow<UiState<LedgerDashboardData>> = combine(
-        repository.observeActivities(currentUserId),
-        repository.observeFamilies(currentUserId),
-        repository.observeCategories(currentUserId),
-        repository.observeEvents(currentUserId)
+        repository.observeActivities(),
+        repository.observeFamilies(),
+        repository.observeCategories(),
+        repository.observeEvents()
     ) { activities, families, categories, events ->
         val mergedNames = (families.map { it.name } + activities.map { it.name })
             .map { it.trim() }
@@ -181,13 +167,9 @@ class LedgerViewModel(
         ) as UiState<LedgerDashboardData>
     }
         .catch { error ->
-            val firestoreError = generateSequence(error) { it.cause }
-                .filterIsInstance<FirebaseFirestoreException>()
-                .firstOrNull()
-            if (firestoreError == null && error is CancellationException) throw error
-            val rootError = firestoreError ?: error
-            Log.w(TAG, "Error observing ledger dashboard", rootError)
-            emit(UiState.Error(rootError.localizedMessage ?: "Failed to load dashboard data."))
+            if (error is CancellationException) throw error
+            Log.w(TAG, "Error observing offline ledger dashboard", error)
+            emit(UiState.Error(error.localizedMessage ?: "Failed to load offline diary data."))
         }
         .stateIn(
             scope = viewModelScope,
@@ -195,10 +177,9 @@ class LedgerViewModel(
             initialValue = UiState.Loading
         )
 
-    fun initDrivePrefs(context: Context) {
-        _driveSyncStatus.value = _driveSyncStatus.value.copy(
-            autoSyncEnabled = GoogleDriveSyncManager.isAutoSyncEnabled(context, currentUserId),
-            lastSyncMillis = GoogleDriveSyncManager.getLastSyncMillis(context, currentUserId)
+    fun initBackupPrefs(context: Context) {
+        _localBackupStatus.value = _localBackupStatus.value.copy(
+            lastBackupMillis = LocalBackupManager.getLastBackupMillis(context)
         )
     }
 
@@ -222,14 +203,10 @@ class LedgerViewModel(
         _actionMessage.value = null
     }
 
-    fun consumePendingDriveConsent() {
-        _pendingDriveConsent.value = null
-    }
-
     // --- EventEntry Operations ---
 
     fun saveEvent(
-        context: Context,
+        @Suppress("UNUSED_PARAMETER") context: Context,
         entry: EventEntry,
         onSaved: (EventEntry) -> Unit = {}
     ) {
@@ -239,32 +216,30 @@ class LedgerViewModel(
             _isSaving.value = false
             result.onSuccess { saved ->
                 _actionMessage.value = if (entry.id.isBlank()) {
-                    "Event \"${saved.title}\" saved to Firestore."
+                    "Occasion \"${saved.title}\" saved offline on device."
                 } else {
-                    "Event \"${saved.title}\" updated."
+                    "Occasion \"${saved.title}\" updated offline."
                 }
-                triggerAutoDriveBackupIfEnabled(context)
                 onSaved(saved)
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "Failed to save event."
+                _actionMessage.value = err.localizedMessage ?: "Failed to save occasion."
             }
         }
     }
 
-    fun deleteEvent(context: Context, eventId: String) {
+    fun deleteEvent(@Suppress("UNUSED_PARAMETER") context: Context, eventId: String) {
         viewModelScope.launch {
             repository.deleteEvent(eventId)
                 .onSuccess {
-                    _actionMessage.value = "Event deleted."
-                    triggerAutoDriveBackupIfEnabled(context)
+                    _actionMessage.value = "Occasion deleted."
                 }
                 .onFailure { err ->
-                    _actionMessage.value = err.localizedMessage ?: "Failed to delete event."
+                    _actionMessage.value = err.localizedMessage ?: "Failed to delete occasion."
                 }
         }
     }
 
-    // --- Firebase AI Logic Search & Family Balance Comparison ---
+    // --- Offline Smart Search & Family Balance Comparison ---
 
     fun runAiSearch(query: String) {
         val data = (dashboardState.value as? UiState.Success)?.data
@@ -282,7 +257,7 @@ class LedgerViewModel(
             )
             _aiSearchState.value = result.fold(
                 onSuccess = { UiState.Success(it) },
-                onFailure = { UiState.Error(it.localizedMessage ?: "AI search failed.") }
+                onFailure = { UiState.Error(it.localizedMessage ?: "Search failed.") }
             )
         }
     }
@@ -339,7 +314,7 @@ class LedgerViewModel(
             )
             _aiComparisonState.value = result.fold(
                 onSuccess = { UiState.Success(it) },
-                onFailure = { UiState.Error(it.localizedMessage ?: "AI balance comparison failed.") }
+                onFailure = { UiState.Error(it.localizedMessage ?: "Balance comparison failed.") }
             )
         }
     }
@@ -348,200 +323,84 @@ class LedgerViewModel(
         _aiComparisonState.value = null
     }
 
-    // --- Google Drive Sync ---
+    // --- Offline Local File Backup & Restore ---
 
-    fun setAutoDriveSync(context: Context, enabled: Boolean) {
-        GoogleDriveSyncManager.setAutoSyncEnabled(context, currentUserId, enabled)
-        _driveSyncStatus.value = _driveSyncStatus.value.copy(autoSyncEnabled = enabled)
-        if (enabled) {
-            syncToGoogleDrive(context, interactive = false)
-        }
-    }
-
-    fun syncToGoogleDrive(context: Context, interactive: Boolean = true) {
+    fun exportOfflineBackupToUri(context: Context, uri: Uri) {
         val currentData = (dashboardState.value as? UiState.Success)?.data ?: return
         viewModelScope.launch {
-            _driveSyncStatus.value = _driveSyncStatus.value.copy(
-                isSyncing = true,
-                statusMessage = null
+            _localBackupStatus.value = _localBackupStatus.value.copy(isBusy = true, statusMessage = null)
+            val result = LocalBackupManager.exportBackupToUri(
+                context = context,
+                uri = uri,
+                categories = currentData.categories,
+                families = currentData.families,
+                activities = currentData.activities,
+                events = currentData.events
             )
-            when (val authState = GoogleDriveSyncManager.requestDriveAuthorization(context)) {
-                is DriveAuthState.Authorized -> {
-                    executeDriveUpload(context, authState.accessToken, currentData)
-                }
-
-                is DriveAuthState.NeedsUserConsent -> {
-                    _driveSyncStatus.value = _driveSyncStatus.value.copy(isSyncing = false)
-                    if (interactive) {
-                        pendingDriveActionAfterConsent = DrivePendingAction.BACKUP
-                        _pendingDriveConsent.value = authState.pendingIntent
-                    }
-                }
-
-                is DriveAuthState.Error -> {
-                    _driveSyncStatus.value = _driveSyncStatus.value.copy(
-                        isSyncing = false,
-                        statusMessage = authState.message
-                    )
-                    if (interactive) {
-                        _actionMessage.value = authState.message
-                    }
-                }
-            }
-        }
-    }
-
-    fun restoreFromGoogleDrive(context: Context) {
-        val currentData = (dashboardState.value as? UiState.Success)?.data ?: return
-        viewModelScope.launch {
-            _driveSyncStatus.value = _driveSyncStatus.value.copy(
-                isSyncing = true,
-                statusMessage = null
-            )
-            when (val authState = GoogleDriveSyncManager.requestDriveAuthorization(context)) {
-                is DriveAuthState.Authorized -> {
-                    executeDriveRestore(authState.accessToken, currentData)
-                }
-
-                is DriveAuthState.NeedsUserConsent -> {
-                    _driveSyncStatus.value = _driveSyncStatus.value.copy(isSyncing = false)
-                    pendingDriveActionAfterConsent = DrivePendingAction.RESTORE
-                    _pendingDriveConsent.value = authState.pendingIntent
-                }
-
-                is DriveAuthState.Error -> {
-                    _driveSyncStatus.value = _driveSyncStatus.value.copy(
-                        isSyncing = false,
-                        statusMessage = authState.message
-                    )
-                    _actionMessage.value = authState.message
-                }
-            }
-        }
-    }
-
-    fun onDriveConsentGranted(context: Context, accessToken: String?) {
-        if (accessToken.isNullOrBlank()) {
-            _actionMessage.value = "Google Drive permission was not granted."
-            pendingDriveActionAfterConsent = null
-            return
-        }
-        val currentData = (dashboardState.value as? UiState.Success)?.data ?: return
-        val action = pendingDriveActionAfterConsent ?: DrivePendingAction.BACKUP
-        pendingDriveActionAfterConsent = null
-
-        viewModelScope.launch {
-            _driveSyncStatus.value = _driveSyncStatus.value.copy(isSyncing = true)
-            when (action) {
-                DrivePendingAction.BACKUP -> executeDriveUpload(context, accessToken, currentData)
-                DrivePendingAction.RESTORE -> executeDriveRestore(accessToken, currentData)
-            }
-        }
-    }
-
-    private suspend fun executeDriveUpload(
-        context: Context,
-        accessToken: String,
-        data: LedgerDashboardData
-    ) {
-        val result = GoogleDriveSyncManager.uploadBackupToDrive(
-            context = context.applicationContext,
-            userId = currentUserId,
-            userEmail = userEmail,
-            accessToken = accessToken,
-            categories = data.categories,
-            families = data.families,
-            activities = data.activities,
-            events = data.events
-        )
-        result.onSuccess { syncedAt ->
-            _driveSyncStatus.value = _driveSyncStatus.value.copy(
-                isSyncing = false,
-                lastSyncMillis = syncedAt,
-                lastSyncedFileName = GoogleDriveSyncManager.BACKUP_FILE_NAME,
-                statusMessage = "Backed up to Google Drive"
-            )
-            _actionMessage.value = "All data backed up to Google Drive successfully."
-        }.onFailure { err ->
-            _driveSyncStatus.value = _driveSyncStatus.value.copy(
-                isSyncing = false,
-                statusMessage = err.localizedMessage ?: "Drive backup failed"
-            )
-            _actionMessage.value = err.localizedMessage ?: "Google Drive upload failed."
-        }
-    }
-
-    private suspend fun executeDriveRestore(
-        accessToken: String,
-        data: LedgerDashboardData
-    ) {
-        val dlResult = GoogleDriveSyncManager.downloadBackupFromDrive(accessToken)
-        dlResult.onSuccess { backup ->
-            val restoreRes = repository.restoreFromDriveBackup(
-                payload = backup,
-                existingCategories = data.categories,
-                existingFamilies = data.families,
-                existingActivities = data.activities,
-                existingEvents = data.events
-            )
-            restoreRes.onSuccess { count ->
-                _driveSyncStatus.value = _driveSyncStatus.value.copy(
-                    isSyncing = false,
-                    statusMessage = "Restored $count records from Google Drive"
+            result.onSuccess { exportedAt ->
+                _localBackupStatus.value = _localBackupStatus.value.copy(
+                    isBusy = false,
+                    lastBackupMillis = exportedAt,
+                    lastFileName = LocalBackupManager.DEFAULT_BACKUP_FILE_NAME,
+                    statusMessage = "Offline backup file exported to phone storage"
                 )
-                _actionMessage.value = if (count > 0) {
-                    "Successfully restored $count records from Google Drive."
-                } else {
-                    "All of your data is already up to date."
+                _actionMessage.value = "Backup saved successfully to your phone."
+            }.onFailure { err ->
+                _localBackupStatus.value = _localBackupStatus.value.copy(
+                    isBusy = false,
+                    statusMessage = err.localizedMessage ?: "Backup export failed"
+                )
+                _actionMessage.value = err.localizedMessage ?: "Could not save backup file."
+            }
+        }
+    }
+
+    fun importOfflineBackupFromUri(context: Context, uri: Uri) {
+        val currentData = (dashboardState.value as? UiState.Success)?.data ?: return
+        viewModelScope.launch {
+            _localBackupStatus.value = _localBackupStatus.value.copy(isBusy = true, statusMessage = null)
+            val readRes = LocalBackupManager.importBackupFromUri(context, uri)
+            readRes.onSuccess { payload ->
+                val restoreRes = repository.restoreFromLocalBackup(
+                    payload = payload,
+                    existingCategories = currentData.categories,
+                    existingFamilies = currentData.families,
+                    existingActivities = currentData.activities,
+                    existingEvents = currentData.events
+                )
+                restoreRes.onSuccess { count ->
+                    _localBackupStatus.value = _localBackupStatus.value.copy(
+                        isBusy = false,
+                        statusMessage = "Restored $count offline records"
+                    )
+                    _actionMessage.value = if (count > 0) {
+                        "Successfully imported $count records to your offline database."
+                    } else {
+                        "All records in that backup are already saved on this device."
+                    }
+                }.onFailure { err ->
+                    _localBackupStatus.value = _localBackupStatus.value.copy(isBusy = false)
+                    _actionMessage.value = err.localizedMessage ?: "Failed to import backup records."
                 }
             }.onFailure { err ->
-                _driveSyncStatus.value = _driveSyncStatus.value.copy(isSyncing = false)
-                _actionMessage.value = err.localizedMessage ?: "Failed to restore records."
+                _localBackupStatus.value = _localBackupStatus.value.copy(isBusy = false)
+                _actionMessage.value = err.localizedMessage ?: "Invalid backup JSON file."
             }
-        }.onFailure { err ->
-            _driveSyncStatus.value = _driveSyncStatus.value.copy(isSyncing = false)
-            _actionMessage.value = err.localizedMessage ?: "Could not find backup file on Google Drive."
         }
     }
 
-    private fun triggerAutoDriveBackupIfEnabled(context: Context) {
-        if (!_driveSyncStatus.value.autoSyncEnabled) return
-        val data = (dashboardState.value as? UiState.Success)?.data ?: return
-        viewModelScope.launch {
-            val token = GoogleDriveSyncManager.tryGetSilentToken(context) ?: return@launch
-            val result = GoogleDriveSyncManager.uploadBackupToDrive(
-                context = context.applicationContext,
-                userId = currentUserId,
-                userEmail = userEmail,
-                accessToken = token,
-                categories = data.categories,
-                families = data.families,
-                activities = data.activities,
-                events = data.events
-            )
-            result.onSuccess { syncedAt ->
-                _driveSyncStatus.value = _driveSyncStatus.value.copy(
-                    lastSyncMillis = syncedAt,
-                    lastSyncedFileName = GoogleDriveSyncManager.BACKUP_FILE_NAME,
-                    statusMessage = "Google Drive auto-sync complete"
-                )
-            }
-        }
-    }
+    // --- Categories, Activities & Families ---
 
     fun seedDefaultCategoriesIfEmpty() {
         val currentCats = (dashboardState.value as? UiState.Success)?.data?.categories ?: return
         if (currentCats.isNotEmpty()) return
         viewModelScope.launch {
             repository.seedDefaultCategoriesIfEmpty(currentCats)
-                .onSuccess {
-                    _actionMessage.value = "Default occasion categories added."
-                }
         }
     }
 
     fun saveCategory(
-        context: Context,
+        @Suppress("UNUSED_PARAMETER") context: Context,
         category: ActivityCategory,
         previousName: String?,
         onSaved: (ActivityCategory) -> Unit = {}
@@ -556,8 +415,7 @@ class LedgerViewModel(
             )
             _isSaving.value = false
             result.onSuccess { saved ->
-                _actionMessage.value = "Category saved."
-                triggerAutoDriveBackupIfEnabled(context)
+                _actionMessage.value = "Category saved offline."
                 onSaved(saved)
             }.onFailure { err ->
                 _actionMessage.value = err.localizedMessage ?: "Failed to save category."
@@ -565,12 +423,11 @@ class LedgerViewModel(
         }
     }
 
-    fun deleteCategory(context: Context, categoryId: String) {
+    fun deleteCategory(@Suppress("UNUSED_PARAMETER") context: Context, categoryId: String) {
         viewModelScope.launch {
             repository.deleteCategory(categoryId)
                 .onSuccess {
                     _actionMessage.value = "Category deleted."
-                    triggerAutoDriveBackupIfEnabled(context)
                 }
                 .onFailure { err ->
                     _actionMessage.value = err.localizedMessage ?: "Failed to delete category."
@@ -601,8 +458,7 @@ class LedgerViewModel(
                 } else {
                     ReminderScheduler.cancelReminder(context.applicationContext, saved.id)
                 }
-                _actionMessage.value = "Entry saved and synced with your Family Directory."
-                triggerAutoDriveBackupIfEnabled(context)
+                _actionMessage.value = "Entry saved offline to your mobile database."
                 onSaved(saved)
             }.onFailure { err ->
                 _actionMessage.value = err.localizedMessage ?: "Failed to save entry."
@@ -611,7 +467,7 @@ class LedgerViewModel(
     }
 
     fun saveFamily(
-        context: Context,
+        @Suppress("UNUSED_PARAMETER") context: Context,
         profile: FamilyProfile,
         onSaved: () -> Unit = {}
     ) {
@@ -627,8 +483,7 @@ class LedgerViewModel(
             val result = repository.saveFamilyAndSyncActivities(profile, linked)
             _isSaving.value = false
             result.onSuccess {
-                _actionMessage.value = "Family profile and linked entries updated."
-                triggerAutoDriveBackupIfEnabled(context)
+                _actionMessage.value = "Family profile and linked entries updated offline."
                 onSaved()
             }.onFailure { err ->
                 _actionMessage.value = err.localizedMessage ?: "Failed to save family profile."
@@ -668,19 +523,17 @@ class LedgerViewModel(
                     ReminderScheduler.cancelReminder(context.applicationContext, record.id)
                     _actionMessage.value = "Reminder turned off."
                 }
-                triggerAutoDriveBackupIfEnabled(context)
             }.onFailure { err ->
                 _actionMessage.value = err.localizedMessage ?: "Failed to update reminder."
             }
         }
     }
 
-    fun markCalendarSynced(context: Context, recordId: String) {
+    fun markCalendarSynced(@Suppress("UNUSED_PARAMETER") context: Context, recordId: String) {
         viewModelScope.launch {
             repository.markCalendarSynced(recordId, true)
                 .onSuccess {
                     _actionMessage.value = "Marked entry as synced to device calendar."
-                    triggerAutoDriveBackupIfEnabled(context)
                 }
         }
     }
@@ -693,7 +546,6 @@ class LedgerViewModel(
             result.onSuccess {
                 ReminderScheduler.cancelReminder(context.applicationContext, activityId)
                 _actionMessage.value = "Entry deleted."
-                triggerAutoDriveBackupIfEnabled(context)
                 onDeleted()
             }.onFailure { err ->
                 _actionMessage.value = err.localizedMessage ?: "Failed to delete entry."
@@ -701,12 +553,11 @@ class LedgerViewModel(
         }
     }
 
-    fun deleteFamily(context: Context, familyDocId: String) {
+    fun deleteFamily(@Suppress("UNUSED_PARAMETER") context: Context, familyDocId: String) {
         viewModelScope.launch {
             repository.deleteFamily(familyDocId)
                 .onSuccess {
                     _actionMessage.value = "Family profile deleted."
-                    triggerAutoDriveBackupIfEnabled(context)
                 }
                 .onFailure { err ->
                     _actionMessage.value = err.localizedMessage ?: "Failed to delete family profile."

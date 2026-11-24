@@ -158,12 +158,12 @@ fun AiAssistantScreen(
                         )
                         Column {
                             Text(
-                                text = "AI Family & Event Assistant",
+                                text = "Smart Search & Balance Compare",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Search families, ledger items, and events with natural language, or compare In vs Out balances side-by-side.",
+                                text = "Instantly search families, ledger items, and occasions offline on your phone, or compare In vs Out balances side-by-side.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -272,7 +272,7 @@ fun AiAssistantScreen(
                             } else {
                                 Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Search Families & Events with AI", fontWeight = FontWeight.SemiBold)
+                                Text("Search Diary Offline", fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -283,14 +283,14 @@ fun AiAssistantScreen(
                         item {
                             AiEmptyPromptCard(
                                 title = "Ask Anything About Your Diary",
-                                body = "AI scans your ${families.size} families, ${events.size} saved events, and ${activities.size} ledger entries to surface exact matches and insights."
+                                body = "Smart search scans your ${families.size} families, ${events.size} saved occasions, and ${activities.size} ledger entries locally on your phone."
                             )
                         }
                     }
 
                     is UiState.Loading -> {
                         item {
-                            AiLoadingCard("Analyzing families, events, and ledger records...")
+                            AiLoadingCard("Scanning local families, occasions, and ledger records...")
                         }
                     }
 
@@ -515,7 +515,7 @@ fun AiAssistantScreen(
                                 } else {
                                     Icon(Icons.Rounded.CompareArrows, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Compare In & Out Balances with AI", fontWeight = FontWeight.SemiBold)
+                                    Text("Compare In & Out Balances", fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -527,7 +527,7 @@ fun AiAssistantScreen(
                         item {
                             AiEmptyPromptCard(
                                 title = "Compare Family In vs Out Balances",
-                                body = "Pick 2 or more families above and tap Compare to get side-by-side In/Out charts, net differences, and AI reciprocity insights."
+                                body = "Pick 2 or more families above and tap Compare to get side-by-side In/Out charts, net differences, and balance insights offline."
                             )
                         }
                     }

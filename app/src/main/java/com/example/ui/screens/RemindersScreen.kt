@@ -24,14 +24,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.rounded.Logout
-import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Category
-import androidx.compose.material.icons.rounded.CloudDone
-import androidx.compose.material.icons.rounded.CloudDownload
-import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsNone
+import androidx.compose.material.icons.rounded.PhoneAndroid
+import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -55,7 +54,7 @@ import androidx.core.content.ContextCompat
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
 import com.example.data.UiState
-import com.example.drive.DriveSyncStatus
+import com.example.drive.LocalBackupStatus
 import com.example.reminders.ReminderScheduler
 import com.example.ui.components.CategoryBadge
 import com.example.ui.components.DirectionPill
@@ -67,16 +66,12 @@ import com.example.ui.viewmodel.LedgerDashboardData
 @Composable
 fun RemindersScreen(
     state: UiState<LedgerDashboardData>,
-    userEmail: String?,
-    userDisplayName: String?,
-    driveSyncStatus: DriveSyncStatus,
-    onSyncToDriveClick: () -> Unit,
-    onRestoreFromDriveClick: () -> Unit,
-    onAutoDriveSyncToggle: (Boolean) -> Unit,
+    backupStatus: LocalBackupStatus,
+    onExportBackupClick: () -> Unit,
+    onImportBackupClick: () -> Unit,
     onManageCategoriesClick: () -> Unit,
     onActivityClick: (ActivityRecord) -> Unit,
     onToggleReminder: (ActivityRecord, Boolean) -> Unit,
-    onSignOutClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -84,6 +79,8 @@ fun RemindersScreen(
     val activities = dashboardData?.activities ?: emptyList()
     val catalog = dashboardData?.catalog ?: DropdownCatalog()
     val categoriesCount = dashboardData?.categories?.size ?: 0
+    val eventsCount = dashboardData?.events?.size ?: 0
+    val familiesCount = dashboardData?.families?.size ?: 0
 
     val reminderItems = remember(activities) {
         activities
@@ -106,7 +103,7 @@ fun RemindersScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // User account card
+            // Offline device storage status card
             item {
                 Card(
                     shape = RoundedCornerShape(22.dp),
@@ -118,50 +115,31 @@ fun RemindersScreen(
                             .fillMaxWidth()
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.AccountCircle,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(40.dp)
+                        Icon(
+                            imageVector = Icons.Rounded.PhoneAndroid,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(38.dp)
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Offline Device Storage",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
                             )
-                            Column {
-                                Text(
-                                    text = userDisplayName?.takeIf { it.isNotBlank() } ?: "Google User",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = userEmail ?: "Cloud sync active",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        OutlinedButton(
-                            onClick = onSignOutClick,
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.testTag("sign_out_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.Logout,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                            Text(
+                                text = "Saved locally on this phone • $eventsCount occasions, ${activities.size} entries, $familiesCount families",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Sign Out")
                         }
                     }
                 }
             }
 
-            // Google Drive Backup & Sync Card
+            // Offline Local Backup & Restore Card
             item {
                 Card(
                     shape = RoundedCornerShape(22.dp),
@@ -182,22 +160,22 @@ fun RemindersScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Rounded.CloudDone,
+                                imageVector = Icons.Rounded.Save,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(30.dp)
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Google Drive Backup & Sync",
+                                    text = "Phone File Backup & Restore",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = if (!userEmail.isNullOrBlank()) {
-                                        "Connected Gmail: $userEmail"
+                                    text = if (backupStatus.lastBackupMillis > 0L) {
+                                        "Last export: ${formatDisplayDate(backupStatus.lastBackupMillis)} • ${formatDisplayTime(backupStatus.lastBackupMillis)}"
                                     } else {
-                                        "Your diary entries, events, and families are backed up safely in Google Drive"
+                                        "Export or restore a JSON backup file directly on your device anytime."
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -205,37 +183,9 @@ fun RemindersScreen(
                             }
                         }
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Auto-Sync to Google Drive",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                Text(
-                                    text = if (driveSyncStatus.lastSyncMillis > 0L) {
-                                        "Last backup: ${formatDisplayDate(driveSyncStatus.lastSyncMillis)} • ${formatDisplayTime(driveSyncStatus.lastSyncMillis)}"
-                                    } else {
-                                        "File: Occasion_Diary_Backup.json"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Switch(
-                                checked = driveSyncStatus.autoSyncEnabled,
-                                onCheckedChange = onAutoDriveSyncToggle,
-                                modifier = Modifier.testTag("drive_autosync_switch")
-                            )
-                        }
-
-                        if (!driveSyncStatus.statusMessage.isNullOrBlank()) {
+                        if (!backupStatus.statusMessage.isNullOrBlank()) {
                             Text(
-                                text = driveSyncStatus.statusMessage,
+                                text = backupStatus.statusMessage,
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -248,15 +198,15 @@ fun RemindersScreen(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Button(
-                                onClick = onSyncToDriveClick,
-                                enabled = !driveSyncStatus.isSyncing,
+                                onClick = onExportBackupClick,
+                                enabled = !backupStatus.isBusy,
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(48.dp)
-                                    .testTag("drive_backup_button")
+                                    .testTag("local_backup_export_button")
                             ) {
-                                if (driveSyncStatus.isSyncing) {
+                                if (backupStatus.isBusy) {
                                     CircularProgressIndicator(
                                         modifier = Modifier.size(18.dp),
                                         strokeWidth = 2.dp,
@@ -264,31 +214,31 @@ fun RemindersScreen(
                                     )
                                 } else {
                                     Icon(
-                                        imageVector = Icons.Rounded.CloudUpload,
+                                        imageVector = Icons.Rounded.Download,
                                         contentDescription = null,
                                         modifier = Modifier.size(18.dp)
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Back Up Now")
+                                Text("Export File")
                             }
 
                             OutlinedButton(
-                                onClick = onRestoreFromDriveClick,
-                                enabled = !driveSyncStatus.isSyncing,
+                                onClick = onImportBackupClick,
+                                enabled = !backupStatus.isBusy,
                                 shape = RoundedCornerShape(12.dp),
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(48.dp)
-                                    .testTag("drive_restore_button")
+                                    .testTag("local_backup_import_button")
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.CloudDownload,
+                                    imageVector = Icons.Rounded.UploadFile,
                                     contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Restore")
+                                Text("Import File")
                             }
                         }
                     }

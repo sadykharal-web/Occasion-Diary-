@@ -352,7 +352,7 @@ fun LedgerScreen(
                                                 fontWeight = FontWeight.Bold
                                             )
                                             Text(
-                                                text = "Tap or swipe right on a card to edit in Firestore",
+                                                text = "Tap or swipe right on a card to edit offline",
                                                 style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
@@ -961,7 +961,7 @@ private fun EmptyUpcomingOccasionsCard(
                 text = if (hasSavedEvents) {
                     "All saved events are in the past. Tap \"All Saved\" above or create a new upcoming occasion."
                 } else {
-                    "Add a wedding, birthday, walima, or family gathering to track it here and sync with Firestore."
+                    "Add a wedding, birthday, walima, or family gathering to track it offline on your phone."
                 },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

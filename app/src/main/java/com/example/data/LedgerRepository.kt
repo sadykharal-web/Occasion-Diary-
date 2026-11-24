@@ -1,260 +1,112 @@
 package com.example.data
 
-import android.content.Context
-import com.example.R
-import com.example.drive.DriveBackupPayload
-import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.auth
-import com.google.firebase.firestore.DocumentSnapshot
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FirebaseFirestoreException
-import com.google.firebase.firestore.snapshots
+import com.example.data.local.ActivityEntity
+import com.example.data.local.CategoryEntity
+import com.example.data.local.EventEntity
+import com.example.data.local.FamilyEntity
+import com.example.data.local.OccasionDiaryDao
+import com.example.drive.LocalBackupPayload
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.tasks.await
+import java.util.UUID
 
 class LedgerRepository(
-    private val db: FirebaseFirestore,
-    private val auth: FirebaseAuth = Firebase.auth
+    private val dao: OccasionDiaryDao
 ) {
-    constructor(context: Context) : this(
-        FirebaseFirestore.getInstance(
-            context.applicationContext.getString(R.string.firestore_database_id)
-        )
-    )
 
-    private fun requireUserId(): String {
-        return auth.currentUser?.uid
-            ?: throw IllegalStateException("Google Sign-In is required.")
+    fun observeActivities(): Flow<List<ActivityRecord>> {
+        return dao.observeActivities().map { entities ->
+            entities.map { it.toDomain() }
+        }
     }
 
-    fun observeFamilies(userId: String): Flow<List<FamilyProfile>> = flow {
-        require(userId.isNotBlank()) { "User ID must not be blank" }
-        val path = "users/$userId/families"
-        emitAll(
-            db.collection("users").document(userId).collection("families")
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.toObjects(
-                        FamilyProfile::class.java,
-                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                    ).sortedWith(
-                        compareBy<FamilyProfile> { it.familyId.toIntOrNull() ?: Int.MAX_VALUE }
-                            .thenBy { it.familyId }
-                            .thenBy { it.name }
-                    )
-                }
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val exceptionToLog = firestoreError ?: (error as? Exception)
-                    if (exceptionToLog != null && auth.currentUser?.uid == userId) {
-                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
-                    }
-                    throw error
-                }
-        )
+    fun observeFamilies(): Flow<List<FamilyProfile>> {
+        return dao.observeFamilies().map { entities ->
+            entities.map { it.toDomain() }
+        }
     }
 
-    fun observeCategories(userId: String): Flow<List<ActivityCategory>> = flow {
-        require(userId.isNotBlank()) { "User ID must not be blank" }
-        val path = "users/$userId/categories"
-        emitAll(
-            db.collection("users").document(userId).collection("categories")
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.toObjects(
-                        ActivityCategory::class.java,
-                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                    ).sortedBy { it.name }
-                }
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val exceptionToLog = firestoreError ?: (error as? Exception)
-                    if (exceptionToLog != null && auth.currentUser?.uid == userId) {
-                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
-                    }
-                    throw error
-                }
-        )
+    fun observeCategories(): Flow<List<ActivityCategory>> {
+        return dao.observeCategories().map { entities ->
+            entities.map { it.toDomain() }
+        }
     }
 
-    fun observeActivities(userId: String): Flow<List<ActivityRecord>> = flow {
-        require(userId.isNotBlank()) { "User ID must not be blank" }
-        val path = "users/$userId/activities"
-        emitAll(
-            db.collection("users").document(userId).collection("activities")
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.toObjects(
-                        ActivityRecord::class.java,
-                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                    ).sortedByDescending { it.eventDateMillis }
-                }
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val exceptionToLog = firestoreError ?: (error as? Exception)
-                    if (exceptionToLog != null && auth.currentUser?.uid == userId) {
-                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
-                    }
-                    throw error
-                }
-        )
-    }
-
-    fun observeEvents(userId: String): Flow<List<EventEntry>> = flow {
-        require(userId.isNotBlank()) { "User ID must not be blank" }
-        val path = "users/$userId/events"
-        emitAll(
-            db.collection("users").document(userId).collection("events")
-                .snapshots()
-                .map { snapshot ->
-                    snapshot.toObjects(
-                        EventEntry::class.java,
-                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
-                    ).sortedByDescending { it.eventDateMillis }
-                }
-                .catch { error ->
-                    val firestoreError = generateSequence(error) { it.cause }
-                        .filterIsInstance<FirebaseFirestoreException>()
-                        .firstOrNull()
-                    if (firestoreError == null && error is CancellationException) throw error
-                    val exceptionToLog = firestoreError ?: (error as? Exception)
-                    if (exceptionToLog != null && auth.currentUser?.uid == userId) {
-                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
-                    }
-                    throw error
-                }
-        )
+    fun observeEvents(): Flow<List<EventEntry>> {
+        return dao.observeEvents().map { entities ->
+            entities.map { it.toDomain() }
+        }
     }
 
     suspend fun saveEvent(entry: EventEntry): Result<EventEntry> {
-        var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/events"
         return try {
-            val uid = requireUserId()
             val cleanTitle = entry.title.trim().take(120)
             val cleanDescription = entry.description.trim().take(1000)
-            val cleanCategory = entry.category.trim().take(80)
+            val cleanCategory = entry.category.trim().take(80).ifEmpty { "Event" }
             val cleanLocation = entry.location.trim().take(200)
             val cleanFamilyDocId = entry.familyDocId?.trim()?.take(128)?.ifEmpty { null }
             val cleanFamilyName = entry.familyName.trim().take(100)
             val safeDateMillis = entry.eventDateMillis.coerceAtLeast(0L)
 
-            require(cleanTitle.isNotEmpty()) { "Please enter an event title." }
+            require(cleanTitle.isNotEmpty()) { "Please enter an occasion name." }
 
-            val col = db.collection("users").document(uid).collection("events")
-            val isNew = entry.id.isBlank()
-            val ref = if (isNew) col.document() else col.document(entry.id)
-            logPath = ref.path
+            val now = System.currentTimeMillis()
+            val resolvedId = entry.id.trim().ifEmpty { UUID.randomUUID().toString() }
+            val createdAt = if (entry.id.isBlank()) now else entry.createdAtMillis
 
-            if (isNew) {
-                val createPayload = buildMap<String, Any> {
-                    put("userId", uid)
-                    put("title", cleanTitle)
-                    put("description", cleanDescription)
-                    put("eventDateMillis", safeDateMillis)
-                    put("category", cleanCategory)
-                    put("location", cleanLocation)
-                    if (cleanFamilyDocId != null) put("familyDocId", cleanFamilyDocId)
-                    put("familyName", cleanFamilyName)
-                    put("createdAt", FieldValue.serverTimestamp())
-                    put("updatedAt", FieldValue.serverTimestamp())
-                }
-                ref.set(createPayload).await()
-            } else {
-                val updatePayload = buildMap<String, Any> {
-                    put("title", cleanTitle)
-                    put("description", cleanDescription)
-                    put("eventDateMillis", safeDateMillis)
-                    put("category", cleanCategory)
-                    put("location", cleanLocation)
-                    if (cleanFamilyDocId != null) put("familyDocId", cleanFamilyDocId)
-                    put("familyName", cleanFamilyName)
-                    put("updatedAt", FieldValue.serverTimestamp())
-                }
-                ref.update(updatePayload).await()
-            }
-
-            Result.success(
-                entry.copy(
-                    id = ref.id,
-                    userId = uid,
-                    title = cleanTitle,
-                    description = cleanDescription,
-                    eventDateMillis = safeDateMillis,
-                    category = cleanCategory,
-                    location = cleanLocation,
-                    familyDocId = cleanFamilyDocId,
-                    familyName = cleanFamilyName
-                )
+            val entity = EventEntity(
+                id = resolvedId,
+                title = cleanTitle,
+                description = cleanDescription,
+                eventDateMillis = safeDateMillis,
+                category = cleanCategory,
+                location = cleanLocation,
+                familyDocId = cleanFamilyDocId,
+                familyName = cleanFamilyName,
+                createdAtMillis = createdAt,
+                updatedAtMillis = now
             )
+            dao.upsertEvent(entity)
+            Result.success(entity.toDomain())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, logPath)
             Result.failure(e)
         }
     }
 
     suspend fun deleteEvent(eventId: String): Result<Unit> {
-        var docPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/events/$eventId"
         return try {
-            val uid = requireUserId()
             require(eventId.isNotBlank()) { "Event ID must not be blank." }
-            val ref = db.collection("users").document(uid).collection("events").document(eventId)
-            docPath = ref.path
-            ref.delete().await()
+            dao.deleteEvent(eventId)
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docPath)
             Result.failure(e)
         }
     }
 
     suspend fun seedDefaultCategoriesIfEmpty(existingCategories: List<ActivityCategory>): Result<Unit> {
         if (existingCategories.isNotEmpty()) return Result.success(Unit)
-        var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/categories"
         return try {
-            val uid = requireUserId()
-            val col = db.collection("users").document(uid).collection("categories")
-            logPath = col.path
-            val batch = db.batch()
-            CategoryStyleCatalog.DEFAULT_SEEDS.forEachIndexed { idx, seed ->
-                val ref = col.document("default_${idx + 1}")
-                batch.set(
-                    ref,
-                    mapOf(
-                        "userId" to uid,
-                        "name" to seed.name,
-                        "colorHex" to seed.colorHex,
-                        "iconKey" to seed.iconKey,
-                        "createdAt" to FieldValue.serverTimestamp(),
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
+            val now = System.currentTimeMillis()
+            val entities = CategoryStyleCatalog.DEFAULT_SEEDS.mapIndexed { idx, seed ->
+                CategoryEntity(
+                    id = "default_${idx + 1}",
+                    name = seed.name,
+                    colorHex = seed.colorHex,
+                    iconKey = seed.iconKey,
+                    createdAtMillis = now,
+                    updatedAtMillis = now
                 )
             }
-            batch.commit().await()
+            dao.upsertCategories(entities)
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, logPath)
             Result.failure(e)
         }
     }
@@ -262,11 +114,9 @@ class LedgerRepository(
     suspend fun saveCategoryAndSyncActivities(
         category: ActivityCategory,
         previousName: String?,
-        existingActivities: List<ActivityRecord>
+        @Suppress("UNUSED_PARAMETER") existingActivities: List<ActivityRecord>
     ): Result<ActivityCategory> {
-        var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/categories"
         return try {
-            val uid = requireUserId()
             val cleanName = category.name.trim().take(80)
             val cleanColor = category.colorHex.trim().take(9)
             val cleanIcon = category.iconKey.trim().take(40)
@@ -275,82 +125,40 @@ class LedgerRepository(
                 "Invalid color hex code."
             }
 
-            val userDoc = db.collection("users").document(uid)
-            val catCol = userDoc.collection("categories")
-            val actCol = userDoc.collection("activities")
+            val now = System.currentTimeMillis()
+            val resolvedId = category.id.trim().ifEmpty { UUID.randomUUID().toString() }
+            val createdAt = if (category.id.isBlank()) now else category.createdAtMillis
 
-            val isNew = category.id.isBlank()
-            val catRef = if (isNew) catCol.document() else catCol.document(category.id)
-            logPath = catRef.path
-
-            val batch = db.batch()
-            if (isNew) {
-                batch.set(
-                    catRef,
-                    mapOf(
-                        "userId" to uid,
-                        "name" to cleanName,
-                        "colorHex" to cleanColor,
-                        "iconKey" to cleanIcon,
-                        "createdAt" to FieldValue.serverTimestamp(),
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                )
-            } else {
-                batch.update(
-                    catRef,
-                    mapOf(
-                        "name" to cleanName,
-                        "colorHex" to cleanColor,
-                        "iconKey" to cleanIcon,
-                        "updatedAt" to FieldValue.serverTimestamp()
-                    )
-                )
-                if (!previousName.isNullOrBlank() && !previousName.equals(cleanName, ignoreCase = false)) {
-                    existingActivities
-                        .filter { it.eventType.equals(previousName, ignoreCase = true) }
-                        .forEach { act ->
-                            batch.update(
-                                actCol.document(act.id),
-                                mapOf(
-                                    "eventType" to cleanName,
-                                    "updatedAt" to FieldValue.serverTimestamp()
-                                )
-                            )
-                        }
-                }
-            }
-            batch.commit().await()
-            Result.success(
-                category.copy(
-                    id = catRef.id,
-                    userId = uid,
-                    name = cleanName,
-                    colorHex = cleanColor,
-                    iconKey = cleanIcon
-                )
+            val entity = CategoryEntity(
+                id = resolvedId,
+                name = cleanName,
+                colorHex = cleanColor,
+                iconKey = cleanIcon,
+                createdAtMillis = createdAt,
+                updatedAtMillis = now
             )
+            dao.upsertCategory(entity)
+
+            if (!previousName.isNullOrBlank() && !previousName.equals(cleanName, ignoreCase = false)) {
+                dao.renameActivityEventType(previousName, cleanName, now)
+            }
+
+            Result.success(entity.toDomain())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, logPath)
             Result.failure(e)
         }
     }
 
     suspend fun deleteCategory(categoryId: String): Result<Unit> {
-        var docPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/categories/$categoryId"
         return try {
-            val uid = requireUserId()
             require(categoryId.isNotBlank()) { "Category ID must not be blank." }
-            val ref = db.collection("users").document(uid).collection("categories").document(categoryId)
-            docPath = ref.path
-            ref.delete().await()
+            dao.deleteCategory(categoryId)
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docPath)
             Result.failure(e)
         }
     }
@@ -358,11 +166,9 @@ class LedgerRepository(
     suspend fun saveActivityAndSyncFamily(
         record: ActivityRecord,
         existingFamilies: List<FamilyProfile>,
-        existingActivities: List<ActivityRecord>
+        @Suppress("UNUSED_PARAMETER") existingActivities: List<ActivityRecord>
     ): Result<ActivityRecord> {
-        var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/activities"
         return try {
-            val uid = requireUserId()
             val cleanName = record.name.trim().take(100)
             val cleanFn = record.familyId.trim().take(40)
             val cleanFather = record.fatherName.trim().take(100)
@@ -375,11 +181,7 @@ class LedgerRepository(
             require(cleanEvent.isNotEmpty()) { "Please select an event or activity category." }
             require(record.neondraAmount in 0L..1_000_000_000L) { "Amount must be within valid bounds." }
 
-            val userDoc = db.collection("users").document(uid)
-            val familiesCol = userDoc.collection("families")
-            val activitiesCol = userDoc.collection("activities")
-
-            val batch = db.batch()
+            val now = System.currentTimeMillis()
             var resolvedFamilyDocId: String? = record.familyDocId?.takeIf { it.isNotBlank() }
 
             if (cleanFn.isNotEmpty() || cleanName.isNotEmpty()) {
@@ -396,105 +198,45 @@ class LedgerRepository(
 
                 if (matchedFamily != null) {
                     resolvedFamilyDocId = matchedFamily.id
-                    val famRef = familiesCol.document(matchedFamily.id)
-                    val famUpdate = buildMap<String, Any> {
-                        put("familyId", effectiveFn)
-                        put("name", cleanName)
-                        put("fatherName", cleanFather.ifEmpty { matchedFamily.fatherName })
-                        put("address", cleanAddress.ifEmpty { matchedFamily.address })
-                        put("updatedAt", FieldValue.serverTimestamp())
-                    }
-                    batch.update(famRef, famUpdate)
+                    dao.upsertFamily(
+                        FamilyEntity(
+                            id = matchedFamily.id,
+                            familyId = effectiveFn,
+                            name = cleanName,
+                            fatherName = cleanFather.ifEmpty { matchedFamily.fatherName },
+                            address = cleanAddress.ifEmpty { matchedFamily.address },
+                            phone = matchedFamily.phone,
+                            createdAtMillis = matchedFamily.createdAtMillis,
+                            updatedAtMillis = now
+                        )
+                    )
                 } else {
-                    val famRef = familiesCol.document()
-                    resolvedFamilyDocId = famRef.id
-                    val famCreate = buildMap<String, Any> {
-                        put("userId", uid)
-                        put("familyId", effectiveFn)
-                        put("name", cleanName)
-                        put("fatherName", cleanFather)
-                        put("address", cleanAddress)
-                        put("createdAt", FieldValue.serverTimestamp())
-                        put("updatedAt", FieldValue.serverTimestamp())
-                    }
-                    batch.set(famRef, famCreate)
+                    val newFamId = UUID.randomUUID().toString()
+                    resolvedFamilyDocId = newFamId
+                    dao.upsertFamily(
+                        FamilyEntity(
+                            id = newFamId,
+                            familyId = effectiveFn,
+                            name = cleanName,
+                            fatherName = cleanFather,
+                            address = cleanAddress,
+                            phone = null,
+                            createdAtMillis = now,
+                            updatedAtMillis = now
+                        )
+                    )
                 }
             }
 
             val isNew = record.id.isBlank()
-            val actRef = if (isNew) activitiesCol.document() else activitiesCol.document(record.id)
-            logPath = actRef.path
-
+            val resolvedActId = if (isNew) UUID.randomUUID().toString() else record.id
             val safeReminderMinutes = record.reminderMinutesBefore.coerceIn(0L, 10080L)
             val safeReminderAt = if (record.reminderEnabled) record.reminderAtMillis.coerceAtLeast(0L) else 0L
             val safeEventMillis = record.eventDateMillis.coerceAtLeast(0L)
+            val resolvedDirection = ActivityDirection.fromWire(record.direction).wireValue
 
-            if (isNew) {
-                val payload = buildMap<String, Any> {
-                    put("userId", uid)
-                    if (resolvedFamilyDocId != null) put("familyDocId", resolvedFamilyDocId)
-                    put("familyId", cleanFn)
-                    put("name", cleanName)
-                    put("fatherName", cleanFather)
-                    put("address", cleanAddress)
-                    put("eventType", cleanEvent)
-                    put("eventDetail", cleanDetail)
-                    put("eventDateMillis", safeEventMillis)
-                    put("direction", ActivityDirection.fromWire(record.direction).wireValue)
-                    put("homeItems", cleanHome)
-                    put("neondraAmount", record.neondraAmount)
-                    put("reminderEnabled", record.reminderEnabled)
-                    put("reminderAtMillis", safeReminderAt)
-                    put("reminderMinutesBefore", safeReminderMinutes)
-                    put("calendarSynced", record.calendarSynced)
-                    put("createdAt", FieldValue.serverTimestamp())
-                    put("updatedAt", FieldValue.serverTimestamp())
-                }
-                batch.set(actRef, payload)
-            } else {
-                val updatePayload = buildMap<String, Any> {
-                    if (resolvedFamilyDocId != null) put("familyDocId", resolvedFamilyDocId)
-                    put("familyId", cleanFn)
-                    put("name", cleanName)
-                    put("fatherName", cleanFather)
-                    put("address", cleanAddress)
-                    put("eventType", cleanEvent)
-                    put("eventDetail", cleanDetail)
-                    put("eventDateMillis", safeEventMillis)
-                    put("direction", ActivityDirection.fromWire(record.direction).wireValue)
-                    put("homeItems", cleanHome)
-                    put("neondraAmount", record.neondraAmount)
-                    put("reminderEnabled", record.reminderEnabled)
-                    put("reminderAtMillis", safeReminderAt)
-                    put("reminderMinutesBefore", safeReminderMinutes)
-                    put("calendarSynced", record.calendarSynced)
-                    put("updatedAt", FieldValue.serverTimestamp())
-                }
-                batch.update(actRef, updatePayload)
-
-                if (resolvedFamilyDocId != null) {
-                    existingActivities
-                        .filter { it.id != record.id && it.familyDocId == resolvedFamilyDocId }
-                        .forEach { sibling ->
-                            val siblingRef = activitiesCol.document(sibling.id)
-                            batch.update(
-                                siblingRef,
-                                mapOf(
-                                    "familyId" to cleanFn,
-                                    "name" to cleanName,
-                                    "fatherName" to cleanFather,
-                                    "address" to cleanAddress,
-                                    "updatedAt" to FieldValue.serverTimestamp()
-                                )
-                            )
-                        }
-                }
-            }
-
-            batch.commit().await()
-            val saved = record.copy(
-                id = actRef.id,
-                userId = uid,
+            val entity = ActivityEntity(
+                id = resolvedActId,
                 familyDocId = resolvedFamilyDocId,
                 familyId = cleanFn,
                 name = cleanName,
@@ -503,27 +245,42 @@ class LedgerRepository(
                 eventType = cleanEvent,
                 eventDetail = cleanDetail,
                 eventDateMillis = safeEventMillis,
-                direction = ActivityDirection.fromWire(record.direction).wireValue,
+                direction = resolvedDirection,
                 homeItems = cleanHome,
+                neondraAmount = record.neondraAmount,
+                reminderEnabled = record.reminderEnabled,
                 reminderAtMillis = safeReminderAt,
-                reminderMinutesBefore = safeReminderMinutes
+                reminderMinutesBefore = safeReminderMinutes,
+                calendarSynced = record.calendarSynced,
+                createdAtMillis = if (isNew) now else record.createdAtMillis,
+                updatedAtMillis = now
             )
-            Result.success(saved)
+            dao.upsertActivity(entity)
+
+            if (!isNew && resolvedFamilyDocId != null) {
+                dao.syncFamilyFieldsToActivities(
+                    familyDocId = resolvedFamilyDocId,
+                    familyId = cleanFn,
+                    name = cleanName,
+                    fatherName = cleanFather,
+                    address = cleanAddress,
+                    updatedAtMillis = now
+                )
+            }
+
+            Result.success(entity.toDomain())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, logPath)
             Result.failure(e)
         }
     }
 
     suspend fun saveFamilyAndSyncActivities(
         profile: FamilyProfile,
-        linkedActivities: List<ActivityRecord>
+        @Suppress("UNUSED_PARAMETER") linkedActivities: List<ActivityRecord>
     ): Result<FamilyProfile> {
-        var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/families"
         return try {
-            val uid = requireUserId()
             val cleanFn = profile.familyId.trim().take(40)
             val cleanName = profile.name.trim().take(100)
             val cleanFather = profile.fatherName.trim().take(100)
@@ -533,188 +290,138 @@ class LedgerRepository(
             require(cleanFn.isNotEmpty()) { "Please enter a Family ID (FN)." }
             require(cleanName.isNotEmpty()) { "Please enter a family name." }
 
-            val userDoc = db.collection("users").document(uid)
-            val familiesCol = userDoc.collection("families")
-            val activitiesCol = userDoc.collection("activities")
-
+            val now = System.currentTimeMillis()
             val isNew = profile.id.isBlank()
-            val famRef = if (isNew) familiesCol.document() else familiesCol.document(profile.id)
-            logPath = famRef.path
+            val resolvedId = if (isNew) UUID.randomUUID().toString() else profile.id
 
-            val batch = db.batch()
-            if (isNew) {
-                val createMap = buildMap<String, Any> {
-                    put("userId", uid)
-                    put("familyId", cleanFn)
-                    put("name", cleanName)
-                    put("fatherName", cleanFather)
-                    put("address", cleanAddress)
-                    if (cleanPhone != null) put("phone", cleanPhone)
-                    put("createdAt", FieldValue.serverTimestamp())
-                    put("updatedAt", FieldValue.serverTimestamp())
-                }
-                batch.set(famRef, createMap)
-            } else {
-                val updateMap = buildMap<String, Any> {
-                    put("familyId", cleanFn)
-                    put("name", cleanName)
-                    put("fatherName", cleanFather)
-                    put("address", cleanAddress)
-                    if (cleanPhone != null) put("phone", cleanPhone)
-                    put("updatedAt", FieldValue.serverTimestamp())
-                }
-                batch.update(famRef, updateMap)
+            val entity = FamilyEntity(
+                id = resolvedId,
+                familyId = cleanFn,
+                name = cleanName,
+                fatherName = cleanFather,
+                address = cleanAddress,
+                phone = cleanPhone,
+                createdAtMillis = if (isNew) now else profile.createdAtMillis,
+                updatedAtMillis = now
+            )
+            dao.upsertFamily(entity)
 
-                linkedActivities.forEach { act ->
-                    val actRef = activitiesCol.document(act.id)
-                    batch.update(
-                        actRef,
-                        mapOf(
-                            "familyId" to cleanFn,
-                            "name" to cleanName,
-                            "fatherName" to cleanFather,
-                            "address" to cleanAddress,
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        )
-                    )
-                }
-            }
-
-            batch.commit().await()
-            Result.success(
-                profile.copy(
-                    id = famRef.id,
-                    userId = uid,
+            if (!isNew) {
+                dao.syncFamilyFieldsToActivities(
+                    familyDocId = resolvedId,
                     familyId = cleanFn,
                     name = cleanName,
                     fatherName = cleanFather,
                     address = cleanAddress,
-                    phone = cleanPhone
+                    updatedAtMillis = now
                 )
-            )
+            }
+
+            Result.success(entity.toDomain())
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, logPath)
             Result.failure(e)
         }
     }
 
-    suspend fun restoreFromDriveBackup(
-        payload: DriveBackupPayload,
+    suspend fun restoreFromLocalBackup(
+        payload: LocalBackupPayload,
         existingCategories: List<ActivityCategory>,
         existingFamilies: List<FamilyProfile>,
         existingActivities: List<ActivityRecord>,
         existingEvents: List<EventEntry> = emptyList()
     ): Result<Int> {
-        var logPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}"
         return try {
-            val uid = requireUserId()
-            val userDoc = db.collection("users").document(uid)
-            logPath = userDoc.path
-            val batch = db.batch()
+            val now = System.currentTimeMillis()
             var importedCount = 0
 
             val existingCatIds = existingCategories.map { it.id }.toSet()
-            payload.categories.forEach { cat ->
-                val validId = cat.id.takeIf { it.matches(Regex("^[a-zA-Z0-9_\\-]+$")) }
-                if (validId != null && validId !in existingCatIds && cat.name.isNotBlank()) {
-                    val ref = userDoc.collection("categories").document(validId)
-                    batch.set(
-                        ref,
-                        mapOf(
-                            "userId" to uid,
-                            "name" to cat.name.trim().take(80),
-                            "colorHex" to cat.colorHex,
-                            "iconKey" to cat.iconKey,
-                            "createdAt" to FieldValue.serverTimestamp(),
-                            "updatedAt" to FieldValue.serverTimestamp()
-                        )
-                    )
+            val newCats = payload.categories
+                .filter { it.name.isNotBlank() && (it.id.isBlank() || it.id !in existingCatIds) }
+                .map { cat ->
                     importedCount++
+                    CategoryEntity(
+                        id = cat.id.ifBlank { UUID.randomUUID().toString() },
+                        name = cat.name.trim().take(80),
+                        colorHex = cat.colorHex.takeIf { it.matches(Regex("^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$")) } ?: "#0F5C4D",
+                        iconKey = cat.iconKey.trim().take(40).ifEmpty { "event" },
+                        createdAtMillis = now,
+                        updatedAtMillis = now
+                    )
                 }
-            }
+            if (newCats.isNotEmpty()) dao.upsertCategories(newCats)
 
             val existingFamIds = existingFamilies.map { it.id }.toSet()
-            payload.families.forEach { fam ->
-                val validId = fam.id.takeIf { it.matches(Regex("^[a-zA-Z0-9_\\-]+$")) }
-                if (validId != null && validId !in existingFamIds && fam.name.isNotBlank() && fam.familyId.isNotBlank()) {
-                    val ref = userDoc.collection("families").document(validId)
-                    val map = buildMap<String, Any> {
-                        put("userId", uid)
-                        put("familyId", fam.familyId.trim().take(40))
-                        put("name", fam.name.trim().take(100))
-                        put("fatherName", fam.fatherName.trim().take(100))
-                        put("address", fam.address.trim().take(200))
-                        if (!fam.phone.isNullOrBlank()) put("phone", fam.phone.trim().take(30))
-                        put("createdAt", FieldValue.serverTimestamp())
-                        put("updatedAt", FieldValue.serverTimestamp())
-                    }
-                    batch.set(ref, map)
+            val newFams = payload.families
+                .filter { it.name.isNotBlank() && (it.id.isBlank() || it.id !in existingFamIds) }
+                .map { fam ->
                     importedCount++
+                    FamilyEntity(
+                        id = fam.id.ifBlank { UUID.randomUUID().toString() },
+                        familyId = fam.familyId.trim().take(40).ifEmpty { "1" },
+                        name = fam.name.trim().take(100),
+                        fatherName = fam.fatherName.trim().take(100),
+                        address = fam.address.trim().take(200),
+                        phone = fam.phone?.trim()?.take(30)?.ifEmpty { null },
+                        createdAtMillis = now,
+                        updatedAtMillis = now
+                    )
                 }
-            }
+            if (newFams.isNotEmpty()) dao.upsertFamilies(newFams)
 
             val existingActIds = existingActivities.map { it.id }.toSet()
-            payload.activities.forEach { act ->
-                val validId = act.id.takeIf { it.matches(Regex("^[a-zA-Z0-9_\\-]+$")) }
-                if (validId != null && validId !in existingActIds && act.name.isNotBlank() && act.eventType.isNotBlank()) {
-                    val ref = userDoc.collection("activities").document(validId)
-                    val map = buildMap<String, Any> {
-                        put("userId", uid)
-                        if (!act.familyDocId.isNullOrBlank()) put("familyDocId", act.familyDocId)
-                        put("familyId", act.familyId.trim().take(40))
-                        put("name", act.name.trim().take(100))
-                        put("fatherName", act.fatherName.trim().take(100))
-                        put("address", act.address.trim().take(200))
-                        put("eventType", act.eventType.trim().take(80))
-                        put("eventDetail", act.eventDetail.trim().take(250))
-                        put("eventDateMillis", act.eventDateMillis.coerceAtLeast(0L))
-                        put("direction", ActivityDirection.fromWire(act.direction).wireValue)
-                        put("homeItems", act.homeItems.trim().take(1000))
-                        put("neondraAmount", act.neondraAmount.coerceIn(0L, 1_000_000_000L))
-                        put("reminderEnabled", act.reminderEnabled)
-                        put("reminderAtMillis", act.reminderAtMillis.coerceAtLeast(0L))
-                        put("reminderMinutesBefore", act.reminderMinutesBefore.coerceIn(0L, 10080L))
-                        put("calendarSynced", act.calendarSynced)
-                        put("createdAt", FieldValue.serverTimestamp())
-                        put("updatedAt", FieldValue.serverTimestamp())
-                    }
-                    batch.set(ref, map)
+            val newActs = payload.activities
+                .filter { it.name.isNotBlank() && (it.id.isBlank() || it.id !in existingActIds) }
+                .map { act ->
                     importedCount++
+                    ActivityEntity(
+                        id = act.id.ifBlank { UUID.randomUUID().toString() },
+                        familyDocId = act.familyDocId?.takeIf { it.isNotBlank() },
+                        familyId = act.familyId.trim().take(40),
+                        name = act.name.trim().take(100),
+                        fatherName = act.fatherName.trim().take(100),
+                        address = act.address.trim().take(200),
+                        eventType = act.eventType.trim().take(80).ifEmpty { "Wedding" },
+                        eventDetail = act.eventDetail.trim().take(250),
+                        eventDateMillis = act.eventDateMillis.coerceAtLeast(0L),
+                        direction = ActivityDirection.fromWire(act.direction).wireValue,
+                        homeItems = act.homeItems.trim().take(1000),
+                        neondraAmount = act.neondraAmount.coerceIn(0L, 1_000_000_000L),
+                        reminderEnabled = act.reminderEnabled,
+                        reminderAtMillis = if (act.reminderEnabled) act.reminderAtMillis.coerceAtLeast(0L) else 0L,
+                        reminderMinutesBefore = act.reminderMinutesBefore.coerceIn(0L, 10080L),
+                        calendarSynced = act.calendarSynced,
+                        createdAtMillis = now,
+                        updatedAtMillis = now
+                    )
                 }
-            }
+            if (newActs.isNotEmpty()) dao.upsertActivities(newActs)
 
-            val existingEventIds = existingEvents.map { it.id }.toSet()
-            payload.events.forEach { evt ->
-                val validId = evt.id.takeIf { it.matches(Regex("^[a-zA-Z0-9_\\-]+$")) }
-                if (validId != null && validId !in existingEventIds && evt.title.isNotBlank()) {
-                    val ref = userDoc.collection("events").document(validId)
-                    val map = buildMap<String, Any> {
-                        put("userId", uid)
-                        put("title", evt.title.trim().take(120))
-                        put("description", evt.description.trim().take(1000))
-                        put("eventDateMillis", evt.eventDateMillis.coerceAtLeast(0L))
-                        put("category", evt.category.trim().take(80))
-                        put("location", evt.location.trim().take(200))
-                        if (!evt.familyDocId.isNullOrBlank()) put("familyDocId", evt.familyDocId.trim().take(128))
-                        put("familyName", evt.familyName.trim().take(100))
-                        put("createdAt", FieldValue.serverTimestamp())
-                        put("updatedAt", FieldValue.serverTimestamp())
-                    }
-                    batch.set(ref, map)
+            val existingEvtIds = existingEvents.map { it.id }.toSet()
+            val newEvts = payload.events
+                .filter { it.title.isNotBlank() && (it.id.isBlank() || it.id !in existingEvtIds) }
+                .map { evt ->
                     importedCount++
+                    EventEntity(
+                        id = evt.id.ifBlank { UUID.randomUUID().toString() },
+                        title = evt.title.trim().take(120),
+                        description = evt.description.trim().take(1000),
+                        eventDateMillis = evt.eventDateMillis.coerceAtLeast(0L),
+                        category = evt.category.trim().take(80).ifEmpty { "Event" },
+                        location = evt.location.trim().take(200),
+                        familyDocId = evt.familyDocId?.takeIf { it.isNotBlank() },
+                        familyName = evt.familyName.trim().take(100),
+                        createdAtMillis = now,
+                        updatedAtMillis = now
+                    )
                 }
-            }
+            if (newEvts.isNotEmpty()) dao.upsertEvents(newEvts)
 
-            if (importedCount > 0) {
-                batch.commit().await()
-            }
             Result.success(importedCount)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.WRITE, logPath)
             Result.failure(e)
         }
     }
@@ -725,81 +432,55 @@ class LedgerRepository(
         reminderAtMillis: Long,
         minutesBefore: Long
     ): Result<Unit> {
-        var docPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/activities/$activityId"
         return try {
-            val uid = requireUserId()
-            require(activityId.isNotBlank()) { "Activity ID must not be blank" }
-            val ref = db.collection("users").document(uid).collection("activities").document(activityId)
-            docPath = ref.path
-            ref.update(
-                mapOf(
-                    "reminderEnabled" to enabled,
-                    "reminderAtMillis" to if (enabled) reminderAtMillis.coerceAtLeast(0L) else 0L,
-                    "reminderMinutesBefore" to minutesBefore.coerceIn(0L, 10080L),
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
+            require(activityId.isNotBlank()) { "Activity ID must not be blank." }
+            dao.updateReminder(
+                activityId = activityId,
+                enabled = enabled,
+                reminderAtMillis = if (enabled) reminderAtMillis.coerceAtLeast(0L) else 0L,
+                minutesBefore = if (enabled) minutesBefore.coerceIn(0L, 10080L) else 0L,
+                updatedAtMillis = System.currentTimeMillis()
+            )
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docPath)
             Result.failure(e)
         }
     }
 
-    suspend fun markCalendarSynced(activityId: String, synced: Boolean = true): Result<Unit> {
-        var docPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/activities/$activityId"
+    suspend fun markCalendarSynced(activityId: String, synced: Boolean): Result<Unit> {
         return try {
-            val uid = requireUserId()
-            require(activityId.isNotBlank()) { "Activity ID must not be blank" }
-            val ref = db.collection("users").document(uid).collection("activities").document(activityId)
-            docPath = ref.path
-            ref.update(
-                mapOf(
-                    "calendarSynced" to synced,
-                    "updatedAt" to FieldValue.serverTimestamp()
-                )
-            ).await()
+            require(activityId.isNotBlank()) { "Activity ID must not be blank." }
+            dao.updateCalendarSynced(activityId, synced, System.currentTimeMillis())
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.UPDATE, docPath)
             Result.failure(e)
         }
     }
 
     suspend fun deleteActivity(activityId: String): Result<Unit> {
-        var docPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/activities/$activityId"
         return try {
-            val uid = requireUserId()
-            require(activityId.isNotBlank()) { "Activity ID must not be blank" }
-            val ref = db.collection("users").document(uid).collection("activities").document(activityId)
-            docPath = ref.path
-            ref.delete().await()
+            require(activityId.isNotBlank()) { "Activity ID must not be blank." }
+            dao.deleteActivity(activityId)
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docPath)
             Result.failure(e)
         }
     }
 
     suspend fun deleteFamily(familyDocId: String): Result<Unit> {
-        var docPath = "users/${auth.currentUser?.uid ?: "unauthenticated"}/families/$familyDocId"
         return try {
-            val uid = requireUserId()
-            require(familyDocId.isNotBlank()) { "Family Doc ID must not be blank" }
-            val ref = db.collection("users").document(uid).collection("families").document(familyDocId)
-            docPath = ref.path
-            ref.delete().await()
+            require(familyDocId.isNotBlank()) { "Family ID must not be blank." }
+            dao.deleteFamily(familyDocId)
             Result.success(Unit)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            handleFirestoreError(e, OperationType.DELETE, docPath)
             Result.failure(e)
         }
     }

@@ -1,6 +1,5 @@
 package com.example.data
 
-import androidx.annotation.Keep
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -18,10 +17,6 @@ import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.DocumentId
-import com.google.firebase.firestore.IgnoreExtraProperties
-import com.google.firebase.firestore.ServerTimestamp
 
 enum class ActivityDirection(val wireValue: String, val displayLabel: String, val shortLabel: String) {
     IN("IN", "In (Received)", "In"),
@@ -34,30 +29,26 @@ enum class ActivityDirection(val wireValue: String, val displayLabel: String, va
     }
 }
 
-@Keep
-@IgnoreExtraProperties
 data class FamilyProfile(
-    @DocumentId val id: String = "",
-    val userId: String = "",
+    val id: String = "",
+    val userId: String = "local",
     val familyId: String = "",
     val name: String = "",
     val fatherName: String = "",
     val address: String = "",
     val phone: String? = null,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAtMillis: Long = System.currentTimeMillis(),
+    val updatedAtMillis: Long = System.currentTimeMillis()
 )
 
-@Keep
-@IgnoreExtraProperties
 data class ActivityCategory(
-    @DocumentId val id: String = "",
-    val userId: String = "",
+    val id: String = "",
+    val userId: String = "local",
     val name: String = "",
     val colorHex: String = "#0F5C4D",
     val iconKey: String = "celebration",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAtMillis: Long = System.currentTimeMillis(),
+    val updatedAtMillis: Long = System.currentTimeMillis()
 ) {
     val parsedColor: Color
         get() = CategoryStyleCatalog.parseColorOrDefault(colorHex)
@@ -66,11 +57,9 @@ data class ActivityCategory(
         get() = CategoryStyleCatalog.iconForKey(iconKey)
 }
 
-@Keep
-@IgnoreExtraProperties
 data class ActivityRecord(
-    @DocumentId val id: String = "",
-    val userId: String = "",
+    val id: String = "",
+    val userId: String = "local",
     val familyDocId: String? = null,
     val familyId: String = "",
     val name: String = "",
@@ -86,18 +75,16 @@ data class ActivityRecord(
     val reminderAtMillis: Long = 0L,
     val reminderMinutesBefore: Long = 0L,
     val calendarSynced: Boolean = false,
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAtMillis: Long = System.currentTimeMillis(),
+    val updatedAtMillis: Long = System.currentTimeMillis()
 ) {
     val parsedDirection: ActivityDirection
         get() = ActivityDirection.fromWire(direction)
 }
 
-@Keep
-@IgnoreExtraProperties
 data class EventEntry(
-    @DocumentId val id: String = "",
-    val userId: String = "",
+    val id: String = "",
+    val userId: String = "local",
     val title: String = "",
     val description: String = "",
     val eventDateMillis: Long = System.currentTimeMillis(),
@@ -105,8 +92,8 @@ data class EventEntry(
     val location: String = "",
     val familyDocId: String? = null,
     val familyName: String = "",
-    @ServerTimestamp val createdAt: Timestamp? = null,
-    @ServerTimestamp val updatedAt: Timestamp? = null
+    val createdAtMillis: Long = System.currentTimeMillis(),
+    val updatedAtMillis: Long = System.currentTimeMillis()
 )
 
 data class CategoryColorOption(val hex: String, val label: String)
