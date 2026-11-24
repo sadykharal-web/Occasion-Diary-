@@ -361,7 +361,7 @@ class AiAssistantRepository {
             "find", "all", "for", "from", "are", "their", "list", "entries", "records"
         )
         val tokens = lowerQuery
-            .split(Regex("[^a-z0-9]+"))
+            .split(Regex("[^\\p{L}\\p{N}]+"))
             .map { it.trim() }
             .filter { it.length >= 2 && it !in stopWords }
 

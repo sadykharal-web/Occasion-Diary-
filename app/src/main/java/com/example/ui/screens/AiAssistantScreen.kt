@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -1714,7 +1715,7 @@ private fun AiErrorCard(
                             color = MaterialTheme.colorScheme.primary
                         )
                         Text(
-                            text = "Debug APKs running directly on a phone need this token allowlisted in Firebase Console (App Check -> Apps -> Life Line -> Manage debug tokens) for Online AI, or run via AI Studio's Streaming Emulator. Local In/Out comparison works offline below.",
+                            text = "Sideloaded debug APKs on a physical phone do not receive AI Studio's launch debug token automatically. Test Online AI in AI Studio's Streaming Emulator, paste an authorized debug token below, or use the offline In/Out comparison and Quick Filter.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1763,6 +1764,10 @@ private fun AiErrorCard(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = onRetry,
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.55f)
+                    ),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text("Retry", color = MaterialTheme.colorScheme.onErrorContainer)
