@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">Occasion Diary</string>
+    <string name="app_name">Life Line</string>
     <string name="app_tagline">Automated tracking for family occasions, ledger balances, events, and reminders</string>
 
     <!-- Navigation -->
@@ -10,7 +10,7 @@
     <string name="nav_reminders">Settings</string>
 
     <!-- Onboarding / App Highlights -->
-    <string name="app_welcome_title">Welcome to Occasion Diary</string>
+    <string name="app_welcome_title">Welcome to Life Line</string>
     <string name="app_welcome_subtitle">Track your family directory, upcoming occasions, and gift ledger 100% offline on your phone.</string>
     <string name="app_feature_sync">Automatic cascading dropdowns for Names, Family IDs, and Addresses</string>
     <string name="app_feature_reminders">Smart occasion scheduling, local alarms, and calendar export</string>

@@ -24,19 +24,25 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.CompareArrows
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Balance
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Clear
-import androidx.compose.material.icons.rounded.CompareArrows
+import androidx.compose.material.icons.rounded.CloudDone
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.OfflineBolt
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -60,7 +66,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,6 +78,8 @@ import androidx.compose.ui.unit.dp
 import com.example.ai.AiBalanceComparisonResult
 import com.example.ai.AiFamilyBalanceInsight
 import com.example.ai.AiSearchResult
+import com.example.ai.CategoryInOutBreakdown
+import com.example.ai.SingleFamilyInOutComparison
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
@@ -105,9 +112,13 @@ fun AiAssistantScreen(
     aiSearchState: UiState<AiSearchResult>?,
     aiComparisonState: UiState<AiBalanceComparisonResult>?,
     selectedCompareFamilyIds: Set<String>,
+    selectedSingleFamilyId: String?,
+    singleFamilyComparisonState: UiState<SingleFamilyInOutComparison>?,
     initialTabIndex: Int = 0,
-    onRunAiSearch: (String) -> Unit,
+    onRunAiSearch: (String, Boolean) -> Unit,
     onClearAiSearch: () -> Unit,
+    onSelectSingleFamily: (String) -> Unit,
+    onRunSingleFamilyAiAnalysis: () -> Unit,
     onToggleFamilyCompare: (String) -> Unit,
     onSelectTopFamilies: () -> Unit,
     onRunAiComparison: () -> Unit,
@@ -117,6 +128,7 @@ fun AiAssistantScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by rememberSaveable(initialTabIndex) { mutableIntStateOf(initialTabIndex) }
+    var compareSubMode by rememberSaveable { mutableIntStateOf(0) } // 0 = Within 1 Family, 1 = 2+ Families
     var searchPrompt by rememberSaveable { mutableStateOf("") }
 
     val dashboardData = (dashboardState as? UiState.Success)?.data
@@ -158,12 +170,12 @@ fun AiAssistantScreen(
                         )
                         Column {
                             Text(
-                                text = "Smart Search & Balance Compare",
+                                text = "Life Line AI Search & Compare",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Instantly search families, ledger items, and occasions offline on your phone, or compare In vs Out balances side-by-side.",
+                                text = "Search your offline Room records online with Gemini AI, or compare In vs Out entries within a single family or across families.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -187,7 +199,7 @@ fun AiAssistantScreen(
                         },
                         modifier = Modifier.testTag("ai_mode_search")
                     ) {
-                        Text("Smart Search")
+                        Text("AI Search")
                     }
                     SegmentedButton(
                         selected = selectedTab == 1,
@@ -195,14 +207,14 @@ fun AiAssistantScreen(
                         shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
                         icon = {
                             Icon(
-                                imageVector = Icons.Rounded.CompareArrows,
+                                imageVector = Icons.AutoMirrored.Rounded.CompareArrows,
                                 contentDescription = null,
                                 modifier = Modifier.size(18.dp)
                             )
                         },
                         modifier = Modifier.testTag("ai_mode_compare")
                     ) {
-                        Text("Compare Balances")
+                        Text("Compare In / Out")
                     }
                 }
             }
@@ -213,7 +225,7 @@ fun AiAssistantScreen(
                         OutlinedTextField(
                             value = searchPrompt,
                             onValueChange = { searchPrompt = it },
-                            label = { Text("Search families, events, gifts, or amounts...") },
+                            label = { Text("Ask AI over your offline diary records...") },
                             placeholder = { Text("e.g. Show all wedding events and high In families") },
                             leadingIcon = { Icon(Icons.Rounded.AutoAwesome, contentDescription = null) },
                             trailingIcon = {
@@ -245,7 +257,7 @@ fun AiAssistantScreen(
                                 AssistChip(
                                     onClick = {
                                         searchPrompt = preset
-                                        onRunAiSearch(preset)
+                                        onRunAiSearch(preset, true)
                                     },
                                     label = { Text(preset) }
                                 )
@@ -253,7 +265,7 @@ fun AiAssistantScreen(
                         }
 
                         Button(
-                            onClick = { onRunAiSearch(searchPrompt) },
+                            onClick = { onRunAiSearch(searchPrompt, true) },
                             enabled = searchPrompt.isNotBlank() && aiSearchState !is UiState.Loading,
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
@@ -268,12 +280,26 @@ fun AiAssistantScreen(
                                     strokeWidth = 2.dp
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Searching with AI...")
+                                Text("Searching Offline Data with AI...")
                             } else {
-                                Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Search Diary Offline", fontWeight = FontWeight.SemiBold)
+                                Text("Search Online with AI", fontWeight = FontWeight.SemiBold)
                             }
+                        }
+
+                        OutlinedButton(
+                            onClick = { onRunAiSearch(searchPrompt, false) },
+                            enabled = searchPrompt.isNotBlank() && aiSearchState !is UiState.Loading,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                                .testTag("ai_search_offline_button")
+                        ) {
+                            Icon(Icons.Rounded.OfflineBolt, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Offline Quick Filter", fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -282,15 +308,15 @@ fun AiAssistantScreen(
                     null -> {
                         item {
                             AiEmptyPromptCard(
-                                title = "Ask Anything About Your Diary",
-                                body = "Smart search scans your ${families.size} families, ${events.size} saved occasions, and ${activities.size} ledger entries locally on your phone."
+                                title = "Ask Gemini AI About Your Offline Data",
+                                body = "Online AI securely inspects your ${families.size} families, ${events.size} saved occasions, and ${activities.size} ledger entries stored offline on your device."
                             )
                         }
                     }
 
                     is UiState.Loading -> {
                         item {
-                            AiLoadingCard("Scanning local families, occasions, and ledger records...")
+                            AiLoadingCard("Analyzing your offline families, occasions, and ledger entries with AI...")
                         }
                     }
 
@@ -299,7 +325,7 @@ fun AiAssistantScreen(
                             AiErrorCard(
                                 message = aiSearchState.message,
                                 onRetry = {
-                                    if (searchPrompt.isNotBlank()) onRunAiSearch(searchPrompt)
+                                    if (searchPrompt.isNotBlank()) onRunAiSearch(searchPrompt, true)
                                 }
                             )
                         }
@@ -318,19 +344,26 @@ fun AiAssistantScreen(
                                     verticalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.AutoAwesome,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                        Text(
-                                            text = "AI Answer",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.AutoAwesome,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "AI Answer",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        SourceModePill(isOnlineAi = result.isOnlineAi)
                                     }
                                     Text(
                                         text = result.answerSummary,
@@ -347,7 +380,9 @@ fun AiAssistantScreen(
                                                     imageVector = Icons.Rounded.Lightbulb,
                                                     contentDescription = null,
                                                     tint = MaterialTheme.colorScheme.secondary,
-                                                    modifier = Modifier.size(16.dp).padding(top = 2.dp)
+                                                    modifier = Modifier
+                                                        .size(16.dp)
+                                                        .padding(top = 2.dp)
                                                 )
                                                 Text(
                                                     text = insight,
@@ -386,6 +421,7 @@ fun AiAssistantScreen(
                                     entriesCount = famActs.size,
                                     onCompareClick = {
                                         onCompareThisFamily(fam.id)
+                                        compareSubMode = 0
                                         selectedTab = 1
                                     }
                                 )
@@ -426,229 +462,443 @@ fun AiAssistantScreen(
                     }
                 }
             } else {
-                // Compare Family In & Out Balances Mode
+                // Compare In & Out Mode: Single Family (In vs Out) OR Multi-Family
                 item {
-                    Card(
-                        shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = compareSubMode == 0,
+                            onClick = { compareSubMode = 0 },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Person,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            modifier = Modifier.testTag("compare_submode_single")
                         ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = "Select 2+ Families to Compare (${selectedCompareFamilyIds.size} selected)",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.weight(1f)
+                            Text("Within 1 Family", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        SegmentedButton(
+                            selected = compareSubMode == 1,
+                            onClick = { compareSubMode = 1 },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Groups,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
                                 )
-                                TextButton(onClick = onSelectTopFamilies) {
-                                    Text("Select Top 3")
-                                }
-                            }
-
-                            if (families.isEmpty()) {
-                                Text(
-                                    text = "Add at least two families in the Families tab or via New Entry to compare their In and Out balances.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            } else {
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    families.forEach { fam ->
-                                        val isSelected = fam.id in selectedCompareFamilyIds
-                                        FilterChip(
-                                            selected = isSelected,
-                                            onClick = { onToggleFamilyCompare(fam.id) },
-                                            leadingIcon = if (isSelected) {
-                                                {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.Check,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-                                            } else null,
-                                            label = {
-                                                Text(
-                                                    text = if (fam.familyId.isNotBlank()) "${fam.name} (FN ${fam.familyId})" else fam.name,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            },
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                            ),
-                                            modifier = Modifier.testTag("compare_family_chip_${fam.id}")
-                                        )
-                                    }
-                                }
-                            }
-
-                            Button(
-                                onClick = onRunAiComparison,
-                                enabled = selectedCompareFamilyIds.size >= 2 && aiComparisonState !is UiState.Loading,
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp)
-                                    .testTag("ai_compare_button")
-                            ) {
-                                if (aiComparisonState is UiState.Loading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        color = MaterialTheme.colorScheme.onPrimary,
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Comparing Family Balances...")
-                                } else {
-                                    Icon(Icons.Rounded.CompareArrows, contentDescription = null, modifier = Modifier.size(18.dp))
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("Compare In & Out Balances", fontWeight = FontWeight.SemiBold)
-                                }
-                            }
+                            },
+                            modifier = Modifier.testTag("compare_submode_multi")
+                        ) {
+                            Text("2+ Families", maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
 
-                when (aiComparisonState) {
-                    null -> {
-                        item {
-                            AiEmptyPromptCard(
-                                title = "Compare Family In vs Out Balances",
-                                body = "Pick 2 or more families above and tap Compare to get side-by-side In/Out charts, net differences, and balance insights offline."
-                            )
-                        }
-                    }
-
-                    is UiState.Loading -> {
-                        item {
-                            AiLoadingCard("Comparing In vs Out totals, net balances, and gift history...")
-                        }
-                    }
-
-                    is UiState.Error -> {
-                        item {
-                            AiErrorCard(
-                                message = aiComparisonState.message,
-                                onRetry = onRunAiComparison
-                            )
-                        }
-                    }
-
-                    is UiState.Success -> {
-                        val comp = aiComparisonState.data
-                        item {
-                            Card(
-                                shape = RoundedCornerShape(20.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                if (compareSubMode == 0) {
+                    // Single-Family In vs Out Entries Comparison
+                    item {
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
-                                Column(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                Text(
+                                    text = "Pick One Family to Compare In vs Out Entries",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                if (families.isEmpty()) {
+                                    Text(
+                                        text = "Add a family in the Families tab or via New Entry to compare its In and Out entries.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Balance,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                        Text(
-                                            text = comp.headline,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    if (comp.higherNetFamilyName.isNotBlank()) {
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.secondaryContainer,
-                                            shape = RoundedCornerShape(10.dp)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Rounded.TrendingUp,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                                Text(
-                                                    text = "Highest Net Balance: ${comp.higherNetFamilyName}",
-                                                    style = MaterialTheme.typography.labelLarge,
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    fontWeight = FontWeight.SemiBold
-                                                )
-                                            }
+                                        families.forEach { fam ->
+                                            val isSelected = fam.id == selectedSingleFamilyId
+                                            FilterChip(
+                                                selected = isSelected,
+                                                onClick = { onSelectSingleFamily(fam.id) },
+                                                leadingIcon = if (isSelected) {
+                                                    {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Check,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                } else null,
+                                                label = {
+                                                    Text(
+                                                        text = if (fam.familyId.isNotBlank()) "${fam.name} (FN ${fam.familyId})" else fam.name,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                                ),
+                                                modifier = Modifier.testTag("single_family_chip_${fam.id}")
+                                            )
                                         }
                                     }
+                                }
+
+                                Button(
+                                    onClick = onRunSingleFamilyAiAnalysis,
+                                    enabled = selectedSingleFamilyId != null && singleFamilyComparisonState !is UiState.Loading,
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(50.dp)
+                                        .testTag("single_family_ai_button")
+                                ) {
+                                    if (singleFamilyComparisonState is UiState.Loading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Analyzing Family In & Out with AI...")
+                                    } else {
+                                        Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Analyze In & Out Entries with AI", fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    when (singleFamilyComparisonState) {
+                        null -> {
+                            item {
+                                AiEmptyPromptCard(
+                                    title = "Compare In vs Out Within One Family",
+                                    body = "Tap any family above to immediately compare all its In (Received) and Out (Given) entries side-by-side, or run Online AI analysis."
+                                )
+                            }
+                        }
+
+                        is UiState.Loading -> {
+                            item {
+                                AiLoadingCard("Comparing In vs Out entries for this family with Gemini AI...")
+                            }
+                        }
+
+                        is UiState.Error -> {
+                            item {
+                                AiErrorCard(
+                                    message = singleFamilyComparisonState.message,
+                                    onRetry = onRunSingleFamilyAiAnalysis
+                                )
+                            }
+                        }
+
+                        is UiState.Success -> {
+                            val comp = singleFamilyComparisonState.data
+                            item {
+                                SingleFamilySummaryCard(comp = comp)
+                            }
+
+                            if (comp.categoryBreakdowns.isNotEmpty()) {
+                                item {
                                     Text(
-                                        text = comp.summary,
-                                        style = MaterialTheme.typography.bodyMedium
+                                        text = "Category Breakdown (${comp.categoryBreakdowns.size})",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                items(comp.categoryBreakdowns, key = { "cat_cmp_${it.categoryName}" }) { cat ->
+                                    CategoryInOutCard(breakdown = cat, catalog = catalog)
+                                }
+                            }
+
+                            item {
+                                SectionDirectionHeader(
+                                    title = "In Entries (Received)",
+                                    count = comp.inEntries.size,
+                                    totalAmount = comp.totalIn,
+                                    isIn = true
+                                )
+                            }
+                            if (comp.inEntries.isEmpty()) {
+                                item {
+                                    EmptyDirectionEntryCard("No In (Received) entries recorded for ${comp.family.name}.")
+                                }
+                            } else {
+                                items(comp.inEntries, key = { "sf_in_${it.id}" }) { act ->
+                                    MatchedActivityCard(
+                                        record = act,
+                                        catalog = catalog,
+                                        onClick = { onActivityClick(act) }
+                                    )
+                                }
+                            }
+
+                            item {
+                                SectionDirectionHeader(
+                                    title = "Out Entries (Given)",
+                                    count = comp.outEntries.size,
+                                    totalAmount = comp.totalOut,
+                                    isIn = false
+                                )
+                            }
+                            if (comp.outEntries.isEmpty()) {
+                                item {
+                                    EmptyDirectionEntryCard("No Out (Given) entries recorded for ${comp.family.name}.")
+                                }
+                            } else {
+                                items(comp.outEntries, key = { "sf_out_${it.id}" }) { act ->
+                                    MatchedActivityCard(
+                                        record = act,
+                                        catalog = catalog,
+                                        onClick = { onActivityClick(act) }
                                     )
                                 }
                             }
                         }
+                    }
+                } else {
+                    // Compare 2+ Families Mode
+                    item {
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Select 2+ Families to Compare (${selectedCompareFamilyIds.size} selected)",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    TextButton(onClick = onSelectTopFamilies) {
+                                        Text("Select Top 3")
+                                    }
+                                }
 
-                        val maxBarValue = comp.familyBreakdowns
-                            .flatMap { listOf(it.totalIn, it.totalOut) }
-                            .maxOrNull()
-                            ?.coerceAtLeast(1L) ?: 1L
+                                if (families.isEmpty()) {
+                                    Text(
+                                        text = "Add at least two families in the Families tab or via New Entry to compare their In and Out balances.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    FlowRow(
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        families.forEach { fam ->
+                                            val isSelected = fam.id in selectedCompareFamilyIds
+                                            FilterChip(
+                                                selected = isSelected,
+                                                onClick = { onToggleFamilyCompare(fam.id) },
+                                                leadingIcon = if (isSelected) {
+                                                    {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Check,
+                                                            contentDescription = null,
+                                                            modifier = Modifier.size(16.dp)
+                                                        )
+                                                    }
+                                                } else null,
+                                                label = {
+                                                    Text(
+                                                        text = if (fam.familyId.isNotBlank()) "${fam.name} (FN ${fam.familyId})" else fam.name,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                                ),
+                                                modifier = Modifier.testTag("compare_family_chip_${fam.id}")
+                                            )
+                                        }
+                                    }
+                                }
 
-                        items(comp.familyBreakdowns, key = { "cmp_${it.familyDocId}" }) { item ->
-                            FamilyBalanceCompareCard(item = item, maxScale = maxBarValue)
+                                Button(
+                                    onClick = onRunAiComparison,
+                                    enabled = selectedCompareFamilyIds.size >= 2 && aiComparisonState !is UiState.Loading,
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(50.dp)
+                                        .testTag("ai_compare_button")
+                                ) {
+                                    if (aiComparisonState is UiState.Loading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            color = MaterialTheme.colorScheme.onPrimary,
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Comparing Family Balances...")
+                                    } else {
+                                        Icon(Icons.AutoMirrored.Rounded.CompareArrows, contentDescription = null, modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Compare 2+ Families", fontWeight = FontWeight.SemiBold)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    when (aiComparisonState) {
+                        null -> {
+                            item {
+                                AiEmptyPromptCard(
+                                    title = "Compare Multi-Family Balances",
+                                    body = "Pick 2 or more families above and tap Compare to get side-by-side In/Out charts, net differences, and balance insights."
+                                )
+                            }
                         }
 
-                        if (comp.recommendations.isNotEmpty()) {
+                        is UiState.Loading -> {
+                            item {
+                                AiLoadingCard("Comparing In vs Out totals, net balances, and gift history...")
+                            }
+                        }
+
+                        is UiState.Error -> {
+                            item {
+                                AiErrorCard(
+                                    message = aiComparisonState.message,
+                                    onRetry = onRunAiComparison
+                                )
+                            }
+                        }
+
+                        is UiState.Success -> {
+                            val comp = aiComparisonState.data
                             item {
                                 Card(
                                     shape = RoundedCornerShape(20.dp),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                                    )
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)
                                     ) {
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Rounded.Lightbulb,
+                                                imageVector = Icons.Rounded.Balance,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.primary
                                             )
                                             Text(
-                                                text = "AI Recommendations",
-                                                style = MaterialTheme.typography.titleSmall,
+                                                text = comp.headline,
+                                                style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
-                                        comp.recommendations.forEach { rec ->
-                                            Text(
-                                                text = "• $rec",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurface
-                                            )
+                                        if (comp.higherNetFamilyName.isNotBlank()) {
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.AutoMirrored.Rounded.TrendingUp,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                    Text(
+                                                        text = "Highest Net Balance: ${comp.higherNetFamilyName}",
+                                                        style = MaterialTheme.typography.labelLarge,
+                                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        Text(
+                                            text = comp.summary,
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                }
+                            }
+
+                            val maxBarValue = comp.familyBreakdowns
+                                .flatMap { listOf(it.totalIn, it.totalOut) }
+                                .maxOrNull()
+                                ?.coerceAtLeast(1L) ?: 1L
+
+                            items(comp.familyBreakdowns, key = { "cmp_${it.familyDocId}" }) { item ->
+                                FamilyBalanceCompareCard(item = item, maxScale = maxBarValue)
+                            }
+
+                            if (comp.recommendations.isNotEmpty()) {
+                                item {
+                                    Card(
+                                        shape = RoundedCornerShape(20.dp),
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                        )
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(16.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Lightbulb,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary
+                                                )
+                                                Text(
+                                                    text = "Balance Insights",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            comp.recommendations.forEach { rec ->
+                                                Text(
+                                                    text = "• $rec",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurface
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -660,6 +910,339 @@ fun AiAssistantScreen(
 
             item { Spacer(modifier = Modifier.height(24.dp)) }
         }
+    }
+}
+
+@Composable
+private fun SourceModePill(isOnlineAi: Boolean) {
+    Surface(
+        color = if (isOnlineAi) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+        shape = RoundedCornerShape(10.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = if (isOnlineAi) Icons.Rounded.CloudDone else Icons.Rounded.OfflineBolt,
+                contentDescription = null,
+                modifier = Modifier.size(14.dp),
+                tint = if (isOnlineAi) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+            Text(
+                text = if (isOnlineAi) "Online Gemini AI" else "Offline Filter",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = if (isOnlineAi) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun SingleFamilySummaryCard(comp: SingleFamilyInOutComparison) {
+    val isDark = isSystemInDarkTheme()
+    val inColor = if (isDark) InBadgeFgDark else InBadgeFgLight
+    val outColor = if (isDark) OutBadgeFgDark else OutBadgeFgLight
+    val maxVal = max(comp.totalIn, comp.totalOut).coerceAtLeast(1L)
+    val inFraction = (comp.totalIn.toFloat() / maxVal.toFloat()).coerceIn(0f, 1f)
+    val outFraction = (comp.totalOut.toFloat() / maxVal.toFloat()).coerceIn(0f, 1f)
+    val netPrefix = if (comp.netBalance >= 0) "+" else ""
+
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (comp.family.familyId.isNotBlank()) {
+                            "${comp.family.name} (FN ${comp.family.familyId})"
+                        } else {
+                            comp.family.name
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (comp.family.address.isNotBlank()) {
+                        Text(
+                            text = comp.family.address,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                SourceModePill(isOnlineAi = comp.usedOnlineAi)
+            }
+
+            // Side-by-side summary tiles: IN | OUT | NET
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = inColor.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("In (${comp.inEntries.size})", style = MaterialTheme.typography.labelSmall, color = inColor)
+                        Text(
+                            text = formatNeondraAmount(comp.totalIn),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = JakartaSansFamily,
+                            color = inColor
+                        )
+                    }
+                }
+                Surface(
+                    color = outColor.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("Out (${comp.outEntries.size})", style = MaterialTheme.typography.labelSmall, color = outColor)
+                        Text(
+                            text = formatNeondraAmount(comp.totalOut),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = JakartaSansFamily,
+                            color = outColor
+                        )
+                    }
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(
+                            text = "Net Balance",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = "$netPrefix${formatNeondraAmount(comp.netBalance)}",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = JakartaSansFamily,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+
+            // Visual Comparison Bars
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(inFraction.coerceAtLeast(if (comp.totalIn > 0) 0.04f else 0f))
+                            .height(10.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(inColor)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(RoundedCornerShape(5.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(outFraction.coerceAtLeast(if (comp.totalOut > 0) 0.04f else 0f))
+                            .height(10.dp)
+                            .clip(RoundedCornerShape(5.dp))
+                            .background(outColor)
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            Text(
+                text = comp.headline,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = comp.summary,
+                style = MaterialTheme.typography.bodyMedium
+            )
+            if (comp.insights.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    comp.insights.forEach { insight ->
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Lightbulb,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier
+                                    .size(16.dp)
+                                    .padding(top = 2.dp)
+                            )
+                            Text(
+                                text = insight,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryInOutCard(
+    breakdown: CategoryInOutBreakdown,
+    catalog: DropdownCatalog
+) {
+    val isDark = isSystemInDarkTheme()
+    val inColor = if (isDark) InBadgeFgDark else InBadgeFgLight
+    val outColor = if (isDark) OutBadgeFgDark else OutBadgeFgLight
+    val (catColor, catIcon) = catalog.resolveCategoryVisual(breakdown.categoryName)
+    val netPrefix = if (breakdown.netBalance >= 0) "+" else ""
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                CategoryBadge(label = breakdown.categoryName, color = catColor, icon = catIcon)
+                Text(
+                    text = "Net: $netPrefix${formatNeondraAmount(breakdown.netBalance)}",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = if (breakdown.netBalance >= 0) inColor else outColor
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "In (${breakdown.inCount}): ${formatNeondraAmount(breakdown.totalIn)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = inColor,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = "Out (${breakdown.outCount}): ${formatNeondraAmount(breakdown.totalOut)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = outColor,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionDirectionHeader(
+    title: String,
+    count: Int,
+    totalAmount: Long,
+    isIn: Boolean
+) {
+    val isDark = isSystemInDarkTheme()
+    val accent = if (isIn) {
+        if (isDark) InBadgeFgDark else InBadgeFgLight
+    } else {
+        if (isDark) OutBadgeFgDark else OutBadgeFgLight
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Icon(
+                imageVector = if (isIn) Icons.Rounded.ArrowDownward else Icons.Rounded.ArrowUpward,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(18.dp)
+            )
+            Text(
+                text = "$title ($count)",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
+            )
+        }
+        Text(
+            text = formatNeondraAmount(totalAmount),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            fontFamily = JakartaSansFamily,
+            color = accent
+        )
+    }
+}
+
+@Composable
+private fun EmptyDirectionEntryCard(message: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(14.dp)
+        )
     }
 }
 
@@ -835,7 +1418,7 @@ private fun MatchedFamilyCard(
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("Compare", style = MaterialTheme.typography.labelMedium)
+                    Text("Compare In/Out", style = MaterialTheme.typography.labelMedium)
                 }
             }
             Text(
@@ -943,12 +1526,25 @@ private fun MatchedActivityCard(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = formatDisplayDate(record.eventDateMillis),
+                        text = buildString {
+                            append(formatDisplayDate(record.eventDateMillis))
+                            if (record.eventDetail.isNotBlank()) {
+                                append(" • ")
+                                append(record.eventDetail)
+                            }
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
                 DirectionPill(direction = record.parsedDirection)
+            }
+            if (record.homeItems.isNotBlank()) {
+                Text(
+                    text = "Items: ${record.homeItems}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -960,7 +1556,8 @@ private fun MatchedActivityCard(
                     text = "Amount: ${formatNeondraAmount(record.neondraAmount)}",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = JakartaSansFamily
                 )
             }
         }

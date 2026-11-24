@@ -150,5 +150,27 @@ class LedgerLogicTest {
         assertEquals(5000L, aliStats.totalOut)
         assertEquals(15000L, aliStats.netBalance)
     }
+
+    @Test
+    fun `single family In vs Out comparison separates In and Out entries accurately`() {
+        val repo = com.example.ai.AiAssistantRepository()
+        val fam = com.example.data.FamilyProfile(id = "f1", familyId = "101", name = "Ali Khan")
+        val activities = listOf(
+            ActivityRecord(id = "a1", familyDocId = "f1", name = "Ali Khan", direction = "IN", neondraAmount = 25000L, eventType = "Wedding"),
+            ActivityRecord(id = "a2", familyDocId = "f1", name = "Ali Khan", direction = "IN", neondraAmount = 5000L, eventType = "Dinner"),
+            ActivityRecord(id = "a3", familyDocId = "f1", name = "Ali Khan", direction = "OUT", neondraAmount = 12000L, eventType = "Wedding")
+        )
+
+        val singleCmp = repo.compareWithinSingleFamilyLocal(fam, activities, emptyList())
+        assertEquals(30000L, singleCmp.totalIn)
+        assertEquals(12000L, singleCmp.totalOut)
+        assertEquals(18000L, singleCmp.netBalance)
+        assertEquals(2, singleCmp.inEntries.size)
+        assertEquals(1, singleCmp.outEntries.size)
+        val weddingBreakdown = singleCmp.categoryBreakdowns.first { it.categoryName == "Wedding" }
+        assertEquals(25000L, weddingBreakdown.totalIn)
+        assertEquals(12000L, weddingBreakdown.totalOut)
+        assertEquals(13000L, weddingBreakdown.netBalance)
+    }
 }
 

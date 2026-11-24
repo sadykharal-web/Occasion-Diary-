@@ -29,7 +29,7 @@ data class LocalBackupStatus(
 
 object LocalBackupManager {
     private const val TAG = "LocalBackupManager"
-    const val DEFAULT_BACKUP_FILE_NAME = "Occasion_Diary_Offline_Backup.json"
+    const val DEFAULT_BACKUP_FILE_NAME = "Life_Line_Backup.json"
     private const val PREFS_NAME = "occasion_diary_local_backup"
     private const val KEY_LAST_BACKUP = "last_backup_millis"
 
@@ -99,7 +99,7 @@ object LocalBackupManager {
         events: List<EventEntry>
     ): String {
         val root = JSONObject()
-        root.put("app", "OccasionDiary")
+        root.put("app", "LifeLine")
         root.put("version", 3)
         root.put("mode", "offline")
         root.put("exportedAtMillis", exportedAtMillis)

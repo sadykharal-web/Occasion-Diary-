@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.ai.AiAssistantRepository
 import com.example.ai.AiBalanceComparisonResult
 import com.example.ai.AiSearchResult
+import com.example.ai.SingleFamilyInOutComparison
 import com.example.data.ActivityCategory
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
@@ -80,6 +81,12 @@ class LedgerViewModel(
 
     private val _selectedCompareFamilyIds = MutableStateFlow<Set<String>>(emptySet())
     val selectedCompareFamilyIds: StateFlow<Set<String>> = _selectedCompareFamilyIds.asStateFlow()
+
+    private val _selectedSingleFamilyId = MutableStateFlow<String?>(null)
+    val selectedSingleFamilyId: StateFlow<String?> = _selectedSingleFamilyId.asStateFlow()
+
+    private val _singleFamilyComparisonState = MutableStateFlow<UiState<SingleFamilyInOutComparison>?>(null)
+    val singleFamilyComparisonState: StateFlow<UiState<SingleFamilyInOutComparison>?> = _singleFamilyComparisonState.asStateFlow()
 
     val dashboardState: StateFlow<UiState<LedgerDashboardData>> = combine(
         repository.observeActivities(),
@@ -239,22 +246,31 @@ class LedgerViewModel(
         }
     }
 
-    // --- Offline Smart Search & Family Balance Comparison ---
+    // --- Online AI Search (over Offline Room Data) & Offline Quick Filter ---
 
-    fun runAiSearch(query: String) {
+    fun runAiSearch(query: String, useOnlineAi: Boolean = true) {
         val data = (dashboardState.value as? UiState.Success)?.data
         if (data == null) {
-            _aiSearchState.value = UiState.Error("Your records are still loading. Please try again in a moment.")
+            _aiSearchState.value = UiState.Error("Your offline records are still loading. Please try again in a moment.")
             return
         }
         viewModelScope.launch {
             _aiSearchState.value = UiState.Loading
-            val result = aiRepository.searchFamiliesAndEvents(
-                query = query,
-                families = data.families,
-                activities = data.activities,
-                events = data.events
-            )
+            val result = if (useOnlineAi) {
+                aiRepository.searchFamiliesAndEventsOnline(
+                    query = query,
+                    families = data.families,
+                    activities = data.activities,
+                    events = data.events
+                )
+            } else {
+                aiRepository.searchFamiliesAndEvents(
+                    query = query,
+                    families = data.families,
+                    activities = data.activities,
+                    events = data.events
+                )
+            }
             _aiSearchState.value = result.fold(
                 onSuccess = { UiState.Success(it) },
                 onFailure = { UiState.Error(it.localizedMessage ?: "Search failed.") }
@@ -264,6 +280,51 @@ class LedgerViewModel(
 
     fun clearAiSearch() {
         _aiSearchState.value = null
+    }
+
+    // --- Single-Family In vs Out Entries Comparison ---
+
+    fun selectSingleFamilyForCompare(familyDocId: String) {
+        _selectedSingleFamilyId.value = familyDocId
+        val data = (dashboardState.value as? UiState.Success)?.data ?: return
+        val family = data.families.firstOrNull { it.id == familyDocId } ?: return
+        val localResult = aiRepository.compareWithinSingleFamilyLocal(
+            family = family,
+            activities = data.activities,
+            events = data.events
+        )
+        _singleFamilyComparisonState.value = UiState.Success(localResult)
+    }
+
+    fun runSingleFamilyOnlineAiAnalysis() {
+        val data = (dashboardState.value as? UiState.Success)?.data
+        if (data == null) {
+            _singleFamilyComparisonState.value = UiState.Error("Your offline records are still loading. Please try again.")
+            return
+        }
+        val targetId = _selectedSingleFamilyId.value ?: data.families.firstOrNull()?.id
+        val family = data.families.firstOrNull { it.id == targetId }
+        if (family == null) {
+            _singleFamilyComparisonState.value = UiState.Error("Please select a family to compare its In and Out entries.")
+            return
+        }
+        _selectedSingleFamilyId.value = family.id
+        viewModelScope.launch {
+            _singleFamilyComparisonState.value = UiState.Loading
+            val result = aiRepository.analyzeWithinSingleFamilyOnline(
+                family = family,
+                activities = data.activities,
+                events = data.events
+            )
+            _singleFamilyComparisonState.value = result.fold(
+                onSuccess = { UiState.Success(it) },
+                onFailure = { UiState.Error(it.localizedMessage ?: "Online AI analysis failed.") }
+            )
+        }
+    }
+
+    fun clearSingleFamilyComparison() {
+        _singleFamilyComparisonState.value = null
     }
 
     fun toggleFamilyForComparison(familyDocId: String) {

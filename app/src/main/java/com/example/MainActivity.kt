@@ -66,6 +66,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.ai.configureAppCheck
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
 import com.example.data.EventEntry
@@ -112,6 +113,7 @@ private enum class TopTab(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureAppCheck(this, intent)
         enableEdgeToEdge()
         ReminderReceiver.ensureNotificationChannel(this)
         setContent {
@@ -156,6 +158,8 @@ fun OccasionDiaryAppShell() {
     val aiSearchState by viewModel.aiSearchState.collectAsStateWithLifecycle()
     val aiComparisonState by viewModel.aiComparisonState.collectAsStateWithLifecycle()
     val selectedCompareFamilyIds by viewModel.selectedCompareFamilyIds.collectAsStateWithLifecycle()
+    val selectedSingleFamilyId by viewModel.selectedSingleFamilyId.collectAsStateWithLifecycle()
+    val singleFamilyComparisonState by viewModel.singleFamilyComparisonState.collectAsStateWithLifecycle()
 
     var didAttemptCategorySeed by remember { mutableStateOf(false) }
     LaunchedEffect(dashboardState) {
@@ -484,9 +488,15 @@ fun OccasionDiaryAppShell() {
                             aiSearchState = aiSearchState,
                             aiComparisonState = aiComparisonState,
                             selectedCompareFamilyIds = selectedCompareFamilyIds,
+                            selectedSingleFamilyId = selectedSingleFamilyId,
+                            singleFamilyComparisonState = singleFamilyComparisonState,
                             initialTabIndex = aiInitialTabIndex,
-                            onRunAiSearch = viewModel::runAiSearch,
+                            onRunAiSearch = { query, useOnline ->
+                                viewModel.runAiSearch(query, useOnlineAi = useOnline)
+                            },
                             onClearAiSearch = viewModel::clearAiSearch,
+                            onSelectSingleFamily = viewModel::selectSingleFamilyForCompare,
+                            onRunSingleFamilyAiAnalysis = viewModel::runSingleFamilyOnlineAiAnalysis,
                             onToggleFamilyCompare = viewModel::toggleFamilyForComparison,
                             onSelectTopFamilies = { viewModel.selectTopFamiliesForComparison(3) },
                             onRunAiComparison = { viewModel.runAiBalanceComparison() },
@@ -496,6 +506,7 @@ fun OccasionDiaryAppShell() {
                                 navController.navigate(ROUTE_DETAIL)
                             },
                             onCompareThisFamily = { familyDocId ->
+                                viewModel.selectSingleFamilyForCompare(familyDocId)
                                 if (familyDocId !in selectedCompareFamilyIds) {
                                     viewModel.toggleFamilyForComparison(familyDocId)
                                 }

@@ -1,6 +1,6 @@
 {
-  "name": "Occasion Diary",
-  "description": "Family occasion, ledger, gift tracking, events, reminders, and AI insights app",
+  "name": "Life Line",
+  "description": "Offline-first family occasion, ledger, gift tracking, reminders, and AI search & balance analysis app",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

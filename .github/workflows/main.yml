@@ -1,4 +1,4 @@
-name: Build Occasion Diary APK
+name: Build Life Line APK
 
 on:
   push:
@@ -99,7 +99,7 @@ jobs:
       - name: Upload Debug APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Occasion-Diary-debug-apk
+          name: Life-Line-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
