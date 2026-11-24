@@ -3,7 +3,11 @@ plugins {
   alias(libs.plugins.kotlin.compose)
   alias(libs.plugins.google.devtools.ksp)
   alias(libs.plugins.secrets)
-  alias(libs.plugins.google.services)
+  alias(libs.plugins.google.services) apply false
+}
+
+if (file("google-services.json").exists()) {
+  apply(plugin = libs.plugins.google.services.get().pluginId)
 }
 
 android {

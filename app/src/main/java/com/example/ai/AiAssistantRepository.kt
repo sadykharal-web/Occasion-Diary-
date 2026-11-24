@@ -7,6 +7,7 @@ import com.example.data.EventEntry
 import com.example.data.FamilyProfile
 import com.example.ui.screens.localDayStartMillis
 import com.google.firebase.Firebase
+import com.google.firebase.FirebaseApp
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.Schema
 import com.google.firebase.ai.type.generationConfig
@@ -157,6 +158,12 @@ class AiAssistantRepository {
             return Result.failure(IllegalArgumentException("Please enter a search query."))
         }
 
+        if (!isFirebaseConfigured()) {
+            return Result.failure(
+                IllegalStateException(MISSING_FIREBASE_CONFIG_MESSAGE)
+            )
+        }
+
         return try {
             val prompt = buildOnlineSearchPrompt(cleanQuery, families, activities, events)
             val response = withTimeout(AI_TIMEOUT_MILLIS) {
@@ -292,6 +299,11 @@ class AiAssistantRepository {
         events: List<EventEntry>
     ): Result<SingleFamilyInOutComparison> {
         val base = compareWithinSingleFamilyLocal(family, activities, events)
+        if (!isFirebaseConfigured()) {
+            return Result.failure(
+                IllegalStateException(MISSING_FIREBASE_CONFIG_MESSAGE)
+            )
+        }
         return try {
             val prompt = buildSingleFamilyPrompt(base)
             val response = withTimeout(AI_TIMEOUT_MILLIS) {
@@ -699,9 +711,20 @@ class AiAssistantRepository {
         val net: Long
     )
 
+    private fun isFirebaseConfigured(): Boolean {
+        return try {
+            FirebaseApp.getInstance()
+            true
+        } catch (_: IllegalStateException) {
+            false
+        }
+    }
+
     private companion object {
         const val TAG = "AiAssistantRepository"
         const val MODEL_NAME = "gemini-3.8-flash"
         const val AI_TIMEOUT_MILLIS = 60_000L
+        const val MISSING_FIREBASE_CONFIG_MESSAGE =
+            "Online AI requires google-services.json. Download the APK directly from AI Studio's Settings menu, or add GOOGLE_SERVICES_JSON as a GitHub Repository Secret. Offline Quick Filter and local Family Compare continue to work offline."
     }
 }
