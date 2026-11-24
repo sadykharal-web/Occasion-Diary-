@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Groups
@@ -67,7 +68,8 @@ fun NewEventFormSheet(
     catalog: DropdownCatalog,
     isSaving: Boolean,
     onDismiss: () -> Unit,
-    onSaveEvent: (EventEntry) -> Unit
+    onSaveEvent: (EventEntry) -> Unit,
+    onDeleteEvent: ((String) -> Unit)? = null
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
@@ -83,6 +85,7 @@ fun NewEventFormSheet(
             isSaving = isSaving,
             onDismiss = onDismiss,
             onSaveEvent = onSaveEvent,
+            onDeleteEvent = onDeleteEvent,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
@@ -100,6 +103,7 @@ fun NewEventFormContent(
     isSaving: Boolean,
     onDismiss: () -> Unit,
     onSaveEvent: (EventEntry) -> Unit,
+    onDeleteEvent: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val isEditing = initialEvent != null && initialEvent.id.isNotBlank()
@@ -227,12 +231,16 @@ fun NewEventFormContent(
                 )
                 Column {
                     Text(
-                        text = if (isEditing) "Edit Event" else "New Event",
+                        text = if (isEditing) "Edit Occasion" else "New Occasion",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Saved directly to your Firestore diary",
+                        text = if (isEditing) {
+                            "Update occasion details in Firestore"
+                        } else {
+                            "Save upcoming occasion details to Firestore"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -242,7 +250,7 @@ fun NewEventFormContent(
                 onClick = onDismiss,
                 modifier = Modifier.testTag("close_new_event_button")
             ) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close New Event Form")
+                Icon(Icons.Rounded.Close, contentDescription = "Close Occasion Form")
             }
         }
 
@@ -252,7 +260,7 @@ fun NewEventFormContent(
                 title = it.take(120)
                 if (validationError != null) validationError = null
             },
-            label = { Text("Event Title *") },
+            label = { Text("Occasion Name *") },
             placeholder = { Text("e.g. Cousin Wedding Reception") },
             leadingIcon = { Icon(Icons.Rounded.Title, contentDescription = null) },
             singleLine = true,
@@ -263,7 +271,7 @@ fun NewEventFormContent(
         )
 
         Text(
-            text = "Event Date & Time",
+            text = "Occasion Date & Time",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold
         )
@@ -405,7 +413,7 @@ fun NewEventFormContent(
             onClick = {
                 val trimmedTitle = title.trim()
                 if (trimmedTitle.isEmpty()) {
-                    validationError = "Please enter an event title."
+                    validationError = "Please enter an occasion name."
                     return@Button
                 }
                 validationError = null
@@ -438,9 +446,34 @@ fun NewEventFormContent(
                 )
             } else {
                 Text(
-                    text = if (isEditing) "Update Event" else "Save Event",
+                    text = if (isEditing) "Update Occasion" else "Save Occasion",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        if (isEditing && onDeleteEvent != null && initialEvent != null) {
+            OutlinedButton(
+                onClick = { onDeleteEvent(initialEvent.id) },
+                enabled = !isSaving,
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("delete_event_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.DeleteOutline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Delete Occasion",
+                    color = MaterialTheme.colorScheme.error,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
         }

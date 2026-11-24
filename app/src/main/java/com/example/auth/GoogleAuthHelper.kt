@@ -61,6 +61,7 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import com.example.R
+import com.example.config.FirebaseRuntimeConfig
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -82,10 +83,13 @@ private fun resolveDefaultWebClientId(context: Context): String? {
         "string",
         context.packageName
     )
-    if (resId == 0) return null
-    return runCatching { context.getString(resId) }
-        .getOrNull()
-        ?.takeIf { it.isNotBlank() }
+    if (resId != 0) {
+        val fromRes = runCatching { context.getString(resId) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+        if (fromRes != null) return fromRes
+    }
+    return FirebaseRuntimeConfig.getRuntimeWebClientId(context)
 }
 
 private tailrec fun Context.findAuthActivity(): Activity? = when (this) {
@@ -101,7 +105,7 @@ fun attemptAutoSignIn(
     onUnauthenticated: () -> Unit,
     scope: CoroutineScope
 ) {
-    if (FirebaseApp.getApps(context).isEmpty()) {
+    if (!FirebaseRuntimeConfig.ensureFirebaseInitialized(context)) {
         onUnauthenticated()
         return
     }

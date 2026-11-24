@@ -15,16 +15,21 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Book
@@ -36,10 +41,13 @@ import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.CloudUpload
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Event
+import androidx.compose.material.icons.rounded.FileOpen
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -51,9 +59,12 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -70,9 +81,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -90,6 +103,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.ai.configureAppCheck
 import com.example.auth.AuthScreen
 import com.example.auth.signOut
+import com.example.config.FirebaseRuntimeConfig
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
 import com.example.data.EventEntry
@@ -110,7 +124,6 @@ import com.example.ui.screens.RemindersScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.LedgerViewModel
 import com.google.firebase.Firebase
-import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -140,6 +153,7 @@ private enum class TopTab(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        FirebaseRuntimeConfig.ensureFirebaseInitialized(this)
         configureAppCheck(this, intent)
         enableEdgeToEdge()
         ReminderReceiver.ensureNotificationChannel(this)
@@ -160,20 +174,24 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 @Composable
 fun AppContent() {
     val context = LocalContext.current
-    val firebaseAuth = remember(context) {
-        val ready = FirebaseApp.getApps(context).isNotEmpty() ||
-            runCatching { FirebaseApp.initializeApp(context) != null }.getOrDefault(false)
+    var configVersion by remember { mutableIntStateOf(0) }
+    val firebaseAuth = remember(context, configVersion) {
+        val ready = FirebaseRuntimeConfig.ensureFirebaseInitialized(context)
         if (ready) runCatching { Firebase.auth }.getOrNull() else null
     }
 
     if (firebaseAuth == null) {
         FirebaseConfigMissingScreen(
+            onConfigImported = {
+                configureAppCheck(context, context.findActivity()?.intent)
+                configVersion++
+            },
             modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing)
         )
         return
     }
 
-    var currentUser by remember { mutableStateOf(firebaseAuth.currentUser) }
+    var currentUser by remember(firebaseAuth) { mutableStateOf(firebaseAuth.currentUser) }
 
     DisposableEffect(firebaseAuth) {
         val listener = FirebaseAuth.AuthStateListener { auth ->
@@ -205,10 +223,49 @@ fun AppContent() {
 }
 
 @Composable
-private fun FirebaseConfigMissingScreen(modifier: Modifier = Modifier) {
+private fun FirebaseConfigMissingScreen(
+    onConfigImported: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    @Suppress("DEPRECATION")
+    val clipboard = LocalClipboardManager.current
+    var showPasteEditor by remember { mutableStateOf(false) }
+    var pastedJson by remember { mutableStateOf("") }
+    var statusMessage by remember { mutableStateOf<String?>(null) }
+    var isError by remember { mutableStateOf(false) }
+
+    val jsonPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        FirebaseRuntimeConfig.readJsonTextFromUri(context, uri)
+            .fold(
+                onSuccess = { text ->
+                    FirebaseRuntimeConfig.importGoogleServicesJson(context, text)
+                        .fold(
+                            onSuccess = {
+                                isError = false
+                                statusMessage = null
+                                onConfigImported()
+                            },
+                            onFailure = { err ->
+                                isError = true
+                                statusMessage = err.localizedMessage ?: "Invalid google-services.json file."
+                            }
+                        )
+                },
+                onFailure = { err ->
+                    isError = true
+                    statusMessage = err.localizedMessage ?: "Could not read selected file."
+                }
+            )
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -216,7 +273,7 @@ private fun FirebaseConfigMissingScreen(modifier: Modifier = Modifier) {
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            modifier = Modifier.widthIn(max = 520.dp)
+            modifier = Modifier.widthIn(max = 540.dp)
         ) {
             Column(
                 modifier = Modifier
@@ -238,17 +295,145 @@ private fun FirebaseConfigMissingScreen(modifier: Modifier = Modifier) {
                     textAlign = TextAlign.Center
                 )
                 Text(
-                    text = "This APK was compiled without google-services.json (for example, via GitHub Actions without the GOOGLE_SERVICES_JSON secret), so Google Sign-In, Firestore, and AI cannot initialize.",
+                    text = "This GitHub-built APK was compiled without app/google-services.json, so Google Sign-In, Firestore, and AI cannot initialize automatically.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
-                Text(
-                    text = "To fix this, generate the APK directly from AI Studio's Settings menu, or add app/google-services.json as a GitHub Repository Secret named GOOGLE_SERVICES_JSON and re-run the workflow.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    textAlign = TextAlign.Center
-                )
+
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "How to fix permanently:",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "1. Easiest: Download & install the APK directly from AI Studio's Settings menu (already bundled).",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "2. GitHub Actions: Add app/google-services.json as a Repository Secret named GOOGLE_SERVICES_JSON and re-run the workflow.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "3. Quick Fix Now: Import google-services.json below right on your phone.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        jsonPicker.launch(arrayOf("application/json", "text/*", "*/*"))
+                    },
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("import_google_services_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.FileOpen,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Import google-services.json File")
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showPasteEditor = !showPasteEditor },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .testTag("toggle_paste_config_button")
+                    ) {
+                        Text(if (showPasteEditor) "Hide Paste Box" else "Paste JSON")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            clipboard.setText(AnnotatedString("GOOGLE_SERVICES_JSON"))
+                            isError = false
+                            statusMessage = "Copied GOOGLE_SERVICES_JSON secret name."
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .testTag("copy_secret_name_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.ContentCopy,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Copy Secret")
+                    }
+                }
+
+                if (showPasteEditor) {
+                    OutlinedTextField(
+                        value = pastedJson,
+                        onValueChange = { pastedJson = it },
+                        label = { Text("Paste google-services.json content") },
+                        minLines = 4,
+                        maxLines = 8,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("paste_google_services_input")
+                    )
+                    Button(
+                        onClick = {
+                            FirebaseRuntimeConfig.importGoogleServicesJson(context, pastedJson)
+                                .fold(
+                                    onSuccess = {
+                                        isError = false
+                                        statusMessage = null
+                                        onConfigImported()
+                                    },
+                                    onFailure = { err ->
+                                        isError = true
+                                        statusMessage = err.localizedMessage ?: "Invalid JSON format."
+                                    }
+                                )
+                        },
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("apply_pasted_config_button")
+                    ) {
+                        Text("Apply Config & Continue")
+                    }
+                }
+
+                if (!statusMessage.isNullOrBlank()) {
+                    Text(
+                        text = statusMessage!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
     }
@@ -368,6 +553,12 @@ private fun AuthenticatedAppShell(
                     editingEvent = null
                     newEventPrefilledDate = null
                 }
+            },
+            onDeleteEvent = { eventId ->
+                viewModel.deleteEvent(context, eventId)
+                showNewEventSheet = false
+                editingEvent = null
+                newEventPrefilledDate = null
             }
         )
     }
@@ -538,6 +729,12 @@ private fun AuthenticatedAppShell(
                             onActivityClick = { act ->
                                 selectedActivityId = act.id
                                 navController.navigate(ROUTE_DETAIL)
+                            },
+                            onEditActivityClick = { act ->
+                                editingActivity = act
+                                prefilledFamily = null
+                                prefilledDateMillis = null
+                                navController.navigate(ROUTE_EDITOR)
                             },
                             onAddClick = {
                                 editingActivity = null

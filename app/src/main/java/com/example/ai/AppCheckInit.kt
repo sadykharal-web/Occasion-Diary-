@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.example.BuildConfig
+import com.example.config.FirebaseRuntimeConfig
 import com.google.firebase.FirebaseApp
 import com.google.firebase.appcheck.FirebaseAppCheck
 import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
@@ -18,10 +19,7 @@ private const val RECAPTCHA_SITE_KEY_RES = "recaptcha_site_key"
 
 fun configureAppCheck(context: Context, intent: Intent?) {
     try {
-        if (FirebaseApp.getApps(context).isEmpty()) {
-            FirebaseApp.initializeApp(context)
-        }
-        if (FirebaseApp.getApps(context).isEmpty()) {
+        if (!FirebaseRuntimeConfig.ensureFirebaseInitialized(context)) {
             Log.w(TAG, "FirebaseApp is not initialized (missing google-services.json); skipping App Check setup.")
             return
         }
