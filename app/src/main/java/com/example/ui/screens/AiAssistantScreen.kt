@@ -67,19 +67,28 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.rounded.ContentCopy
 import com.example.ai.AiBalanceComparisonResult
 import com.example.ai.AiFamilyBalanceInsight
 import com.example.ai.AiSearchResult
 import com.example.ai.CategoryInOutBreakdown
 import com.example.ai.SingleFamilyInOutComparison
+import com.example.ai.getAppCheckDebugSecret
+import com.example.ai.saveAppCheckDebugSecret
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
@@ -114,6 +123,8 @@ fun AiAssistantScreen(
     selectedCompareFamilyIds: Set<String>,
     selectedSingleFamilyId: String?,
     singleFamilyComparisonState: UiState<SingleFamilyInOutComparison>?,
+    singleFamilyAiLoading: Boolean = false,
+    singleFamilyAiError: String? = null,
     initialTabIndex: Int = 0,
     onRunAiSearch: (String, Boolean) -> Unit,
     onClearAiSearch: () -> Unit,
@@ -326,6 +337,9 @@ fun AiAssistantScreen(
                                 message = aiSearchState.message,
                                 onRetry = {
                                     if (searchPrompt.isNotBlank()) onRunAiSearch(searchPrompt, true)
+                                },
+                                onOfflineFallback = {
+                                    if (searchPrompt.isNotBlank()) onRunAiSearch(searchPrompt, false)
                                 }
                             )
                         }
@@ -560,14 +574,14 @@ fun AiAssistantScreen(
 
                                 Button(
                                     onClick = onRunSingleFamilyAiAnalysis,
-                                    enabled = selectedSingleFamilyId != null && singleFamilyComparisonState !is UiState.Loading,
+                                    enabled = selectedSingleFamilyId != null && !singleFamilyAiLoading && singleFamilyComparisonState !is UiState.Loading,
                                     shape = RoundedCornerShape(14.dp),
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(50.dp)
                                         .testTag("single_family_ai_button")
                                 ) {
-                                    if (singleFamilyComparisonState is UiState.Loading) {
+                                    if (singleFamilyAiLoading || singleFamilyComparisonState is UiState.Loading) {
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(20.dp),
                                             color = MaterialTheme.colorScheme.onPrimary,
@@ -582,6 +596,21 @@ fun AiAssistantScreen(
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    if (singleFamilyAiLoading) {
+                        item {
+                            AiLoadingCard("Comparing In vs Out entries for this family with Gemini AI...")
+                        }
+                    }
+
+                    if (!singleFamilyAiError.isNullOrBlank()) {
+                        item {
+                            AiErrorCard(
+                                message = singleFamilyAiError,
+                                onRetry = onRunSingleFamilyAiAnalysis
+                            )
                         }
                     }
 
@@ -1615,7 +1644,21 @@ private fun AiLoadingCard(message: String) {
 }
 
 @Composable
-private fun AiErrorCard(message: String, onRetry: () -> Unit) {
+private fun AiErrorCard(
+    message: String,
+    onRetry: () -> Unit,
+    onOfflineFallback: (() -> Unit)? = null
+) {
+    val context = LocalContext.current
+    val isAppCheckError = message.contains("App Check", ignoreCase = true) ||
+        message.contains("403", ignoreCase = true)
+    val debugToken = remember(message) {
+        if (isAppCheckError) getAppCheckDebugSecret(context) else null
+    }
+    var customTokenInput by remember { mutableStateOf("") }
+    var showTokenInput by remember { mutableStateOf(false) }
+    var copiedNotice by remember { mutableStateOf(false) }
+
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
@@ -1629,22 +1672,113 @@ private fun AiErrorCard(message: String, onRetry: () -> Unit) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                Icon(
+                    imageVector = Icons.Rounded.ErrorOutline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer
+                )
                 Text(
                     text = "AI Request Failed",
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.error,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
                     fontWeight = FontWeight.Bold
                 )
             }
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onErrorContainer
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                fontWeight = FontWeight.Medium
             )
-            OutlinedButton(onClick = onRetry, shape = RoundedCornerShape(10.dp)) {
-                Text("Retry")
+
+            if (isAppCheckError && debugToken != null) {
+                Surface(
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Device App Check Debug Token",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = debugToken,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Debug APKs running directly on a phone need this token allowlisted in Firebase Console (App Check -> Apps -> Life Line -> Manage debug tokens) for Online AI, or run via AI Studio's Streaming Emulator. Local In/Out comparison works offline below.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                                    cm?.setPrimaryClip(ClipData.newPlainText("App Check Debug Token", debugToken))
+                                    copiedNotice = true
+                                },
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (copiedNotice) "Copied!" else "Copy Token")
+                            }
+                            TextButton(onClick = { showTokenInput = !showTokenInput }) {
+                                Text(if (showTokenInput) "Hide Input" else "Paste Token")
+                            }
+                        }
+                        if (showTokenInput) {
+                            OutlinedTextField(
+                                value = customTokenInput,
+                                onValueChange = { customTokenInput = it },
+                                label = { Text("Registered App Check Debug Token") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Button(
+                                onClick = {
+                                    if (saveAppCheckDebugSecret(context, customTokenInput)) {
+                                        showTokenInput = false
+                                        onRetry()
+                                    }
+                                },
+                                enabled = customTokenInput.isNotBlank(),
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text("Save Token & Retry")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(
+                    onClick = onRetry,
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Retry", color = MaterialTheme.colorScheme.onErrorContainer)
+                }
+                if (onOfflineFallback != null) {
+                    Button(
+                        onClick = onOfflineFallback,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Rounded.OfflineBolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Use Offline Filter")
+                    }
+                }
             }
         }
     }
 }
+

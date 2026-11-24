@@ -161,6 +161,8 @@ fun OccasionDiaryAppShell() {
     val selectedCompareFamilyIds by viewModel.selectedCompareFamilyIds.collectAsStateWithLifecycle()
     val selectedSingleFamilyId by viewModel.selectedSingleFamilyId.collectAsStateWithLifecycle()
     val singleFamilyComparisonState by viewModel.singleFamilyComparisonState.collectAsStateWithLifecycle()
+    val singleFamilyAiLoading by viewModel.singleFamilyAiLoading.collectAsStateWithLifecycle()
+    val singleFamilyAiError by viewModel.singleFamilyAiError.collectAsStateWithLifecycle()
 
     var didAttemptCategorySeed by remember { mutableStateOf(false) }
     LaunchedEffect(dashboardState) {
@@ -494,6 +496,8 @@ fun OccasionDiaryAppShell() {
                             selectedCompareFamilyIds = selectedCompareFamilyIds,
                             selectedSingleFamilyId = selectedSingleFamilyId,
                             singleFamilyComparisonState = singleFamilyComparisonState,
+                            singleFamilyAiLoading = singleFamilyAiLoading,
+                            singleFamilyAiError = singleFamilyAiError,
                             initialTabIndex = aiInitialTabIndex,
                             onRunAiSearch = { query, useOnline ->
                                 viewModel.runAiSearch(query, useOnlineAi = useOnline)

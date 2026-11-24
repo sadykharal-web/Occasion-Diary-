@@ -61,3 +61,9 @@ val ReminderAmberFgDark = Color(0xFFFFD085)
 
 val ErrorRed = Color(0xFFBA1A1A)
 val ErrorContainerLight = Color(0xFFFFDAD6)
+val OnErrorContainerLight = Color(0xFF410002)
+
+val ErrorRedDark = Color(0xFFFFB4AB)
+val OnErrorDark = Color(0xFF690005)
+val ErrorContainerDark = Color(0xFF7D1A1A)
+val OnErrorContainerDark = Color(0xFFFFDAD6)

@@ -7,6 +7,7 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 private val DarkColorScheme = darkColorScheme(
@@ -27,8 +28,10 @@ private val DarkColorScheme = darkColorScheme(
     surfaceVariant = ForestSurfaceVariantDark,
     onSurfaceVariant = MutedOnDark,
     outline = ForestOutlineDark,
-    error = ErrorRed,
-    errorContainer = ErrorContainerLight
+    error = ErrorRedDark,
+    onError = OnErrorDark,
+    errorContainer = ErrorContainerDark,
+    onErrorContainer = OnErrorContainerDark
 )
 
 private val LightColorScheme = lightColorScheme(
@@ -52,7 +55,9 @@ private val LightColorScheme = lightColorScheme(
     onSurfaceVariant = MutedOnSurfaceVariant,
     outline = WarmOutline,
     error = ErrorRed,
-    errorContainer = ErrorContainerLight
+    onError = Color.White,
+    errorContainer = ErrorContainerLight,
+    onErrorContainer = OnErrorContainerLight
 )
 
 val AppShapes = Shapes(

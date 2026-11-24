@@ -100,6 +100,12 @@ class LedgerViewModel(
     private val _singleFamilyComparisonState = MutableStateFlow<UiState<SingleFamilyInOutComparison>?>(null)
     val singleFamilyComparisonState: StateFlow<UiState<SingleFamilyInOutComparison>?> = _singleFamilyComparisonState.asStateFlow()
 
+    private val _singleFamilyAiLoading = MutableStateFlow(false)
+    val singleFamilyAiLoading: StateFlow<Boolean> = _singleFamilyAiLoading.asStateFlow()
+
+    private val _singleFamilyAiError = MutableStateFlow<String?>(null)
+    val singleFamilyAiError: StateFlow<String?> = _singleFamilyAiError.asStateFlow()
+
     val dashboardState: StateFlow<UiState<LedgerDashboardData>> = combine(
         repository.observeActivities(),
         repository.observeFamilies(),
@@ -310,6 +316,8 @@ class LedgerViewModel(
 
     fun selectSingleFamilyForCompare(familyDocId: String) {
         _selectedSingleFamilyId.value = familyDocId
+        _singleFamilyAiError.value = null
+        _singleFamilyAiLoading.value = false
         val data = (dashboardState.value as? UiState.Success)?.data ?: return
         val family = data.families.firstOrNull { it.id == familyDocId } ?: return
         val localResult = aiRepository.compareWithinSingleFamilyLocal(
@@ -323,32 +331,46 @@ class LedgerViewModel(
     fun runSingleFamilyOnlineAiAnalysis() {
         val data = (dashboardState.value as? UiState.Success)?.data
         if (data == null) {
-            _singleFamilyComparisonState.value = UiState.Error("Your offline records are still loading. Please try again.")
+            _singleFamilyAiError.value = "Your offline records are still loading. Please try again."
             return
         }
         val targetId = _selectedSingleFamilyId.value ?: data.families.firstOrNull()?.id
         val family = data.families.firstOrNull { it.id == targetId }
         if (family == null) {
-            _singleFamilyComparisonState.value = UiState.Error("Please select a family to compare its In and Out entries.")
+            _singleFamilyAiError.value = "Please select a family to compare its In and Out entries."
             return
         }
         _selectedSingleFamilyId.value = family.id
+        if (_singleFamilyComparisonState.value !is UiState.Success) {
+            _singleFamilyComparisonState.value = UiState.Success(
+                aiRepository.compareWithinSingleFamilyLocal(
+                    family = family,
+                    activities = data.activities,
+                    events = data.events
+                )
+            )
+        }
         viewModelScope.launch {
-            _singleFamilyComparisonState.value = UiState.Loading
+            _singleFamilyAiLoading.value = true
+            _singleFamilyAiError.value = null
             val result = aiRepository.analyzeWithinSingleFamilyOnline(
                 family = family,
                 activities = data.activities,
                 events = data.events
             )
-            _singleFamilyComparisonState.value = result.fold(
-                onSuccess = { UiState.Success(it) },
-                onFailure = { UiState.Error(it.localizedMessage ?: "Online AI analysis failed.") }
-            )
+            _singleFamilyAiLoading.value = false
+            result.onSuccess { aiComparison ->
+                _singleFamilyComparisonState.value = UiState.Success(aiComparison)
+            }.onFailure { err ->
+                _singleFamilyAiError.value = err.localizedMessage ?: "Online AI analysis failed."
+            }
         }
     }
 
     fun clearSingleFamilyComparison() {
         _singleFamilyComparisonState.value = null
+        _singleFamilyAiLoading.value = false
+        _singleFamilyAiError.value = null
     }
 
     fun toggleFamilyForComparison(familyDocId: String) {
