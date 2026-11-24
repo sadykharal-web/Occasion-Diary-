@@ -231,7 +231,10 @@ abstract class OccasionDiaryDatabase : RoomDatabase() {
                     context.applicationContext,
                     OccasionDiaryDatabase::class.java,
                     "occasion_diary_offline.db"
-                ).build().also { INSTANCE = it }
+                )
+                    .fallbackToDestructiveMigration(dropAllTables = true)
+                    .build()
+                    .also { INSTANCE = it }
             }
         }
     }

@@ -74,7 +74,7 @@ jobs:
             --stacktrace \
             --console=plain \
             -Dorg.gradle.workers.max=2 \
-            -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" \
+            -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8 -Djava.awt.headless=true" \
             2>&1 | tee gradle-build.log; then
             echo "### Gradle Build Failure" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -114,7 +114,7 @@ jobs:
             --stacktrace \
             --console=plain \
             -Dorg.gradle.workers.max=2 \
-            -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8" \
+            -Dorg.gradle.jvmargs="-Xmx3g -XX:MaxMetaspaceSize=768m -Dfile.encoding=UTF-8 -Djava.awt.headless=true" \
             2>&1 | tee gradle-test.log; then
             echo "### Unit Test Failure" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"

@@ -453,7 +453,7 @@ fun NewEventFormContent(
             }
         }
 
-        if (isEditing && onDeleteEvent != null && initialEvent != null) {
+        if (initialEvent != null && onDeleteEvent != null) {
             OutlinedButton(
                 onClick = { onDeleteEvent(initialEvent.id) },
                 enabled = !isSaving,

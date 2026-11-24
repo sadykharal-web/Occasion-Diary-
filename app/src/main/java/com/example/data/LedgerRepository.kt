@@ -5,15 +5,22 @@ import com.example.data.local.CategoryEntity
 import com.example.data.local.EventEntity
 import com.example.data.local.FamilyEntity
 import com.example.data.local.OccasionDiaryDao
+import com.example.data.local.OccasionDiaryDatabase
 import com.example.drive.LocalBackupPayload
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.UUID
 
+/**
+ * Repository routing all occasion, ledger, family, category, and backup operations
+ * through the injected local RoomDatabase instance.
+ */
 class LedgerRepository(
-    private val dao: OccasionDiaryDao
+    private val database: OccasionDiaryDatabase
 ) {
+    private val dao: OccasionDiaryDao
+        get() = database.dao()
 
     fun observeActivities(): Flow<List<ActivityRecord>> {
         return dao.observeActivities().map { entities ->

@@ -57,7 +57,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
@@ -128,14 +127,16 @@ class MainActivity : ComponentActivity() {
 fun OccasionDiaryAppShell() {
     val context = LocalContext.current
 
+    val appContext = context.applicationContext
+    val repository = remember(appContext) {
+        (appContext as? OccasionDiaryApplication)?.repository
+            ?: LedgerRepository(OccasionDiaryDatabase.getInstance(appContext))
+    }
+
     val viewModel: LedgerViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                val app = checkNotNull(this[APPLICATION_KEY]) {
-                    "APPLICATION_KEY missing from CreationExtras"
-                }
-                val db = OccasionDiaryDatabase.getInstance(app)
-                LedgerViewModel(LedgerRepository(db.dao()))
+                LedgerViewModel(repository)
             }
         }
     )
