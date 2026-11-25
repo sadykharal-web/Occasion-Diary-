@@ -170,10 +170,8 @@ class LedgerViewModel(
             .sorted()
 
         val mergedEvents = (
-            categories.map { it.name } +
-                DropdownCatalog.DEFAULT_EVENT_TYPES +
-                activities.map { it.eventType } +
-                events.map { it.category }
+            DropdownCatalog.DEFAULT_EVENT_TYPES +
+                categories.map { it.name }
             )
             .map { it.trim() }
             .filter { it.isNotEmpty() }
@@ -716,7 +714,6 @@ class LedgerViewModel(
 
     fun seedDefaultCategoriesIfEmpty() {
         val currentCats = (dashboardState.value as? UiState.Success)?.data?.categories ?: return
-        if (currentCats.isNotEmpty()) return
         viewModelScope.launch {
             repository.seedDefaultCategoriesIfEmpty(currentCats)
         }
@@ -738,10 +735,10 @@ class LedgerViewModel(
             )
             _isSaving.value = false
             result.onSuccess { saved ->
-                _actionMessage.value = "Category saved offline."
+                _actionMessage.value = "Event type saved offline."
                 onSaved(saved)
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "Failed to save category."
+                _actionMessage.value = err.localizedMessage ?: "Failed to save event type."
             }
         }
     }
@@ -750,10 +747,10 @@ class LedgerViewModel(
         viewModelScope.launch {
             repository.deleteCategory(categoryId)
                 .onSuccess {
-                    _actionMessage.value = "Category deleted."
+                    _actionMessage.value = "Event type deleted."
                 }
                 .onFailure { err ->
-                    _actionMessage.value = err.localizedMessage ?: "Failed to delete category."
+                    _actionMessage.value = err.localizedMessage ?: "Failed to delete event type."
                 }
         }
     }

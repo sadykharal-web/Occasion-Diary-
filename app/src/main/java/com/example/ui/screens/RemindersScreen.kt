@@ -273,12 +273,12 @@ fun RemindersScreen(
                             )
                             Column {
                                 Text(
-                                    text = "Manage Occasion Categories",
+                                    text = "Manage Event Types",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "$categoriesCount categories • Customize colors & icons",
+                                    text = "$categoriesCount event types • Customize colors & icons",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -286,7 +286,7 @@ fun RemindersScreen(
                         }
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                            contentDescription = "Open categories",
+                            contentDescription = "Open event types",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -295,7 +295,7 @@ fun RemindersScreen(
 
             item {
                 Text(
-                    text = "Upcoming Occasions & Reminders (${reminderItems.size})",
+                    text = "Upcoming Events & Reminders (${reminderItems.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -324,7 +324,7 @@ fun RemindersScreen(
                                 modifier = Modifier.size(40.dp)
                             )
                             Text(
-                                text = "No active reminders or upcoming occasions yet",
+                                text = "No active reminders or upcoming events yet",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -368,7 +368,7 @@ fun RemindersScreen(
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "${formatDisplayDate(item.eventDateMillis)} • ${formatDisplayTime(item.eventDateMillis)}",
+                                        text = formatDisplayDate(item.eventDateMillis),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )

@@ -87,7 +87,6 @@ import com.example.ui.components.DirectionPill
 import com.example.ui.components.HeroLedgerSummaryCard
 import com.example.ui.components.ReminderStatusBadge
 import com.example.ui.components.formatDisplayDate
-import com.example.ui.components.formatDisplayTime
 import com.example.ui.components.formatNeondraAmount
 import com.example.ui.theme.InBadgeFgDark
 import com.example.ui.theme.InBadgeFgLight
@@ -425,7 +424,7 @@ fun LedgerScreen(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Quick Neondra", fontWeight = FontWeight.Bold)
+                                    Text("Neondra", fontWeight = FontWeight.Bold)
                                 }
 
                                 OutlinedButton(
@@ -451,7 +450,7 @@ fun LedgerScreen(
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = onSearchQueryChange,
-                                placeholder = { Text("Search name, FN, father, address, event detail or category...") },
+                                placeholder = { Text("Search name, FN, father, address, event detail or event type...") },
                                 leadingIcon = {
                                     Icon(Icons.Rounded.Search, contentDescription = null)
                                 },
@@ -525,13 +524,13 @@ fun LedgerScreen(
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         },
-                                        label = { Text("Categories") },
+                                        label = { Text("Event Types") },
                                         modifier = Modifier.testTag("manage_categories_chip")
                                     )
                                     FilterChip(
                                         selected = selectedCategoryFilter == null,
                                         onClick = { onCategoryFilterChange(null) },
-                                        label = { Text("All Categories") }
+                                        label = { Text("All Event Types") }
                                     )
                                     data.catalog.eventTypes.forEach { catName ->
                                         val (catColor, catIcon) = data.catalog.resolveCategoryVisual(catName)
@@ -797,7 +796,7 @@ private fun UpcomingEventOccasionCard(
                         modifier = Modifier.size(15.dp)
                     )
                     Text(
-                        text = "${formatDisplayDate(event.eventDateMillis)} • ${formatDisplayTime(event.eventDateMillis)}",
+                        text = formatDisplayDate(event.eventDateMillis),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontFamily = JakartaSansFamily
@@ -940,7 +939,7 @@ private fun UpcomingActivityOccasionCard(
                         modifier = Modifier.size(15.dp)
                     )
                     Text(
-                        text = "${formatDisplayDate(record.eventDateMillis)} • ${formatDisplayTime(record.eventDateMillis)}",
+                        text = formatDisplayDate(record.eventDateMillis),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontFamily = JakartaSansFamily
@@ -1207,7 +1206,7 @@ private fun EmptyLedgerState(
                 text = if (hasAnyData) {
                     "Try adjusting your filters or search query."
                 } else {
-                    "Tap the (+) button below to record your first occasion, gift, or Neondra. Families sharing Name, Father's Name & Address are grouped automatically under one unique FN."
+                    "Tap the (+) button below to record your first entry or Neondra. Families sharing Name, Father's Name & Address are grouped automatically under one unique FN."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

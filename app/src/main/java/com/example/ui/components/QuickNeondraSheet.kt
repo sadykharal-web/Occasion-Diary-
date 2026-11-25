@@ -179,7 +179,7 @@ fun QuickNeondraContent(
                 )
                 Column {
                     Text(
-                        text = "Quick Neondra Entry",
+                        text = "Neondra Entry",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold
                     )
@@ -194,7 +194,50 @@ fun QuickNeondraContent(
                 onClick = onDismiss,
                 modifier = Modifier.testTag("close_quick_neondra_button")
             ) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close Quick Neondra")
+                Icon(Icons.Rounded.Close, contentDescription = "Close Neondra")
+            }
+        }
+
+        Surface(
+            color = if (matchedFamily != null) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+            },
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("quick_neondra_fn_preview")
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Badge,
+                    contentDescription = null,
+                    tint = if (matchedFamily != null) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    },
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = if (matchedFamily != null) {
+                        "FN: ${matchedFamily.familyId} • Matched Existing Family"
+                    } else {
+                        "FN: ${catalog.nextSuggestedFamilyId} • Auto-assigned on save"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (matchedFamily != null) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSecondaryContainer
+                    }
+                )
             }
         }
 
@@ -255,51 +298,6 @@ fun QuickNeondraContent(
             modifier = Modifier.testTag("quick_neondra_address_input")
         )
 
-        if (name.isNotBlank() && fatherName.isNotBlank() && address.isNotBlank()) {
-            Surface(
-                color = if (matchedFamily != null) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
-                },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag("quick_neondra_fn_preview")
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Badge,
-                        contentDescription = null,
-                        tint = if (matchedFamily != null) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        },
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Text(
-                        text = if (matchedFamily != null) {
-                            "Matched Existing Family • FN ${matchedFamily.familyId}"
-                        } else {
-                            "New Family • Will assign unique FN ${catalog.nextSuggestedFamilyId}"
-                        },
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = if (matchedFamily != null) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSecondaryContainer
-                        }
-                    )
-                }
-            }
-        }
-
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 text = "Event Type *",
@@ -348,7 +346,7 @@ fun QuickNeondraContent(
                 if (validationError != null) validationError = null
             },
             label = { Text("Event Detail") },
-            placeholder = { Text("e.g. Son Wedding, Nikah ceremony...") },
+            placeholder = { Text("e.g. Son Shadi, Nikah ceremony...") },
             leadingIcon = { Icon(Icons.Rounded.Description, contentDescription = null) },
             minLines = 1,
             maxLines = 2,

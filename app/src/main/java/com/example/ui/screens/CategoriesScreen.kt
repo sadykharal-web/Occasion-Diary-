@@ -100,8 +100,8 @@ fun CategoriesScreen(
         val cat = deletingCategory!!
         AlertDialog(
             onDismissRequest = { deletingCategory = null },
-            title = { Text("Delete Category?") },
-            text = { Text("Are you sure you want to delete the \"${cat.name}\" category?") },
+            title = { Text("Delete Event Type?") },
+            text = { Text("Are you sure you want to delete the \"${cat.name}\" event type?") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -122,7 +122,7 @@ fun CategoriesScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("Occasion Categories", fontWeight = FontWeight.Bold) },
+                title = { Text("Event Types", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag("categories_back_button")) {
                         Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
@@ -140,7 +140,7 @@ fun CategoriesScreen(
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.testTag("add_category_fab")
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = "Add new category")
+                Icon(Icons.Rounded.Add, contentDescription = "Add new event type")
             }
         }
     ) { innerPadding ->
@@ -179,12 +179,12 @@ fun CategoriesScreen(
                             )
                             Column {
                                 Text(
-                                    text = "Custom Categories (${categories.size})",
+                                    text = "Event Types (${categories.size})",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "Pick a distinct color and icon for each occasion. Renaming a category automatically updates all linked entries.",
+                                    text = "Pick a distinct color and icon for each event type. Renaming an event type automatically updates all linked entries.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -216,13 +216,13 @@ fun CategoriesScreen(
                                     modifier = Modifier.size(44.dp)
                                 )
                                 Text(
-                                    text = "No Categories Yet",
+                                    text = "No Event Types Yet",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center
                                 )
                                 OutlinedButton(onClick = onSeedDefaults) {
-                                    Text("Load Default Categories (Wedding, Walima, Meeting...)")
+                                    Text("Load Default Event Types (Aqiqah, Birthday, Shadi, Nikah)")
                                 }
                             }
                         }
@@ -308,12 +308,12 @@ private fun CategoryRowCard(
 
             Row {
                 IconButton(onClick = onEdit, modifier = Modifier.testTag("edit_category_${category.id}")) {
-                    Icon(Icons.Rounded.Edit, contentDescription = "Edit category")
+                    Icon(Icons.Rounded.Edit, contentDescription = "Edit event type")
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.testTag("delete_category_${category.id}")) {
                     Icon(
                         Icons.Rounded.DeleteOutline,
-                        contentDescription = "Delete category",
+                        contentDescription = "Delete event type",
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -349,7 +349,7 @@ fun CategoryEditorDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = if (initial == null) "Create New Category" else "Edit Category",
+                text = if (initial == null) "Create New Event Type" else "Edit Event Type",
                 fontWeight = FontWeight.Bold
             )
         },
@@ -361,7 +361,7 @@ fun CategoryEditorDialog(
                 ) {
                     Text("Preview:", style = MaterialTheme.typography.labelMedium)
                     CategoryBadge(
-                        label = name.ifBlank { "Category Name" },
+                        label = name.ifBlank { "Event Type" },
                         color = previewColor,
                         icon = previewIcon
                     )
@@ -370,8 +370,8 @@ fun CategoryEditorDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Category Name *") },
-                    placeholder = { Text("e.g. Wedding, Walima, Office, Education") },
+                    label = { Text("Event Type Name *") },
+                    placeholder = { Text("e.g. Aqiqah, Birthday, Shadi, Nikah") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
@@ -460,7 +460,7 @@ fun CategoryEditorDialog(
                 onClick = {
                     val clean = name.trim()
                     if (clean.isEmpty()) {
-                        error = "Category name is required."
+                        error = "Event type name is required."
                         return@TextButton
                     }
                     onConfirm(

@@ -77,12 +77,12 @@ object CalendarIntentHelper {
         val title = "${record.eventType} - ${record.name}" +
             if (record.familyId.isNotBlank()) " (FN ${record.familyId})" else ""
         val description = buildString {
-            if (record.familyId.isNotBlank()) appendLine("Family Number (FN): ${record.familyId}")
+            if (record.familyId.isNotBlank()) appendLine("FN: ${record.familyId}")
             if (record.fatherName.isNotBlank()) appendLine("Father's Name: ${record.fatherName}")
             if (record.address.isNotBlank()) appendLine("Address: ${record.address}")
             if (record.eventDetail.isNotBlank()) appendLine("Details: ${record.eventDetail}")
             appendLine("Type: ${record.parsedDirection.displayLabel}")
-            if (record.homeItems.isNotBlank()) appendLine("Gifts / Items: ${record.homeItems}")
+            if (record.homeItems.isNotBlank()) appendLine("Home Gift / Items: ${record.homeItems}")
             appendLine("Amount: $formattedNeondra")
         }.trim()
 

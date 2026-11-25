@@ -310,4 +310,39 @@ class LedgerLogicTest {
         val backToLocal = com.example.ui.screens.utcPickerMillisToLocalDayStart(utcMillis)
         assertEquals(sampleLocalStart, backToLocal)
     }
+
+    @Test
+    fun `default event types contain only the 4 Neondra events`() {
+        assertEquals(
+            listOf("Aqiqah", "Birthday", "Shadi", "Nikah"),
+            com.example.data.DropdownCatalog.DEFAULT_EVENT_TYPES
+        )
+    }
+
+    @Test
+    fun `home gift item formatters and append helper build clean comma-separated text`() {
+        var items = ""
+        items = com.example.ui.screens.appendHomeGiftItem(
+            items,
+            com.example.ui.screens.formatCashGiftItem("5000")
+        )
+        items = com.example.ui.screens.appendHomeGiftItem(
+            items,
+            com.example.ui.screens.formatSuitGiftItem("Lady Suit", 2)
+        )
+        items = com.example.ui.screens.appendHomeGiftItem(
+            items,
+            com.example.ui.screens.formatSuitGiftItem("Gents Suit", 1)
+        )
+        items = com.example.ui.screens.appendHomeGiftItem(
+            items,
+            com.example.ui.screens.formatKgGiftItem("Fruits", 3)
+        )
+        items = com.example.ui.screens.appendHomeGiftItem(
+            items,
+            com.example.ui.screens.formatKgGiftItem("Sweets", 5)
+        )
+        assertEquals("Cash 5,000, 2 Lady Suits, 1 Gents Suit, 3 KG Fruits, 5 KG Sweets", items)
+        assertEquals("Cash", com.example.ui.screens.formatCashGiftItem(""))
+    }
 }

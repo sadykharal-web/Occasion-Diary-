@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -27,7 +28,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.CalendarMonth
@@ -38,7 +38,6 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PersonAdd
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -47,12 +46,17 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -60,12 +64,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -88,22 +91,34 @@ import com.example.reminders.CalendarIntentHelper
 import com.example.ui.components.AutoCompleteDropdownField
 import com.example.ui.components.DropdownOptionItem
 import com.example.ui.components.formatDisplayDate
-import com.example.ui.components.formatDisplayTime
+import com.example.ui.components.formatNeondraAmount
 import com.example.ui.components.formatReminderOffsetLabel
 import java.util.Calendar
 
-private val QUICK_HOME_CHIPS = listOf(
-    "Cash",
-    "Garland (Haar)",
-    "Ladies Suit",
-    "Men's Suit",
-    "Shoes & Bag",
-    "Dupatta & Dresses",
-    "2 kg Mithai",
-    "3 kg Apples",
-    "3 kg Oranges",
-    "3 doz Bananas"
-)
+private val SUIT_COUNT_OPTIONS = (1..20).toList()
+private val KG_COUNT_OPTIONS = (1..25).toList()
+
+fun appendHomeGiftItem(existing: String, newItem: String): String {
+    val cleanItem = newItem.trim()
+    if (cleanItem.isEmpty()) return existing
+    val cleanExisting = existing.trimEnd().trimEnd(',').trimEnd()
+    return if (cleanExisting.isEmpty()) cleanItem else "$cleanExisting, $cleanItem"
+}
+
+fun formatCashGiftItem(amountText: String): String {
+    val amount = amountText.filter { it.isDigit() }.toLongOrNull() ?: 0L
+    return if (amount > 0L) "Cash ${formatNeondraAmount(amount)}" else "Cash"
+}
+
+fun formatSuitGiftItem(label: String, count: Int): String {
+    val safeCount = count.coerceAtLeast(1)
+    return if (safeCount == 1) "1 $label" else "$safeCount ${label}s"
+}
+
+fun formatKgGiftItem(label: String, kg: Int): String {
+    val safeKg = kg.coerceAtLeast(1)
+    return "$safeKg KG $label"
+}
 
 private val REMINDER_OFFSETS = listOf(0L, 60L, 180L, 1440L, 2880L)
 
@@ -141,7 +156,7 @@ fun ActivityEditorScreen(
         mutableStateOf(initialRecord?.address ?: prefilledFamily?.address ?: "")
     }
     var eventType by remember {
-        mutableStateOf(initialRecord?.eventType ?: catalog.eventTypes.firstOrNull() ?: "Wedding")
+        mutableStateOf(initialRecord?.eventType ?: catalog.eventTypes.firstOrNull() ?: "Shadi")
     }
     var eventDetail by remember {
         mutableStateOf(initialRecord?.eventDetail ?: "")
@@ -159,6 +174,11 @@ fun ActivityEditorScreen(
     var homeItems by remember {
         mutableStateOf(initialRecord?.homeItems ?: "")
     }
+    var cashGiftAmountText by remember { mutableStateOf("") }
+    var selectedLadySuitCount by remember { mutableIntStateOf(1) }
+    var selectedGentsSuitCount by remember { mutableIntStateOf(1) }
+    var selectedFruitsKg by remember { mutableIntStateOf(1) }
+    var selectedSweetsKg by remember { mutableIntStateOf(1) }
     var neondraText by remember {
         mutableStateOf(
             initialRecord?.neondraAmount?.takeIf { it > 0L }?.toString() ?: ""
@@ -177,7 +197,6 @@ fun ActivityEditorScreen(
     }
     var validationError by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
     var showQuickCategoryDialog by remember { mutableStateOf(false) }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -293,40 +312,6 @@ fun ActivityEditorScreen(
         }
     }
 
-    if (showTimePicker) {
-        val cal = remember(eventDateMillis) {
-            Calendar.getInstance().apply { timeInMillis = eventDateMillis }
-        }
-        val timeState = rememberTimePickerState(
-            initialHour = cal.get(Calendar.HOUR_OF_DAY),
-            initialMinute = cal.get(Calendar.MINUTE)
-        )
-        AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            title = { Text("Select Time") },
-            text = { TimePicker(state = timeState) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val updatedCal = Calendar.getInstance().apply {
-                            timeInMillis = eventDateMillis
-                            set(Calendar.HOUR_OF_DAY, timeState.hour)
-                            set(Calendar.MINUTE, timeState.minute)
-                            set(Calendar.SECOND, 0)
-                        }
-                        eventDateMillis = updatedCal.timeInMillis
-                        showTimePicker = false
-                    }
-                ) {
-                    Text("Confirm")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
-            }
-        )
-    }
-
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -377,31 +362,6 @@ fun ActivityEditorScreen(
                             fontWeight = FontWeight.Bold
                         )
 
-                        AutoCompleteDropdownField(
-                            value = name,
-                            onValueChange = {
-                                name = it
-                                selectedFamilyDocId = null
-                            },
-                            label = "Name *",
-                            placeholder = "e.g. Rajab Ali",
-                            supportingText = "Same Name + Father's Name + Address automatically share one Family Number (FN)",
-                            options = nameOptions,
-                            onOptionSelected = { opt ->
-                                name = opt.primaryValue
-                                val matched = catalog.families.firstOrNull {
-                                    it.id == opt.payloadTag || it.name.equals(opt.primaryValue, ignoreCase = true)
-                                }
-                                if (matched != null) {
-                                    selectedFamilyDocId = matched.id
-                                    if (matched.familyId.isNotBlank()) familyId = matched.familyId
-                                    if (matched.fatherName.isNotBlank()) fatherName = matched.fatherName
-                                    if (matched.address.isNotBlank()) address = matched.address
-                                }
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) }
-                        )
-
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -410,7 +370,7 @@ fun ActivityEditorScreen(
                             AutoCompleteDropdownField(
                                 value = familyId,
                                 onValueChange = { familyId = it },
-                                label = "Family Number (FN)",
+                                label = "FN",
                                 placeholder = "e.g. ${catalog.nextSuggestedFamilyId}",
                                 options = fnOptions,
                                 onOptionSelected = { opt ->
@@ -426,7 +386,9 @@ fun ActivityEditorScreen(
                                     }
                                 },
                                 leadingIcon = { Icon(Icons.Rounded.Badge, contentDescription = null) },
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("editor_fn_input")
                             )
 
                             AssistChip(
@@ -435,6 +397,32 @@ fun ActivityEditorScreen(
                                 modifier = Modifier.padding(top = 8.dp)
                             )
                         }
+
+                        AutoCompleteDropdownField(
+                            value = name,
+                            onValueChange = {
+                                name = it
+                                selectedFamilyDocId = null
+                            },
+                            label = "Name *",
+                            placeholder = "e.g. Rajab Ali",
+                            supportingText = "Same Name + Father's Name + Address automatically share one FN",
+                            options = nameOptions,
+                            onOptionSelected = { opt ->
+                                name = opt.primaryValue
+                                val matched = catalog.families.firstOrNull {
+                                    it.id == opt.payloadTag || it.name.equals(opt.primaryValue, ignoreCase = true)
+                                }
+                                if (matched != null) {
+                                    selectedFamilyDocId = matched.id
+                                    if (matched.familyId.isNotBlank()) familyId = matched.familyId
+                                    if (matched.fatherName.isNotBlank()) fatherName = matched.fatherName
+                                    if (matched.address.isNotBlank()) address = matched.address
+                                }
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.Person, contentDescription = null) },
+                            modifier = Modifier.testTag("editor_name_input")
+                        )
 
                         AutoCompleteDropdownField(
                             value = fatherName,
@@ -457,14 +445,15 @@ fun ActivityEditorScreen(
                                 address = it
                                 selectedFamilyDocId = null
                             },
-                            label = "Address / Village / Area",
+                            label = "Address",
                             placeholder = "e.g. Kot Ramzan",
                             options = addressOptions,
                             onOptionSelected = { opt ->
                                 address = opt.primaryValue
                                 selectedFamilyDocId = null
                             },
-                            leadingIcon = { Icon(Icons.Rounded.LocationOn, contentDescription = null) }
+                            leadingIcon = { Icon(Icons.Rounded.LocationOn, contentDescription = null) },
+                            modifier = Modifier.testTag("editor_address_input")
                         )
 
                         if (name.isNotBlank()) {
@@ -526,7 +515,7 @@ fun ActivityEditorScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Occasion, Category & Type",
+                                text = "Event Type",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold
@@ -534,21 +523,22 @@ fun ActivityEditorScreen(
                             TextButton(onClick = { showQuickCategoryDialog = true }) {
                                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("New Category")
+                                Text("New Event Type")
                             }
                         }
 
                         AutoCompleteDropdownField(
                             value = eventType,
                             onValueChange = { eventType = it },
-                            label = "Occasion Category *",
-                            placeholder = "e.g. Wedding, Walima, Meeting",
+                            label = "Event Type *",
+                            placeholder = "e.g. Aqiqah, Birthday, Shadi, Nikah",
                             options = eventOptions,
                             onOptionSelected = { opt -> eventType = opt.primaryValue },
                             leadingIcon = {
                                 val (catColor, catIcon) = catalog.resolveCategoryVisual(eventType)
                                 Icon(catIcon, contentDescription = null, tint = catColor)
-                            }
+                            },
+                            modifier = Modifier.testTag("editor_event_type_input")
                         )
 
                         Row(
@@ -590,33 +580,17 @@ fun ActivityEditorScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        OutlinedButton(
+                            onClick = { showDatePicker = true },
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp)
+                                .testTag("editor_event_date_button")
                         ) {
-                            OutlinedButton(
-                                onClick = { showDatePicker = true },
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .weight(1.2f)
-                                    .height(52.dp)
-                            ) {
-                                Icon(Icons.Rounded.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(formatDisplayDate(eventDateMillis))
-                            }
-
-                            OutlinedButton(
-                                onClick = { showTimePicker = true },
-                                shape = RoundedCornerShape(14.dp),
-                                modifier = Modifier
-                                    .weight(0.8f)
-                                    .height(52.dp)
-                            ) {
-                                Icon(Icons.Rounded.AccessTime, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(formatDisplayTime(eventDateMillis))
-                            }
+                            Icon(Icons.Rounded.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Event Date: ${formatDisplayDate(eventDateMillis)}")
                         }
 
                         Text(
@@ -683,7 +657,7 @@ fun ActivityEditorScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "Items / Gifts & Neondra Amount",
+                            text = "Home Gift / Items & Neondra Amount",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -692,31 +666,143 @@ fun ActivityEditorScreen(
                         OutlinedTextField(
                             value = homeItems,
                             onValueChange = { homeItems = it },
-                            label = { Text("Items / Gifts") },
-                            placeholder = { Text("e.g. Cash 20000, Haar 3000, Ladies Suit...") },
+                            label = { Text("Home Gift / Items") },
+                            placeholder = { Text("e.g. Cash 5,000, 2 Lady Suits, 1 Gents Suit, 3 KG Fruits...") },
                             leadingIcon = { Icon(Icons.Rounded.Home, contentDescription = null) },
-                            minLines = 3,
+                            minLines = 2,
                             maxLines = 5,
                             shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                .testTag("editor_home_items_input")
+                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            QUICK_HOME_CHIPS.forEach { chipText ->
-                                AssistChip(
-                                    onClick = {
-                                        homeItems = if (homeItems.isBlank()) {
-                                            chipText
-                                        } else {
-                                            "${homeItems.trimEnd()}, $chipText"
-                                        }
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Text(
+                                    text = "Gift / Item Categories",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold
+                                )
+
+                                // Cash
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Cash",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.width(84.dp)
+                                    )
+                                    OutlinedTextField(
+                                        value = cashGiftAmountText,
+                                        onValueChange = { input ->
+                                            cashGiftAmountText = input.filter { it.isDigit() }.take(9)
+                                        },
+                                        placeholder = { Text("Amount") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .testTag("home_gift_cash_input")
+                                    )
+                                    FilledTonalButton(
+                                        onClick = {
+                                            homeItems = appendHomeGiftItem(
+                                                homeItems,
+                                                formatCashGiftItem(cashGiftAmountText)
+                                            )
+                                            cashGiftAmountText = ""
+                                        },
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier
+                                            .height(48.dp)
+                                            .testTag("home_gift_cash_add_button")
+                                    ) {
+                                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text("Add")
+                                    }
+                                }
+
+                                // Lady Suit + No. dropdown
+                                GiftCategoryQuantityRow(
+                                    label = "Lady Suit",
+                                    options = SUIT_COUNT_OPTIONS,
+                                    selectedValue = selectedLadySuitCount,
+                                    unitSuffix = "",
+                                    onValueSelected = { selectedLadySuitCount = it },
+                                    onAddClick = {
+                                        homeItems = appendHomeGiftItem(
+                                            homeItems,
+                                            formatSuitGiftItem("Lady Suit", selectedLadySuitCount)
+                                        )
                                     },
-                                    label = { Text("+ $chipText") }
+                                    dropdownTag = "home_gift_lady_suit_dropdown",
+                                    addButtonTag = "home_gift_lady_suit_add_button"
+                                )
+
+                                // Gents Suit + No. dropdown
+                                GiftCategoryQuantityRow(
+                                    label = "Gents Suit",
+                                    options = SUIT_COUNT_OPTIONS,
+                                    selectedValue = selectedGentsSuitCount,
+                                    unitSuffix = "",
+                                    onValueSelected = { selectedGentsSuitCount = it },
+                                    onAddClick = {
+                                        homeItems = appendHomeGiftItem(
+                                            homeItems,
+                                            formatSuitGiftItem("Gents Suit", selectedGentsSuitCount)
+                                        )
+                                    },
+                                    dropdownTag = "home_gift_gents_suit_dropdown",
+                                    addButtonTag = "home_gift_gents_suit_add_button"
+                                )
+
+                                // Fruits + No. KG dropdown
+                                GiftCategoryQuantityRow(
+                                    label = "Fruits",
+                                    options = KG_COUNT_OPTIONS,
+                                    selectedValue = selectedFruitsKg,
+                                    unitSuffix = " KG",
+                                    onValueSelected = { selectedFruitsKg = it },
+                                    onAddClick = {
+                                        homeItems = appendHomeGiftItem(
+                                            homeItems,
+                                            formatKgGiftItem("Fruits", selectedFruitsKg)
+                                        )
+                                    },
+                                    dropdownTag = "home_gift_fruits_dropdown",
+                                    addButtonTag = "home_gift_fruits_add_button"
+                                )
+
+                                // Sweets + No. KG dropdown
+                                GiftCategoryQuantityRow(
+                                    label = "Sweets",
+                                    options = KG_COUNT_OPTIONS,
+                                    selectedValue = selectedSweetsKg,
+                                    unitSuffix = " KG",
+                                    onValueSelected = { selectedSweetsKg = it },
+                                    onAddClick = {
+                                        homeItems = appendHomeGiftItem(
+                                            homeItems,
+                                            formatKgGiftItem("Sweets", selectedSweetsKg)
+                                        )
+                                    },
+                                    dropdownTag = "home_gift_sweets_dropdown",
+                                    addButtonTag = "home_gift_sweets_add_button"
                                 )
                             }
                         }
@@ -766,7 +852,7 @@ fun ActivityEditorScreen(
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "Schedule an alert notification before the occasion",
+                                        text = "Schedule an alert notification before the event",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -851,7 +937,7 @@ fun ActivityEditorScreen(
                             return@Button
                         }
                         if (trimmedEvent.isEmpty()) {
-                            validationError = "Please enter an occasion or category."
+                            validationError = "Please select an event type."
                             return@Button
                         }
                         validationError = null
@@ -912,6 +998,88 @@ fun ActivityEditorScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GiftCategoryQuantityRow(
+    label: String,
+    options: List<Int>,
+    selectedValue: Int,
+    unitSuffix: String,
+    onValueSelected: (Int) -> Unit,
+    onAddClick: () -> Unit,
+    dropdownTag: String,
+    addButtonTag: String
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded },
+            modifier = Modifier
+                .width(if (unitSuffix.isNotEmpty()) 118.dp else 96.dp)
+                .testTag(dropdownTag)
+        ) {
+            OutlinedTextField(
+                value = "$selectedValue$unitSuffix",
+                onValueChange = {},
+                readOnly = true,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                options.forEach { count ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "$count$unitSuffix",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = if (count == selectedValue) FontWeight.Bold else FontWeight.Normal
+                            )
+                        },
+                        onClick = {
+                            onValueSelected(count)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+
+        FilledTonalButton(
+            onClick = onAddClick,
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier
+                .height(48.dp)
+                .testTag(addButtonTag)
+        ) {
+            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(4.dp))
+            Text("Add")
         }
     }
 }

@@ -362,7 +362,7 @@ private fun FamilyEditorDialog(
                 OutlinedTextField(
                     value = fn,
                     onValueChange = { fn = it },
-                    label = { Text("Unique Family Number (FN) *") },
+                    label = { Text("FN *") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -400,7 +400,7 @@ private fun FamilyEditorDialog(
             TextButton(
                 onClick = {
                     if (fn.trim().isEmpty() || name.trim().isEmpty()) {
-                        error = "Name and Family Number (FN) are required."
+                        error = "FN and Name are required."
                         return@TextButton
                     }
                     onConfirm(

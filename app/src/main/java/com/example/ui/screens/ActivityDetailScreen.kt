@@ -64,7 +64,6 @@ import com.example.reminders.CalendarIntentHelper
 import com.example.ui.components.CategoryBadge
 import com.example.ui.components.DirectionPill
 import com.example.ui.components.formatDisplayDate
-import com.example.ui.components.formatDisplayTime
 import com.example.ui.components.formatNeondraAmount
 import com.example.ui.components.formatReminderOffsetLabel
 
@@ -191,12 +190,13 @@ fun ActivityDetailScreen(
                         modifier = Modifier.padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
-                        DetailFieldRow(label = "Family Number (FN)", value = record.familyId.ifBlank { "—" })
+                        DetailFieldRow(label = "FN", value = record.familyId.ifBlank { "—" })
+                        DetailFieldRow(label = "Name", value = record.name.ifBlank { "—" })
                         DetailFieldRow(label = "Father's Name", value = record.fatherName.ifBlank { "—" })
                         DetailFieldRow(label = "Address", value = record.address.ifBlank { "—" })
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text(
-                                text = "Occasion Category",
+                                text = "Event Type",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -217,8 +217,8 @@ fun ActivityDetailScreen(
                         }
                         DetailFieldRow(label = "Event Details", value = record.eventDetail.ifBlank { "—" })
                         DetailFieldRow(
-                            label = "Date & Time",
-                            value = "${formatDisplayDate(record.eventDateMillis)} • ${formatDisplayTime(record.eventDateMillis)}"
+                            label = "Event Date",
+                            value = formatDisplayDate(record.eventDateMillis)
                         )
 
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -240,7 +240,7 @@ fun ActivityDetailScreen(
                         }
 
                         DetailFieldRow(
-                            label = "Items / Gifts",
+                            label = "Home Gift / Items",
                             value = record.homeItems.ifBlank { "No items listed" }
                         )
 

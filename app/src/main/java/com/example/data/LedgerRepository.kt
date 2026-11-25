@@ -96,9 +96,22 @@ class LedgerRepository(
     }
 
     suspend fun seedDefaultCategoriesIfEmpty(existingCategories: List<ActivityCategory>): Result<Unit> {
-        if (existingCategories.isNotEmpty()) return Result.success(Unit)
+        val legacySeedNames = setOf(
+            "Wedding", "Walima", "Neondra", "Gathering", "Condolence", "Meeting", "Personal"
+        )
+        val hasLegacyDefaultSeeds = existingCategories.any {
+            it.id.startsWith("default_") && it.name in legacySeedNames
+        }
+        if (existingCategories.isNotEmpty() && !hasLegacyDefaultSeeds) {
+            return Result.success(Unit)
+        }
         return try {
             val now = System.currentTimeMillis()
+            if (hasLegacyDefaultSeeds) {
+                existingCategories
+                    .filter { it.id.startsWith("default_") }
+                    .forEach { dao.deleteCategory(it.id) }
+            }
             val entities = CategoryStyleCatalog.DEFAULT_SEEDS.mapIndexed { idx, seed ->
                 CategoryEntity(
                     id = "default_${idx + 1}",
@@ -127,7 +140,7 @@ class LedgerRepository(
             val cleanName = category.name.trim().take(80)
             val cleanColor = category.colorHex.trim().take(9)
             val cleanIcon = category.iconKey.trim().take(40)
-            require(cleanName.isNotEmpty()) { "Please enter a category name." }
+            require(cleanName.isNotEmpty()) { "Please enter an event type name." }
             require(cleanColor.matches(Regex("^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"))) {
                 "Invalid color code."
             }
@@ -160,7 +173,7 @@ class LedgerRepository(
 
     suspend fun deleteCategory(categoryId: String): Result<Unit> {
         return try {
-            require(categoryId.isNotBlank()) { "Category ID cannot be blank." }
+            require(categoryId.isNotBlank()) { "Event Type ID cannot be blank." }
             dao.deleteCategory(categoryId)
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -185,7 +198,7 @@ class LedgerRepository(
             val cleanHome = record.homeItems.trim().take(1000)
 
             require(cleanName.isNotEmpty()) { "Please enter a person or family name." }
-            require(cleanEvent.isNotEmpty()) { "Please select an event or category." }
+            require(cleanEvent.isNotEmpty()) { "Please select an event type." }
             require(record.neondraAmount in 0L..1_000_000_000L) { "Amount must be within valid limits." }
 
             val now = System.currentTimeMillis()
@@ -389,7 +402,7 @@ class LedgerRepository(
                         name = act.name.trim().take(100),
                         fatherName = act.fatherName.trim().take(100),
                         address = act.address.trim().take(200),
-                        eventType = act.eventType.trim().take(80).ifEmpty { "Wedding" },
+                        eventType = act.eventType.trim().take(80).ifEmpty { "Shadi" },
                         eventDetail = act.eventDetail.trim().take(250),
                         eventDateMillis = act.eventDateMillis.coerceAtLeast(0L),
                         direction = ActivityDirection.fromWire(act.direction).wireValue,
@@ -415,7 +428,7 @@ class LedgerRepository(
                         title = evt.title.trim().take(120),
                         description = evt.description.trim().take(1000),
                         eventDateMillis = evt.eventDateMillis.coerceAtLeast(0L),
-                        category = evt.category.trim().take(80).ifEmpty { "Occasion" },
+                        category = evt.category.trim().take(80).ifEmpty { "Shadi" },
                         location = evt.location.trim().take(200),
                         familyDocId = evt.familyDocId?.takeIf { it.isNotBlank() },
                         familyName = evt.familyName.trim().take(100),

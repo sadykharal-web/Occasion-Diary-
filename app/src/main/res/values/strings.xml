@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Life Line</string>
-    <string name="app_tagline">Offline family occasion diary, In/Out ledger, reminders &amp; AI insights</string>
+    <string name="app_tagline">Offline family ledger, In/Out tracker, reminders &amp; AI insights</string>
 
     <!-- Navigation -->
     <string name="nav_ledger">Ledger</string>
@@ -10,21 +10,21 @@
 
     <!-- Onboarding / App Highlights -->
     <string name="app_welcome_title">Welcome to Life Line</string>
-    <string name="app_welcome_subtitle">Keep your families, upcoming occasions, and Neondra ledger 100% offline on your device.</string>
+    <string name="app_welcome_subtitle">Keep your families, events, and Neondra ledger 100% offline on your device.</string>
     <string name="app_feature_sync">Automatic family grouping by Name, Father\'s Name &amp; Address</string>
-    <string name="app_feature_reminders">Occasion reminders, alerts, and device calendar sync</string>
+    <string name="app_feature_reminders">Event reminders, alerts, and device calendar sync</string>
     <string name="app_feature_ledger">Complete In &amp; Out tracking with instant comparisons</string>
 
     <!-- Fields -->
+    <string name="field_fn">FN</string>
     <string name="field_name">Name</string>
-    <string name="field_fn">Family Number (FN)</string>
     <string name="field_father">Father\'s Name</string>
     <string name="field_address">Address</string>
-    <string name="field_event">Event / Category</string>
+    <string name="field_event">Event Type</string>
     <string name="field_e_detail">Event Details</string>
-    <string name="field_date">Date</string>
+    <string name="field_date">Event Date</string>
     <string name="field_in_out">Transaction (In / Out)</string>
-    <string name="field_home">Home Gifts / Items</string>
+    <string name="field_home">Home Gift / Items</string>
     <string name="field_neondra">Neondra Amount</string>
 
     <!-- Directions -->
@@ -46,7 +46,7 @@
 
     <!-- Reminders & Calendar -->
     <string name="reminder_enable">Enable Reminder</string>
-    <string name="reminder_channel_name">Occasion &amp; Ledger Reminders</string>
-    <string name="reminder_channel_desc">Scheduled alerts for upcoming occasions and ledger entries</string>
+    <string name="reminder_channel_name">Event &amp; Ledger Reminders</string>
+    <string name="reminder_channel_desc">Scheduled alerts for upcoming events and ledger entries</string>
     <string name="permission_notifications_rationale">Notification permission is needed to show scheduled reminders.</string>
 </resources>

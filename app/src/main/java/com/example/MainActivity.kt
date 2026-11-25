@@ -179,9 +179,7 @@ fun OccasionDiaryAppShell() {
         val data = (dashboardState as? UiState.Success)?.data
         if (!didAttemptCategorySeed && data != null) {
             didAttemptCategorySeed = true
-            if (data.categories.isEmpty()) {
-                viewModel.seedDefaultCategoriesIfEmpty()
-            }
+            viewModel.seedDefaultCategoriesIfEmpty()
         }
     }
 
@@ -278,7 +276,7 @@ fun OccasionDiaryAppShell() {
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Category,
-                                    contentDescription = "Manage Categories"
+                                    contentDescription = "Manage Event Types"
                                 )
                             }
                             IconButton(

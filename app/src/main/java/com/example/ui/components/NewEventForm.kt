@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AccessTime
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
@@ -23,7 +22,6 @@ import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Title
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -40,10 +38,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -119,7 +115,7 @@ fun NewEventFormContent(
         mutableStateOf(
             initialEvent?.category?.takeIf { it.isNotBlank() }
                 ?: catalog.eventTypes.firstOrNull()
-                ?: "Wedding"
+                ?: "Shadi"
         )
     }
     var location by remember(initialEvent) { mutableStateOf(initialEvent?.location ?: "") }
@@ -130,7 +126,6 @@ fun NewEventFormContent(
 
     var validationError by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
 
     val familyOptions = remember(catalog.families) {
         catalog.families.map { fam ->
@@ -176,40 +171,6 @@ fun NewEventFormContent(
         ) {
             DatePicker(state = datePickerState)
         }
-    }
-
-    if (showTimePicker) {
-        val cal = remember(eventDateMillis) {
-            Calendar.getInstance().apply { timeInMillis = eventDateMillis }
-        }
-        val timeState = rememberTimePickerState(
-            initialHour = cal.get(Calendar.HOUR_OF_DAY),
-            initialMinute = cal.get(Calendar.MINUTE)
-        )
-        AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            title = { Text("Select Time") },
-            text = { TimePicker(state = timeState) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val updatedCal = Calendar.getInstance().apply {
-                            timeInMillis = eventDateMillis
-                            set(Calendar.HOUR_OF_DAY, timeState.hour)
-                            set(Calendar.MINUTE, timeState.minute)
-                            set(Calendar.SECOND, 0)
-                        }
-                        eventDateMillis = updatedCal.timeInMillis
-                        showTimePicker = false
-                    }
-                ) {
-                    Text("Confirm")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
-            }
-        )
     }
 
     Column(
@@ -272,38 +233,21 @@ fun NewEventFormContent(
         )
 
         Text(
-            text = "Event Date & Time",
+            text = "Event Date",
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold
         )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        OutlinedButton(
+            onClick = { showDatePicker = true },
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp)
+                .testTag("new_event_date_button")
         ) {
-            OutlinedButton(
-                onClick = { showDatePicker = true },
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .weight(1.25f)
-                    .height(50.dp)
-                    .testTag("new_event_date_button")
-            ) {
-                Icon(Icons.Rounded.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(formatDisplayDate(eventDateMillis))
-            }
-            OutlinedButton(
-                onClick = { showTimePicker = true },
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .weight(0.85f)
-                    .height(50.dp)
-                    .testTag("new_event_time_button")
-            ) {
-                Icon(Icons.Rounded.AccessTime, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(formatDisplayTime(eventDateMillis))
-            }
+            Icon(Icons.Rounded.CalendarMonth, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(formatDisplayDate(eventDateMillis))
         }
 
         OutlinedTextField(
@@ -322,7 +266,7 @@ fun NewEventFormContent(
 
         if (catalog.eventTypes.isNotEmpty()) {
             Text(
-                text = "Category",
+                text = "Event Type",
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold
             )

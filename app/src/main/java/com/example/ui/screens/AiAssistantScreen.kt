@@ -114,7 +114,7 @@ import kotlin.math.max
 
 private val AI_SEARCH_PROMPTS = listOf(
     "Who has the highest In balance?",
-    "Wedding entries and Neondra details",
+    "Shadi entries and Neondra details",
     "Families with negative balance",
     "Recent cash gifts & Neondra"
 )
@@ -682,7 +682,7 @@ fun AiAssistantScreen(
                             if (comp.categoryBreakdowns.isNotEmpty()) {
                                 item {
                                     Text(
-                                        text = "Category Breakdown (${comp.categoryBreakdowns.size})",
+                                        text = "Event Type Breakdown (${comp.categoryBreakdowns.size})",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -1899,7 +1899,7 @@ private fun MatchedActivityCard(
             }
             if (record.homeItems.isNotBlank()) {
                 Text(
-                    text = "Items / Gifts: ${record.homeItems}",
+                    text = "Home Gift / Items: ${record.homeItems}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

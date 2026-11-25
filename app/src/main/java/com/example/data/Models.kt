@@ -225,7 +225,7 @@ data class EventEntry(
     val title: String = "",
     val description: String = "",
     val eventDateMillis: Long = System.currentTimeMillis(),
-    val category: String = "Wedding",
+    val category: String = "Shadi",
     val location: String = "",
     val familyDocId: String? = null,
     val familyName: String = "",
@@ -271,20 +271,20 @@ object CategoryStyleCatalog {
     )
 
     val DEFAULT_SEEDS = listOf(
-        DefaultCategorySeed("Wedding", "#D81B60", "celebration"),
-        DefaultCategorySeed("Walima", "#0F5C4D", "restaurant"),
-        DefaultCategorySeed("Neondra", "#0F5C4D", "payments"),
         DefaultCategorySeed("Aqiqah", "#00897B", "favorite"),
-        DefaultCategorySeed("Gathering", "#B87314", "sparkles"),
-        DefaultCategorySeed("Condolence", "#455A64", "mosque"),
         DefaultCategorySeed("Birthday", "#6A4C93", "celebration"),
-        DefaultCategorySeed("Meeting", "#1976D2", "work"),
-        DefaultCategorySeed("Personal", "#5D4037", "home")
+        DefaultCategorySeed("Shadi", "#D81B60", "celebration"),
+        DefaultCategorySeed("Nikah", "#0F5C4D", "mosque")
     )
 
     private val LEGACY_SEEDS = listOf(
-        DefaultCategorySeed("Shadi", "#D81B60", "celebration"),
-        DefaultCategorySeed("Nikah", "#0F5C4D", "mosque"),
+        DefaultCategorySeed("Wedding", "#D81B60", "celebration"),
+        DefaultCategorySeed("Walima", "#0F5C4D", "restaurant"),
+        DefaultCategorySeed("Neondra", "#0F5C4D", "payments"),
+        DefaultCategorySeed("Gathering", "#B87314", "sparkles"),
+        DefaultCategorySeed("Condolence", "#455A64", "mosque"),
+        DefaultCategorySeed("Meeting", "#1976D2", "work"),
+        DefaultCategorySeed("Personal", "#5D4037", "home"),
         DefaultCategorySeed("شادی", "#D81B60", "celebration"),
         DefaultCategorySeed("ولیمہ", "#0F5C4D", "restaurant"),
         DefaultCategorySeed("نیوندرا", "#0F5C4D", "payments"),
