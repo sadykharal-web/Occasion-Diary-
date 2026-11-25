@@ -100,8 +100,8 @@ fun CategoriesScreen(
         val cat = deletingCategory!!
         AlertDialog(
             onDismissRequest = { deletingCategory = null },
-            title = { Text("قسم حذف کریں؟") },
-            text = { Text("کیا آپ واقعی \"${cat.name}\" قسم حذف کرنا چاہتے ہیں؟") },
+            title = { Text("Delete Category?") },
+            text = { Text("Are you sure you want to delete the \"${cat.name}\" category?") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -109,11 +109,11 @@ fun CategoriesScreen(
                         onDeleteCategory(cat.id)
                     }
                 ) {
-                    Text("حذف کریں", color = MaterialTheme.colorScheme.error)
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { deletingCategory = null }) { Text("منسوخ کریں") }
+                TextButton(onClick = { deletingCategory = null }) { Text("Cancel") }
             }
         )
     }
@@ -122,10 +122,10 @@ fun CategoriesScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text("تقریبات کی اقسام", fontWeight = FontWeight.Bold) },
+                title = { Text("Occasion Categories", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack, modifier = Modifier.testTag("categories_back_button")) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "واپس")
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -140,7 +140,7 @@ fun CategoriesScreen(
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.testTag("add_category_fab")
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = "نئی قسم شامل کریں")
+                Icon(Icons.Rounded.Add, contentDescription = "Add new category")
             }
         }
     ) { innerPadding ->
@@ -179,12 +179,12 @@ fun CategoriesScreen(
                             )
                             Column {
                                 Text(
-                                    text = "مخصوص اقسام (${categories.size})",
+                                    text = "Custom Categories (${categories.size})",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "ہر تقریب کے لیے الگ رنگ اور آئیکن منتخب کریں۔ نام بدلنے پر تمام منسلک اندراجات خودکار اپ ڈیٹ ہو جائیں گے۔",
+                                    text = "Pick a distinct color and icon for each occasion. Renaming a category automatically updates all linked entries.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -216,13 +216,13 @@ fun CategoriesScreen(
                                     modifier = Modifier.size(44.dp)
                                 )
                                 Text(
-                                    text = "ابھی کوئی قسم موجود نہیں",
+                                    text = "No Categories Yet",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center
                                 )
                                 OutlinedButton(onClick = onSeedDefaults) {
-                                    Text("بنیادی اقسام لوڈ کریں (شادی، ولیمہ، میٹنگ...)")
+                                    Text("Load Default Categories (Wedding, Walima, Meeting...)")
                                 }
                             }
                         }
@@ -299,7 +299,7 @@ private fun CategoryRowCard(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "$usageCount اندراجات • ${category.colorHex}",
+                        text = "$usageCount entries • ${category.colorHex}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -308,12 +308,12 @@ private fun CategoryRowCard(
 
             Row {
                 IconButton(onClick = onEdit, modifier = Modifier.testTag("edit_category_${category.id}")) {
-                    Icon(Icons.Rounded.Edit, contentDescription = "قسم میں ترمیم")
+                    Icon(Icons.Rounded.Edit, contentDescription = "Edit category")
                 }
                 IconButton(onClick = onDelete, modifier = Modifier.testTag("delete_category_${category.id}")) {
                     Icon(
                         Icons.Rounded.DeleteOutline,
-                        contentDescription = "قسم حذف کریں",
+                        contentDescription = "Delete category",
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -349,20 +349,19 @@ fun CategoryEditorDialog(
         onDismissRequest = onDismiss,
         title = {
             Text(
-                text = if (initial == null) "نئی قسم بنائیں" else "قسم میں ترمیم",
+                text = if (initial == null) "Create New Category" else "Edit Category",
                 fontWeight = FontWeight.Bold
             )
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // Live preview pill
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("پیش منظر:", style = MaterialTheme.typography.labelMedium)
+                    Text("Preview:", style = MaterialTheme.typography.labelMedium)
                     CategoryBadge(
-                        label = name.ifBlank { "قسم کا نام" },
+                        label = name.ifBlank { "Category Name" },
                         color = previewColor,
                         icon = previewIcon
                     )
@@ -371,8 +370,8 @@ fun CategoryEditorDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("قسم کا نام *") },
-                    placeholder = { Text("مثلاً: شادی، ولیمہ، دفتر، تعلیم") },
+                    label = { Text("Category Name *") },
+                    placeholder = { Text("e.g. Wedding, Walima, Office, Education") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier
@@ -380,7 +379,7 @@ fun CategoryEditorDialog(
                         .testTag("category_name_input")
                 )
 
-                Text("رنگ منتخب کریں:", style = MaterialTheme.typography.labelLarge)
+                Text("Pick Color:", style = MaterialTheme.typography.labelLarge)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -415,7 +414,7 @@ fun CategoryEditorDialog(
                     }
                 }
 
-                Text("آئیکن منتخب کریں:", style = MaterialTheme.typography.labelLarge)
+                Text("Pick Icon:", style = MaterialTheme.typography.labelLarge)
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -461,7 +460,7 @@ fun CategoryEditorDialog(
                 onClick = {
                     val clean = name.trim()
                     if (clean.isEmpty()) {
-                        error = "قسم کا نام ضروری ہے۔"
+                        error = "Category name is required."
                         return@TextButton
                     }
                     onConfirm(
@@ -476,11 +475,11 @@ fun CategoryEditorDialog(
                 },
                 modifier = Modifier.testTag("save_category_button")
             ) {
-                Text("محفوظ کریں")
+                Text("Save")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("منسوخ کریں") }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }

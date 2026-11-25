@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.data.ActivityDirection
+import com.example.data.FamilyIdentityMatcher
 import com.example.data.FamilyProfile
 import com.example.data.UiState
 import com.example.ui.components.formatNeondraAmount
@@ -107,7 +108,7 @@ fun FamiliesScreen(
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 modifier = Modifier.testTag("add_family_fab")
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = "نیا خاندان شامل کریں")
+                Icon(Icons.Rounded.Add, contentDescription = "Add New Family")
             }
         }
     ) { innerPadding ->
@@ -154,12 +155,12 @@ fun FamiliesScreen(
                                 )
                                 Column {
                                     Text(
-                                        text = "خاندانوں کی فہرست (${families.size})",
+                                        text = "Families Directory (${families.size})",
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "ہر نیا اندراج خودکار طور پر یہاں محفوظ ہوتا ہے اور نام، فیملی نمبر اور پتے کے ڈراپ ڈاؤن میں شامل ہو جاتا ہے۔",
+                                        text = "Entries sharing the same Name, Father's Name & Address are treated as one family and automatically linked under their unique FN.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -175,7 +176,7 @@ fun FamiliesScreen(
                                 ) {
                                     Icon(Icons.Rounded.CompareArrows, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("خاندانوں کی آمدن اور خرچ کا موازنہ کریں")
+                                    Text("Compare Families In & Out")
                                 }
                             }
                         }
@@ -186,7 +187,7 @@ fun FamiliesScreen(
                     OutlinedTextField(
                         value = search,
                         onValueChange = { search = it },
-                        placeholder = { Text("نام، فیملی نمبر، ولدیت یا پتہ تلاش کریں...") },
+                        placeholder = { Text("Search name, FN, father's name or address...") },
                         leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                         singleLine = true,
                         shape = RoundedCornerShape(16.dp),
@@ -210,7 +211,7 @@ fun FamiliesScreen(
                                 modifier = Modifier.size(44.dp)
                             )
                             Text(
-                                text = "ابھی تک کوئی خاندان محفوظ نہیں ہے",
+                                text = "No families saved yet",
                                 style = MaterialTheme.typography.titleMedium,
                                 textAlign = TextAlign.Center
                             )
@@ -219,8 +220,7 @@ fun FamiliesScreen(
                 } else {
                     items(filteredFamilies, key = { it.id }) { family ->
                         val famActs = activities.filter { act ->
-                            act.familyDocId == family.id ||
-                                (act.familyId == family.familyId && act.name.equals(family.name, ignoreCase = true))
+                            FamilyIdentityMatcher.activityBelongsToFamily(act, family)
                         }
                         val totalIn = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.neondraAmount }
                         val totalOut = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.neondraAmount }
@@ -266,7 +266,7 @@ fun FamiliesScreen(
                                             )
                                             if (family.fatherName.isNotBlank()) {
                                                 Text(
-                                                    text = "ولدیت: ${family.fatherName}",
+                                                    text = "Father: ${family.fatherName}",
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
@@ -280,12 +280,12 @@ fun FamiliesScreen(
                                                 showFamilyDialog = true
                                             }
                                         ) {
-                                            Icon(Icons.Rounded.Edit, contentDescription = "خاندان میں ترمیم")
+                                            Icon(Icons.Rounded.Edit, contentDescription = "Edit Family")
                                         }
                                         IconButton(onClick = { onDeleteFamily(family.id) }) {
                                             Icon(
                                                 Icons.Rounded.DeleteOutline,
-                                                contentDescription = "خاندان حذف کریں",
+                                                contentDescription = "Delete Family",
                                                 tint = MaterialTheme.colorScheme.error
                                             )
                                         }
@@ -316,7 +316,7 @@ fun FamiliesScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "${famActs.size} اندراجات • آمدن: ${formatNeondraAmount(totalIn)} • خرچ: ${formatNeondraAmount(totalOut)}",
+                                        text = "${famActs.size} entries • In: ${formatNeondraAmount(totalIn)} • Out: ${formatNeondraAmount(totalOut)}",
                                         style = MaterialTheme.typography.labelMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -327,7 +327,7 @@ fun FamiliesScreen(
                                     ) {
                                         Icon(Icons.Rounded.PostAdd, contentDescription = null, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        Text("نیا اندراج")
+                                        Text("New Entry")
                                     }
                                 }
                             }
@@ -355,35 +355,35 @@ private fun FamilyEditorDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(if (initial == null) "نیا خاندان شامل کریں" else "خاندان میں ترمیم کریں")
+            Text(if (initial == null) "Add New Family" else "Edit Family")
         },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = fn,
                     onValueChange = { fn = it },
-                    label = { Text("فیملی نمبر (FN) *") },
+                    label = { Text("Unique Family Number (FN) *") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("نام *") },
+                    label = { Text("Name *") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = father,
                     onValueChange = { father = it },
-                    label = { Text("والد کا نام") },
+                    label = { Text("Father's Name *") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
-                    label = { Text("پتہ / گاؤں / علاقہ") },
+                    label = { Text("Address *") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -400,7 +400,7 @@ private fun FamilyEditorDialog(
             TextButton(
                 onClick = {
                     if (fn.trim().isEmpty() || name.trim().isEmpty()) {
-                        error = "نام اور فیملی نمبر (FN) ضروری ہیں۔"
+                        error = "Name and Family Number (FN) are required."
                         return@TextButton
                     }
                     onConfirm(
@@ -415,11 +415,11 @@ private fun FamilyEditorDialog(
                     )
                 }
             ) {
-                Text("محفوظ کریں")
+                Text("Save")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("منسوخ کریں") }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }

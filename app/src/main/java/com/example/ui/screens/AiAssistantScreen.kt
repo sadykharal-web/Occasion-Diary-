@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -26,16 +29,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.CompareArrows
+import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Balance
 import androidx.compose.material.icons.rounded.CalendarMonth
-import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.Chat
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.CloudDone
+import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Groups
@@ -67,11 +72,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,9 +84,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.rounded.ContentCopy
 import com.example.ai.AiBalanceComparisonResult
 import com.example.ai.AiFamilyBalanceInsight
+import com.example.ai.AiFollowUpChatMessage
 import com.example.ai.AiSearchResult
 import com.example.ai.CategoryInOutBreakdown
 import com.example.ai.SingleFamilyInOutComparison
@@ -94,6 +96,7 @@ import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
 import com.example.data.EventEntry
+import com.example.data.FamilyIdentityMatcher
 import com.example.data.FamilyProfile
 import com.example.data.UiState
 import com.example.ui.components.CategoryBadge
@@ -103,16 +106,23 @@ import com.example.ui.components.formatNeondraAmount
 import com.example.ui.theme.InBadgeFgDark
 import com.example.ui.theme.InBadgeFgLight
 import com.example.ui.theme.JakartaSansFamily
+import com.example.ui.theme.NotoArabicFamily
 import com.example.ui.theme.OutBadgeFgDark
 import com.example.ui.theme.OutBadgeFgLight
 import com.example.ui.viewmodel.LedgerDashboardData
 import kotlin.math.max
 
 private val AI_SEARCH_PROMPTS = listOf(
-    "سب سے زیادہ آمدن کس خاندان کی ہے؟",
-    "آنے والی تقریبات اور شادیاں",
-    "منفی بیلنس والے خاندان",
-    "حالیہ خرچ اور نقد تحائف"
+    "Who has the highest In balance?",
+    "Upcoming occasions and weddings",
+    "Families with negative balance",
+    "Recent cash gifts & Neondra"
+)
+
+private val FOLLOW_UP_CHAT_SUGGESTIONS = listOf(
+    "Who gave more In vs Out?",
+    "کس تقریب میں سب سے زیادہ رقم آئی یا دی گئی؟",
+    "آئندہ تقریب پر کتنا نیوندرا دینا مناسب رہے گا؟"
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -128,22 +138,32 @@ fun AiAssistantScreen(
     singleFamilyAiError: String? = null,
     multiFamilyAiLoading: Boolean = false,
     multiFamilyAiError: String? = null,
+    singleFamilyChatMessages: List<AiFollowUpChatMessage> = emptyList(),
+    singleFamilyChatLoading: Boolean = false,
+    singleFamilyChatError: String? = null,
+    multiFamilyChatMessages: List<AiFollowUpChatMessage> = emptyList(),
+    multiFamilyChatLoading: Boolean = false,
+    multiFamilyChatError: String? = null,
     initialTabIndex: Int = 0,
     onRunAiSearch: (String, Boolean) -> Unit,
     onClearAiSearch: () -> Unit,
     onSelectSingleFamily: (String) -> Unit,
     onRunSingleFamilyAiAnalysis: () -> Unit,
+    onSendSingleFamilyChat: (String, Boolean) -> Unit = { _, _ -> },
+    onClearSingleFamilyChat: () -> Unit = {},
     onToggleFamilyCompare: (String) -> Unit,
     onSelectTopFamilies: () -> Unit,
     onRunAiComparison: () -> Unit,
     onRunMultiFamilyAiAnalysis: () -> Unit = {},
+    onSendMultiFamilyChat: (String, Boolean) -> Unit = { _, _ -> },
+    onClearMultiFamilyChat: () -> Unit = {},
     onClearAiComparison: () -> Unit,
     onActivityClick: (ActivityRecord) -> Unit,
     onCompareThisFamily: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var selectedTab by rememberSaveable(initialTabIndex) { mutableIntStateOf(initialTabIndex) }
-    var compareSubMode by rememberSaveable { mutableIntStateOf(0) } // 0 = ایک خاندان کے اندر، 1 = 2 یا زیادہ خاندان
+    var compareSubMode by rememberSaveable { mutableIntStateOf(0) } // 0 = Within 1 Family, 1 = 2+ Families
     var searchPrompt by rememberSaveable { mutableStateOf("") }
 
     val dashboardData = (dashboardState as? UiState.Success)?.data
@@ -185,12 +205,12 @@ fun AiAssistantScreen(
                         )
                         Column {
                             Text(
-                                text = "Life Line AI تلاش اور موازنہ",
+                                text = "Life Line AI Search & Compare",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "فون کے آف لائن ریکارڈ میں آن لائن Gemini AI سے تلاش کریں یا ایک یا زیادہ خاندانوں کی آمدن اور خرچ کا موازنہ کریں۔",
+                                text = "Search offline records with online Gemini AI or compare In vs Out balances. All AI answers & follow-up chat reply in Urdu (اردو).",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -214,7 +234,7 @@ fun AiAssistantScreen(
                         },
                         modifier = Modifier.testTag("ai_mode_search")
                     ) {
-                        Text("AI تلاش")
+                        Text("AI Search")
                     }
                     SegmentedButton(
                         selected = selectedTab == 1,
@@ -229,7 +249,7 @@ fun AiAssistantScreen(
                         },
                         modifier = Modifier.testTag("ai_mode_compare")
                     ) {
-                        Text("آمدن / خرچ موازنہ")
+                        Text("Compare In / Out")
                     }
                 }
             }
@@ -240,8 +260,8 @@ fun AiAssistantScreen(
                         OutlinedTextField(
                             value = searchPrompt,
                             onValueChange = { searchPrompt = it },
-                            label = { Text("اپنے آف لائن کھاتے کے بارے میں AI سے پوچھیں...") },
-                            placeholder = { Text("مثلاً شادی کی تمام تقریبات اور زیادہ آمدن والے خاندان دکھائیں") },
+                            label = { Text("Ask AI about your offline ledger (AI replies in Urdu)...") },
+                            placeholder = { Text("e.g. Show all wedding gifts or families with positive balance") },
                             leadingIcon = { Icon(Icons.Rounded.AutoAwesome, contentDescription = null) },
                             trailingIcon = {
                                 if (searchPrompt.isNotEmpty()) {
@@ -251,7 +271,7 @@ fun AiAssistantScreen(
                                             onClearAiSearch()
                                         }
                                     ) {
-                                        Icon(Icons.Rounded.Clear, contentDescription = "تلاش صاف کریں")
+                                        Icon(Icons.Rounded.Clear, contentDescription = "Clear search")
                                     }
                                 }
                             },
@@ -295,11 +315,11 @@ fun AiAssistantScreen(
                                     strokeWidth = 2.dp
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("AI کے ذریعے آف لائن ریکارڈ تلاش کیا جا رہا ہے...")
+                                Text("Searching offline records with Online AI...")
                             } else {
                                 Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("آن لائن AI سے تلاش کریں", fontWeight = FontWeight.SemiBold)
+                                Text("Search Online with AI (Urdu Reply)", fontWeight = FontWeight.SemiBold)
                             }
                         }
 
@@ -314,7 +334,7 @@ fun AiAssistantScreen(
                         ) {
                             Icon(Icons.Rounded.OfflineBolt, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("آف لائن فوری تلاش", fontWeight = FontWeight.Medium)
+                            Text("Offline Quick Filter", fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -323,15 +343,15 @@ fun AiAssistantScreen(
                     null -> {
                         item {
                             AiEmptyPromptCard(
-                                title = "آف لائن ڈیٹا میں Gemini AI سے تلاش کریں",
-                                body = "آن لائن AI آپ کے فون میں محفوظ ${families.size} خاندانوں، ${events.size} تقریبات اور ${activities.size} کھاتہ اندراجات کا تجزیہ کر کے اردو میں جواب دیتا ہے۔"
+                                title = "Search Offline Data with Gemini AI",
+                                body = "Ask in English or Urdu. Online AI analyzes your ${families.size} families, ${events.size} events, and ${activities.size} ledger entries saved offline and responds in clear Urdu."
                             )
                         }
                     }
 
                     is UiState.Loading -> {
                         item {
-                            AiLoadingCard("AI آپ کے آف لائن خاندانوں، تقریبات اور کھاتے کے اندراجات کا تجزیہ کر رہا ہے...")
+                            AiLoadingCard("AI is analyzing your offline families, events, and ledger entries...")
                         }
                     }
 
@@ -376,7 +396,7 @@ fun AiAssistantScreen(
                                                 tint = MaterialTheme.colorScheme.primary
                                             )
                                             Text(
-                                                text = "AI کا جواب",
+                                                text = "AI Response (Urdu)",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -385,7 +405,8 @@ fun AiAssistantScreen(
                                     }
                                     Text(
                                         text = result.answerSummary,
-                                        style = MaterialTheme.typography.bodyMedium
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontFamily = NotoArabicFamily
                                     )
                                     if (result.keyInsights.isNotEmpty()) {
                                         HorizontalDivider()
@@ -405,6 +426,7 @@ fun AiAssistantScreen(
                                                 Text(
                                                     text = insight,
                                                     style = MaterialTheme.typography.bodySmall,
+                                                    fontFamily = NotoArabicFamily,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                             }
@@ -418,16 +440,14 @@ fun AiAssistantScreen(
                         if (matchedFamilies.isNotEmpty()) {
                             item {
                                 Text(
-                                    text = "ملتے جلتے خاندان (${matchedFamilies.size})",
+                                    text = "Matched Families (${matchedFamilies.size})",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
                             items(matchedFamilies, key = { "fam_${it.id}" }) { fam ->
                                 val famActs = activities.filter {
-                                    it.familyDocId == fam.id ||
-                                        (it.familyId.isNotBlank() && it.familyId == fam.familyId &&
-                                            it.name.equals(fam.name, ignoreCase = true))
+                                    FamilyIdentityMatcher.activityBelongsToFamily(it, fam)
                                 }
                                 val fIn = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.neondraAmount }
                                 val fOut = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.neondraAmount }
@@ -450,7 +470,7 @@ fun AiAssistantScreen(
                         if (matchedEvents.isNotEmpty()) {
                             item {
                                 Text(
-                                    text = "متعلقہ تقریبات (${matchedEvents.size})",
+                                    text = "Matched Events (${matchedEvents.size})",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -464,7 +484,7 @@ fun AiAssistantScreen(
                         if (matchedActivities.isNotEmpty()) {
                             item {
                                 Text(
-                                    text = "متعلقہ کھاتہ اندراجات (${matchedActivities.size})",
+                                    text = "Matched Ledger Entries (${matchedActivities.size})",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -480,7 +500,7 @@ fun AiAssistantScreen(
                     }
                 }
             } else {
-                // Compare In & Out Mode: Single Family (In vs Out) OR Multi-Family
+                // Compare In & Out Mode: Within 1 Family OR 2+ Families
                 item {
                     SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
                         SegmentedButton(
@@ -496,7 +516,7 @@ fun AiAssistantScreen(
                             },
                             modifier = Modifier.testTag("compare_submode_single")
                         ) {
-                            Text("ایک خاندان کے اندر", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("Within 1 Family", maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         SegmentedButton(
                             selected = compareSubMode == 1,
@@ -511,13 +531,12 @@ fun AiAssistantScreen(
                             },
                             modifier = Modifier.testTag("compare_submode_multi")
                         ) {
-                            Text("2+ خاندان", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("2+ Families", maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }
 
                 if (compareSubMode == 0) {
-                    // Single-Family In vs Out Entries Comparison
                     item {
                         Card(
                             shape = RoundedCornerShape(20.dp),
@@ -528,14 +547,14 @@ fun AiAssistantScreen(
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Text(
-                                    text = "ایک خاندان کے آمدن اور خرچ کا موازنہ کریں",
+                                    text = "Pick One Family to Compare In vs Out Entries",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold
                                 )
 
                                 if (families.isEmpty()) {
                                     Text(
-                                        text = "آمدن اور خرچ کا موازنہ کرنے کے لیے خاندان ٹیب یا نیا اندراج سے خاندان شامل کریں۔",
+                                        text = "Add a family or ledger entry first to compare In vs Out records.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -592,11 +611,11 @@ fun AiAssistantScreen(
                                             strokeWidth = 2.dp
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("AI کے ذریعے اردو موازنہ ہو رہا ہے...")
+                                        Text("Analyzing with Online AI...")
                                     } else {
                                         Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("آن لائن AI سے اردو موازنہ کریں", fontWeight = FontWeight.SemiBold)
+                                        Text("Analyze In & Out with AI (Urdu)", fontWeight = FontWeight.SemiBold)
                                     }
                                 }
                             }
@@ -605,7 +624,7 @@ fun AiAssistantScreen(
 
                     if (singleFamilyAiLoading) {
                         item {
-                            AiLoadingCard("Gemini AI اس خاندان کے آمدن اور خرچ کا اردو میں موازنہ کر رہا ہے...")
+                            AiLoadingCard("Gemini AI is comparing this family's In vs Out entries in Urdu...")
                         }
                     }
 
@@ -622,15 +641,15 @@ fun AiAssistantScreen(
                         null -> {
                             item {
                                 AiEmptyPromptCard(
-                                    title = "ایک خاندان کے اندر آمدن بمقابلہ خرچ",
-                                    body = "اوپر کسی بھی خاندان پر ٹیپ کریں تاکہ اس کی آمدن (وصول) اور خرچ (دیے گئے) کا فوری آف لائن موازنہ دیکھیں، یا آن لائن AI سے اردو تجزیہ کروائیں۔"
+                                    title = "Compare In vs Out Within One Family",
+                                    body = "Tap any family above to view its instant offline In (Received) vs Out (Given) comparison, ask follow-up questions in AI Chat, or run Online AI Urdu analysis."
                                 )
                             }
                         }
 
                         is UiState.Loading -> {
                             item {
-                                AiLoadingCard("Gemini AI اس خاندان کے آمدن اور خرچ کا اردو میں موازنہ کر رہا ہے...")
+                                AiLoadingCard("Gemini AI is comparing this family's In vs Out entries in Urdu...")
                             }
                         }
 
@@ -649,10 +668,21 @@ fun AiAssistantScreen(
                                 SingleFamilySummaryCard(comp = comp)
                             }
 
+                            item(key = "single_family_followup_chat") {
+                                ComparisonFollowUpChatCard(
+                                    contextLabel = "${comp.family.name} (FN ${comp.family.familyId})",
+                                    messages = singleFamilyChatMessages,
+                                    isLoading = singleFamilyChatLoading,
+                                    errorMessage = singleFamilyChatError,
+                                    onSendQuestion = onSendSingleFamilyChat,
+                                    onClearChat = onClearSingleFamilyChat
+                                )
+                            }
+
                             if (comp.categoryBreakdowns.isNotEmpty()) {
                                 item {
                                     Text(
-                                        text = "اقسام کے لحاظ سے تفصیل (${comp.categoryBreakdowns.size})",
+                                        text = "Category Breakdown (${comp.categoryBreakdowns.size})",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold
                                     )
@@ -664,7 +694,7 @@ fun AiAssistantScreen(
 
                             item {
                                 SectionDirectionHeader(
-                                    title = "آمدن کے اندراجات (وصول)",
+                                    title = "In Entries (Received)",
                                     count = comp.inEntries.size,
                                     totalAmount = comp.totalIn,
                                     isIn = true
@@ -672,7 +702,7 @@ fun AiAssistantScreen(
                             }
                             if (comp.inEntries.isEmpty()) {
                                 item {
-                                    EmptyDirectionEntryCard("${comp.family.name} کے لیے کوئی آمدن (وصول) اندراج موجود نہیں ہے۔")
+                                    EmptyDirectionEntryCard("No In (Received) entries recorded for ${comp.family.name}.")
                                 }
                             } else {
                                 items(comp.inEntries, key = { "sf_in_${it.id}" }) { act ->
@@ -686,7 +716,7 @@ fun AiAssistantScreen(
 
                             item {
                                 SectionDirectionHeader(
-                                    title = "خرچ کے اندراجات (دیے گئے)",
+                                    title = "Out Entries (Given)",
                                     count = comp.outEntries.size,
                                     totalAmount = comp.totalOut,
                                     isIn = false
@@ -694,7 +724,7 @@ fun AiAssistantScreen(
                             }
                             if (comp.outEntries.isEmpty()) {
                                 item {
-                                    EmptyDirectionEntryCard("${comp.family.name} کے لیے کوئی خرچ (دیے گئے) اندراج موجود نہیں ہے۔")
+                                    EmptyDirectionEntryCard("No Out (Given) entries recorded for ${comp.family.name}.")
                                 }
                             } else {
                                 items(comp.outEntries, key = { "sf_out_${it.id}" }) { act ->
@@ -724,19 +754,19 @@ fun AiAssistantScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "موازنے کے لیے 2+ خاندان منتخب کریں (${selectedCompareFamilyIds.size} منتخب)",
+                                        text = "Select 2+ Families to Compare (${selectedCompareFamilyIds.size} selected)",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.weight(1f)
                                     )
                                     TextButton(onClick = onSelectTopFamilies) {
-                                        Text("سرفہرست 3 منتخب کریں")
+                                        Text("Select Top 3")
                                     }
                                 }
 
                                 if (families.isEmpty()) {
                                     Text(
-                                        text = "آمدن اور خرچ کا موازنہ کرنے کے لیے کم از کم دو خاندان شامل کریں۔",
+                                        text = "Add at least 2 families to compare In and Out balances.",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -793,11 +823,11 @@ fun AiAssistantScreen(
                                             strokeWidth = 2.dp
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("خاندانوں کا موازنہ کیا جا رہا ہے...")
+                                        Text("Comparing families...")
                                     } else {
                                         Icon(Icons.AutoMirrored.Rounded.CompareArrows, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("فوری آف لائن موازنہ دیکھیں", fontWeight = FontWeight.SemiBold)
+                                        Text("Compare In & Out Offline", fontWeight = FontWeight.SemiBold)
                                     }
                                 }
 
@@ -816,11 +846,11 @@ fun AiAssistantScreen(
                                             strokeWidth = 2.dp
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("آن لائن AI اردو موازنہ جاری ہے...")
+                                        Text("Online AI comparison running...")
                                     } else {
                                         Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
-                                        Text("آن لائن AI سے اردو موازنہ", fontWeight = FontWeight.Medium)
+                                        Text("Analyze with Online AI (Urdu)", fontWeight = FontWeight.Medium)
                                     }
                                 }
                             }
@@ -829,7 +859,7 @@ fun AiAssistantScreen(
 
                     if (multiFamilyAiLoading) {
                         item {
-                            AiLoadingCard("Gemini AI منتخب خاندانوں کے بیلنس کا اردو میں موازنہ کر رہا ہے...")
+                            AiLoadingCard("Gemini AI is comparing selected families in Urdu...")
                         }
                     }
 
@@ -847,15 +877,15 @@ fun AiAssistantScreen(
                         null -> {
                             item {
                                 AiEmptyPromptCard(
-                                    title = "متعدد خاندانوں کے بیلنس کا موازنہ",
-                                    body = "اوپر 2 یا زیادہ خاندان منتخب کریں اور فوری آف لائن موازنہ یا آن لائن AI اردو تجزیہ حاصل کریں۔"
+                                    title = "Compare Balances Across Families",
+                                    body = "Select 2 or more families above to compare In vs Out totals offline, run Online AI Urdu analysis, and ask follow-up questions in AI Chat."
                                 )
                             }
                         }
 
                         is UiState.Loading -> {
                             item {
-                                AiLoadingCard("خاندانوں کے آمدن، خرچ اور خالص بیلنس کا موازنہ ہو رہا ہے...")
+                                AiLoadingCard("Comparing In, Out, and net balances across families...")
                             }
                         }
 
@@ -898,6 +928,7 @@ fun AiAssistantScreen(
                                                 Text(
                                                     text = comp.headline,
                                                     style = MaterialTheme.typography.titleMedium,
+                                                    fontFamily = NotoArabicFamily,
                                                     fontWeight = FontWeight.Bold
                                                 )
                                             }
@@ -920,7 +951,7 @@ fun AiAssistantScreen(
                                                         modifier = Modifier.size(16.dp)
                                                     )
                                                     Text(
-                                                        text = "سب سے زیادہ خالص بیلنس: ${comp.higherNetFamilyName}",
+                                                        text = "Highest Net Balance: ${comp.higherNetFamilyName}",
                                                         style = MaterialTheme.typography.labelLarge,
                                                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                                                         fontWeight = FontWeight.SemiBold
@@ -930,10 +961,22 @@ fun AiAssistantScreen(
                                         }
                                         Text(
                                             text = comp.summary,
-                                            style = MaterialTheme.typography.bodyMedium
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontFamily = NotoArabicFamily
                                         )
                                     }
                                 }
+                            }
+
+                            item(key = "multi_family_followup_chat") {
+                                ComparisonFollowUpChatCard(
+                                    contextLabel = "${comp.familyBreakdowns.size} Selected Families",
+                                    messages = multiFamilyChatMessages,
+                                    isLoading = multiFamilyChatLoading,
+                                    errorMessage = multiFamilyChatError,
+                                    onSendQuestion = onSendMultiFamilyChat,
+                                    onClearChat = onClearMultiFamilyChat
+                                )
                             }
 
                             val maxBarValue = comp.familyBreakdowns
@@ -967,7 +1010,7 @@ fun AiAssistantScreen(
                                                     tint = MaterialTheme.colorScheme.primary
                                                 )
                                                 Text(
-                                                    text = "بیلنس کے اہم نکات",
+                                                    text = "Balance Insights (Urdu)",
                                                     style = MaterialTheme.typography.titleSmall,
                                                     fontWeight = FontWeight.Bold
                                                 )
@@ -976,6 +1019,7 @@ fun AiAssistantScreen(
                                                 Text(
                                                     text = "• $rec",
                                                     style = MaterialTheme.typography.bodySmall,
+                                                    fontFamily = NotoArabicFamily,
                                                     color = MaterialTheme.colorScheme.onSurface
                                                 )
                                             }
@@ -989,6 +1033,232 @@ fun AiAssistantScreen(
             }
 
             item { Spacer(modifier = Modifier.height(24.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun ComparisonFollowUpChatCard(
+    contextLabel: String,
+    messages: List<AiFollowUpChatMessage>,
+    isLoading: Boolean,
+    errorMessage: String?,
+    onSendQuestion: (question: String, useOnlineAi: Boolean) -> Unit,
+    onClearChat: () -> Unit
+) {
+    var draftQuestion by rememberSaveable(contextLabel) { mutableStateOf("") }
+    var lastAskedQuestion by rememberSaveable(contextLabel) { mutableStateOf("") }
+
+    Card(
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("comparison_followup_chat_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Chat,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Column {
+                        Text(
+                            text = "Follow-Up AI Chat (Replies in Urdu)",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Ask further questions about $contextLabel",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                if (messages.isNotEmpty()) {
+                    TextButton(onClick = onClearChat) {
+                        Text("Clear")
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FOLLOW_UP_CHAT_SUGGESTIONS.forEach { chipPrompt ->
+                    AssistChip(
+                        onClick = {
+                            lastAskedQuestion = chipPrompt
+                            draftQuestion = ""
+                            onSendQuestion(chipPrompt, true)
+                        },
+                        label = { Text(chipPrompt, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    )
+                }
+            }
+
+            if (messages.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    messages.forEach { msg ->
+                        val isUser = msg.isUser
+                        Surface(
+                            color = if (isUser) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surface
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (isUser) "You" else "Life Line AI (Urdu)",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isUser) {
+                                            MaterialTheme.colorScheme.onPrimaryContainer
+                                        } else {
+                                            MaterialTheme.colorScheme.primary
+                                        }
+                                    )
+                                    if (!isUser) {
+                                        Text(
+                                            text = if (msg.isOnlineAi) "Online AI" else "Offline",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = msg.text,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontFamily = if (isUser) JakartaSansFamily else NotoArabicFamily,
+                                    color = if (isUser) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (isLoading) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.padding(vertical = 4.dp)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Text(
+                        text = "AI is preparing an Urdu reply...",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            if (!errorMessage.isNullOrBlank()) {
+                val fallbackQ = lastAskedQuestion.ifBlank { draftQuestion }
+                AiErrorCard(
+                    message = errorMessage,
+                    onRetry = {
+                        if (fallbackQ.isNotBlank()) onSendQuestion(fallbackQ, true)
+                    },
+                    onOfflineFallback = if (fallbackQ.isNotBlank()) {
+                        { onSendQuestion(fallbackQ, false) }
+                    } else null
+                )
+            }
+
+            OutlinedTextField(
+                value = draftQuestion,
+                onValueChange = { draftQuestion = it },
+                label = { Text("Ask a follow-up question...") },
+                placeholder = { Text("e.g. Which occasion had the highest Neondra?") },
+                maxLines = 3,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("comparison_chat_input")
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = {
+                        val q = draftQuestion.trim()
+                        if (q.isNotEmpty()) {
+                            lastAskedQuestion = q
+                            draftQuestion = ""
+                            onSendQuestion(q, true)
+                        }
+                    },
+                    enabled = draftQuestion.isNotBlank() && !isLoading,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(46.dp)
+                        .testTag("comparison_chat_send_button")
+                ) {
+                    Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Ask AI (Urdu)", fontWeight = FontWeight.SemiBold)
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        val q = draftQuestion.trim()
+                        if (q.isNotEmpty()) {
+                            lastAskedQuestion = q
+                            draftQuestion = ""
+                            onSendQuestion(q, false)
+                        }
+                    },
+                    enabled = draftQuestion.isNotBlank() && !isLoading,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .height(46.dp)
+                        .testTag("comparison_chat_offline_button")
+                ) {
+                    Icon(Icons.Rounded.OfflineBolt, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Offline")
+                }
+            }
         }
     }
 }
@@ -1019,7 +1289,7 @@ private fun SourceModePill(isOnlineAi: Boolean) {
                 }
             )
             Text(
-                text = if (isOnlineAi) "آن لائن Gemini AI" else "آف لائن ریکارڈ",
+                text = if (isOnlineAi) "Online Gemini AI • Urdu" else "Offline • Urdu",
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = if (isOnlineAi) {
@@ -1067,9 +1337,13 @@ private fun SingleFamilySummaryCard(comp: SingleFamilyInOutComparison) {
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
-                    if (comp.family.address.isNotBlank()) {
+                    val famMeta = buildList {
+                        if (comp.family.fatherName.isNotBlank()) add("Father: ${comp.family.fatherName}")
+                        if (comp.family.address.isNotBlank()) add(comp.family.address)
+                    }.joinToString(" • ")
+                    if (famMeta.isNotEmpty()) {
                         Text(
-                            text = comp.family.address,
+                            text = famMeta,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -1078,7 +1352,6 @@ private fun SingleFamilySummaryCard(comp: SingleFamilyInOutComparison) {
                 SourceModePill(isOnlineAi = comp.usedOnlineAi)
             }
 
-            // Side-by-side summary tiles: IN | OUT | NET
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -1089,7 +1362,7 @@ private fun SingleFamilySummaryCard(comp: SingleFamilyInOutComparison) {
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
-                        Text("آمدن (${comp.inEntries.size})", style = MaterialTheme.typography.labelSmall, color = inColor)
+                        Text("In (${comp.inEntries.size})", style = MaterialTheme.typography.labelSmall, color = inColor)
                         Text(
                             text = formatNeondraAmount(comp.totalIn),
                             style = MaterialTheme.typography.titleSmall,
@@ -1105,7 +1378,7 @@ private fun SingleFamilySummaryCard(comp: SingleFamilyInOutComparison) {
                     modifier = Modifier.weight(1f)
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
-                        Text("خرچ (${comp.outEntries.size})", style = MaterialTheme.typography.labelSmall, color = outColor)
+                        Text("Out (${comp.outEntries.size})", style = MaterialTheme.typography.labelSmall, color = outColor)
                         Text(
                             text = formatNeondraAmount(comp.totalOut),
                             style = MaterialTheme.typography.titleSmall,
@@ -1122,7 +1395,7 @@ private fun SingleFamilySummaryCard(comp: SingleFamilyInOutComparison) {
                 ) {
                     Column(modifier = Modifier.padding(10.dp)) {
                         Text(
-                            text = "خالص بیلنس",
+                            text = "Net Balance",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSecondaryContainer
                         )
@@ -1137,7 +1410,6 @@ private fun SingleFamilySummaryCard(comp: SingleFamilyInOutComparison) {
                 }
             }
 
-            // Visual Comparison Bars
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(
                     modifier = Modifier
@@ -1176,11 +1448,13 @@ private fun SingleFamilySummaryCard(comp: SingleFamilyInOutComparison) {
             Text(
                 text = comp.headline,
                 style = MaterialTheme.typography.titleSmall,
+                fontFamily = NotoArabicFamily,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = comp.summary,
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                fontFamily = NotoArabicFamily
             )
             if (comp.insights.isNotEmpty()) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -1200,6 +1474,7 @@ private fun SingleFamilySummaryCard(comp: SingleFamilyInOutComparison) {
                             Text(
                                 text = insight,
                                 style = MaterialTheme.typography.bodySmall,
+                                fontFamily = NotoArabicFamily,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
@@ -1237,7 +1512,7 @@ private fun CategoryInOutCard(
             ) {
                 CategoryBadge(label = breakdown.categoryName, color = catColor, icon = catIcon)
                 Text(
-                    text = "خالص: $netPrefix${formatNeondraAmount(breakdown.netBalance)}",
+                    text = "Net: $netPrefix${formatNeondraAmount(breakdown.netBalance)}",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = if (breakdown.netBalance >= 0) inColor else outColor
@@ -1248,13 +1523,13 @@ private fun CategoryInOutCard(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "آمدن (${breakdown.inCount}): ${formatNeondraAmount(breakdown.totalIn)}",
+                    text = "In (${breakdown.inCount}): ${formatNeondraAmount(breakdown.totalIn)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = inColor,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "خرچ (${breakdown.outCount}): ${formatNeondraAmount(breakdown.totalOut)}",
+                    text = "Out (${breakdown.outCount}): ${formatNeondraAmount(breakdown.totalOut)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = outColor,
                     fontWeight = FontWeight.SemiBold
@@ -1359,7 +1634,7 @@ private fun FamilyBalanceCompareCard(
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "${item.entriesCount} کھاتہ اندراجات • ${item.eventsCount} تقریبات",
+                        text = "${item.entriesCount} ledger entries • ${item.eventsCount} events",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1370,7 +1645,7 @@ private fun FamilyBalanceCompareCard(
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Text(
-                        text = "خالص: $netPrefix${formatNeondraAmount(item.netBalance)}",
+                        text = "Net: $netPrefix${formatNeondraAmount(item.netBalance)}",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = if (item.netBalance >= 0) inColor else outColor,
@@ -1379,13 +1654,12 @@ private fun FamilyBalanceCompareCard(
                 }
             }
 
-            // IN bar
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("آمدن (وصول)", style = MaterialTheme.typography.labelMedium, color = inColor)
+                    Text("In (Received)", style = MaterialTheme.typography.labelMedium, color = inColor)
                     Text(
                         text = formatNeondraAmount(item.totalIn),
                         style = MaterialTheme.typography.labelMedium,
@@ -1410,13 +1684,12 @@ private fun FamilyBalanceCompareCard(
                 }
             }
 
-            // OUT bar
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("خرچ (دیے گئے)", style = MaterialTheme.typography.labelMedium, color = outColor)
+                    Text("Out (Given)", style = MaterialTheme.typography.labelMedium, color = outColor)
                     Text(
                         text = formatNeondraAmount(item.totalOut),
                         style = MaterialTheme.typography.labelMedium,
@@ -1444,6 +1717,7 @@ private fun FamilyBalanceCompareCard(
             Text(
                 text = item.insight,
                 style = MaterialTheme.typography.bodySmall,
+                fontFamily = NotoArabicFamily,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -1484,9 +1758,13 @@ private fun MatchedFamilyCard(
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold
                         )
-                        if (family.address.isNotBlank()) {
+                        val meta = buildList {
+                            if (family.fatherName.isNotBlank()) add("Father: ${family.fatherName}")
+                            if (family.address.isNotBlank()) add(family.address)
+                        }.joinToString(" • ")
+                        if (meta.isNotEmpty()) {
                             Text(
-                                text = family.address,
+                                text = meta,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1498,11 +1776,11 @@ private fun MatchedFamilyCard(
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("موازنہ دیکھیں", style = MaterialTheme.typography.labelMedium)
+                    Text("Compare", style = MaterialTheme.typography.labelMedium)
                 }
             }
             Text(
-                text = "$entriesCount اندراجات • آمدن: ${formatNeondraAmount(totalIn)} • خرچ: ${formatNeondraAmount(totalOut)} • خالص: ${formatNeondraAmount(totalIn - totalOut)}",
+                text = "$entriesCount entries • In: ${formatNeondraAmount(totalIn)} • Out: ${formatNeondraAmount(totalOut)} • Net: ${formatNeondraAmount(totalIn - totalOut)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.primary
             )
@@ -1621,7 +1899,7 @@ private fun MatchedActivityCard(
             }
             if (record.homeItems.isNotBlank()) {
                 Text(
-                    text = "تحائف / اشیاء: ${record.homeItems}",
+                    text = "Items / Gifts: ${record.homeItems}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1633,7 +1911,7 @@ private fun MatchedActivityCard(
             ) {
                 CategoryBadge(label = record.eventType, color = catColor, icon = catIcon)
                 Text(
-                    text = "رقم: ${formatNeondraAmount(record.neondraAmount)}",
+                    text = "Amount: ${formatNeondraAmount(record.neondraAmount)}",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold
@@ -1730,7 +2008,7 @@ private fun AiErrorCard(
                     tint = MaterialTheme.colorScheme.onErrorContainer
                 )
                 Text(
-                    text = "AI درخواست ناکام ہو گئی",
+                    text = "AI Request Failed",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onErrorContainer,
                     fontWeight = FontWeight.Bold
@@ -1745,7 +2023,7 @@ private fun AiErrorCard(
 
             if (isAppCheckError && debugToken != null) {
                 Text(
-                    text = "فون پر براہ راست انسٹال کی گئی ڈیبگ APK کو لانچ کے وقت App Check کا مجاز ٹوکن خودکار نہیں ملتا۔ آپ ابھی \"آف لائن فوری تلاش\" اور \"فوری آف لائن موازنہ\" بغیر کسی رکاوٹ کے استعمال کر سکتے ہیں۔",
+                    text = "Sideloaded debug APKs on a physical phone do not receive AI Studio's launch debug token automatically. Test Online AI in AI Studio's Streaming Emulator, paste an authorized debug token below, or use Offline Quick Filter and Offline Comparison.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
@@ -1755,7 +2033,7 @@ private fun AiErrorCard(
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
                 ) {
                     Text(
-                        text = if (showTechnicalToken) "تکنیکی تفصیل چھپائیں" else "تکنیکی تفصیل / ڈی بگ ٹوکن",
+                        text = if (showTechnicalToken) "Hide Technical Details" else "Technical Details / Debug Token",
                         color = MaterialTheme.colorScheme.onErrorContainer,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -1772,7 +2050,7 @@ private fun AiErrorCard(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "ڈیوائس App Check ڈی بگ ٹوکن",
+                                text = "Device App Check Debug Token",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -1794,17 +2072,17 @@ private fun AiErrorCard(
                                 ) {
                                     Icon(Icons.Rounded.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text(if (copiedNotice) "کاپی ہو گیا!" else "ٹوکن کاپی کریں")
+                                    Text(if (copiedNotice) "Copied!" else "Copy Token")
                                 }
                                 TextButton(onClick = { showTokenInput = !showTokenInput }) {
-                                    Text(if (showTokenInput) "ان پٹ بند کریں" else "ٹوکن درج کریں")
+                                    Text(if (showTokenInput) "Close Input" else "Paste Token")
                                 }
                             }
                             if (showTokenInput) {
                                 OutlinedTextField(
                                     value = customTokenInput,
                                     onValueChange = { customTokenInput = it },
-                                    label = { Text("مجاز App Check ڈی بگ ٹوکن") },
+                                    label = { Text("Authorized App Check Debug Token") },
                                     singleLine = true,
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -1818,12 +2096,12 @@ private fun AiErrorCard(
                                     enabled = customTokenInput.isNotBlank(),
                                     shape = RoundedCornerShape(10.dp)
                                 ) {
-                                    Text("ٹوکن محفوظ کریں")
+                                    Text("Save Token")
                                 }
                             }
                             if (savedRestartNotice) {
                                 Text(
-                                    text = "ٹوکن محفوظ ہو گیا ہے۔ تبدیلی لاگو ہونے کے لیے براہ کرم ایپ کو مکمل بند کر کے دوبارہ کھولیں۔",
+                                    text = "Token saved. Force-close and reopen the app for the new token to take effect.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.SemiBold
@@ -1842,7 +2120,7 @@ private fun AiErrorCard(
                     ) {
                         Icon(Icons.Rounded.OfflineBolt, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("آف لائن تلاش استعمال کریں")
+                        Text("Use Offline Filter")
                     }
                 }
                 OutlinedButton(
@@ -1853,10 +2131,9 @@ private fun AiErrorCard(
                     ),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Text("دوبارہ کوشش کریں", color = MaterialTheme.colorScheme.onErrorContainer)
+                    Text("Retry", color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }
         }
     }
 }
-

@@ -17,10 +17,11 @@ import androidx.compose.material.icons.rounded.ShoppingBag
 import androidx.compose.material.icons.rounded.Work
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import java.util.UUID
 
 enum class ActivityDirection(val wireValue: String, val displayLabel: String, val shortLabel: String) {
-    IN("IN", "آمدن (وصول)", "آمدن"),
-    OUT("OUT", "خرچ (دیے گئے)", "خرچ");
+    IN("IN", "In (Received)", "In"),
+    OUT("OUT", "Out (Given)", "Out");
 
     companion object {
         fun fromWire(raw: String?): ActivityDirection {
@@ -40,6 +41,142 @@ data class FamilyProfile(
     val createdAtMillis: Long = System.currentTimeMillis(),
     val updatedAtMillis: Long = System.currentTimeMillis()
 )
+
+data class FamilyIdentityResolution(
+    val familyProfile: FamilyProfile,
+    val matchedExisting: Boolean
+)
+
+/**
+ * Enforces 3-field family identity:
+ * A family is considered the same ONLY when normalized (Name, Father's Name, Address) match.
+ * Every distinct (Name, Father's Name, Address) family receives a unique Family Number (FN).
+ */
+object FamilyIdentityMatcher {
+    fun normalizeField(value: String): String {
+        return value.trim().replace(Regex("\\s+"), " ").lowercase()
+    }
+
+    fun matchesThreeFields(
+        family: FamilyProfile,
+        name: String,
+        fatherName: String,
+        address: String
+    ): Boolean {
+        return normalizeField(family.name) == normalizeField(name) &&
+            normalizeField(family.fatherName) == normalizeField(fatherName) &&
+            normalizeField(family.address) == normalizeField(address)
+    }
+
+    fun findMatchingFamily(
+        families: List<FamilyProfile>,
+        name: String,
+        fatherName: String,
+        address: String
+    ): FamilyProfile? {
+        if (normalizeField(name).isEmpty()) return null
+        return families.firstOrNull { matchesThreeFields(it, name, fatherName, address) }
+    }
+
+    fun nextUniqueFamilyNumber(
+        existingFamilies: List<FamilyProfile>,
+        existingActivities: List<ActivityRecord> = emptyList()
+    ): String {
+        val usedNumbers = (existingFamilies.mapNotNull { it.familyId.trim().toIntOrNull() } +
+            existingActivities.mapNotNull { it.familyId.trim().toIntOrNull() }).toSet()
+        var candidate = (usedNumbers.maxOrNull() ?: 0) + 1
+        while (candidate in usedNumbers) {
+            candidate++
+        }
+        return candidate.toString()
+    }
+
+    fun isFnUsedByDifferentFamily(
+        candidateFn: String,
+        targetFamilyDocId: String?,
+        existingFamilies: List<FamilyProfile>
+    ): Boolean {
+        val cleanFn = candidateFn.trim()
+        if (cleanFn.isEmpty()) return true
+        return existingFamilies.any { fam ->
+            fam.id != targetFamilyDocId && fam.familyId.trim().equals(cleanFn, ignoreCase = true)
+        }
+    }
+
+    fun resolveForActivity(
+        name: String,
+        fatherName: String,
+        address: String,
+        requestedFn: String,
+        existingFamilies: List<FamilyProfile>,
+        existingActivities: List<ActivityRecord>,
+        nowMillis: Long = System.currentTimeMillis()
+    ): FamilyIdentityResolution {
+        val cleanName = name.trim().take(100)
+        val cleanFather = fatherName.trim().take(100)
+        val cleanAddress = address.trim().take(200)
+        val cleanFn = requestedFn.trim().take(40)
+
+        val matched = findMatchingFamily(existingFamilies, cleanName, cleanFather, cleanAddress)
+        if (matched != null) {
+            val resolvedFn = matched.familyId.trim().takeIf { it.isNotEmpty() }
+                ?: if (cleanFn.isNotEmpty() && !isFnUsedByDifferentFamily(cleanFn, matched.id, existingFamilies)) {
+                    cleanFn
+                } else {
+                    nextUniqueFamilyNumber(existingFamilies, existingActivities)
+                }
+
+            val updatedProfile = matched.copy(
+                familyId = resolvedFn,
+                name = cleanName,
+                fatherName = cleanFather.ifEmpty { matched.fatherName },
+                address = cleanAddress.ifEmpty { matched.address },
+                updatedAtMillis = nowMillis
+            )
+            return FamilyIdentityResolution(
+                familyProfile = updatedProfile,
+                matchedExisting = true
+            )
+        }
+
+        val uniqueFn = if (cleanFn.isNotEmpty() && !isFnUsedByDifferentFamily(cleanFn, null, existingFamilies)) {
+            cleanFn
+        } else {
+            nextUniqueFamilyNumber(existingFamilies, existingActivities)
+        }
+        val newProfile = FamilyProfile(
+            id = UUID.randomUUID().toString(),
+            userId = "local",
+            familyId = uniqueFn,
+            name = cleanName,
+            fatherName = cleanFather,
+            address = cleanAddress,
+            phone = null,
+            createdAtMillis = nowMillis,
+            updatedAtMillis = nowMillis
+        )
+        return FamilyIdentityResolution(
+            familyProfile = newProfile,
+            matchedExisting = false
+        )
+    }
+
+    fun activityBelongsToFamily(
+        activity: ActivityRecord,
+        family: FamilyProfile
+    ): Boolean {
+        if (!activity.familyDocId.isNullOrBlank()) {
+            return activity.familyDocId == family.id
+        }
+        if (matchesThreeFields(family, activity.name, activity.fatherName, activity.address)) {
+            return true
+        }
+        return activity.familyId.isNotBlank() &&
+            family.familyId.isNotBlank() &&
+            activity.familyId.trim().equals(family.familyId.trim(), ignoreCase = true) &&
+            normalizeField(activity.name) == normalizeField(family.name)
+    }
+}
 
 data class ActivityCategory(
     val id: String = "",
@@ -88,7 +225,7 @@ data class EventEntry(
     val title: String = "",
     val description: String = "",
     val eventDateMillis: Long = System.currentTimeMillis(),
-    val category: String = "شادی",
+    val category: String = "Wedding",
     val location: String = "",
     val familyDocId: String? = null,
     val familyName: String = "",
@@ -102,57 +239,59 @@ data class DefaultCategorySeed(val name: String, val colorHex: String, val iconK
 
 object CategoryStyleCatalog {
     val COLOR_PALETTE = listOf(
-        CategoryColorOption("#0F5C4D", "زمردی سبز"),
-        CategoryColorOption("#B87314", "سنہری"),
-        CategoryColorOption("#B83B2B", "سرخ"),
-        CategoryColorOption("#1976D2", "شاہی نیلا"),
-        CategoryColorOption("#6A4C93", "جامنی"),
-        CategoryColorOption("#00897B", "فیروزی"),
-        CategoryColorOption("#D81B60", "گلابی"),
-        CategoryColorOption("#5D4037", "بھورا"),
-        CategoryColorOption("#2E7D32", "گہرا سبز"),
-        CategoryColorOption("#EF6C00", "نارنجی"),
-        CategoryColorOption("#28666E", "گہرا نیلا"),
-        CategoryColorOption("#455A64", "سرمئی")
+        CategoryColorOption("#0F5C4D", "Emerald"),
+        CategoryColorOption("#B87314", "Gold"),
+        CategoryColorOption("#B83B2B", "Crimson"),
+        CategoryColorOption("#1976D2", "Royal Blue"),
+        CategoryColorOption("#6A4C93", "Plum"),
+        CategoryColorOption("#00897B", "Teal"),
+        CategoryColorOption("#D81B60", "Rose"),
+        CategoryColorOption("#5D4037", "Umber"),
+        CategoryColorOption("#2E7D32", "Forest"),
+        CategoryColorOption("#EF6C00", "Amber"),
+        CategoryColorOption("#28666E", "Deep Cyan"),
+        CategoryColorOption("#455A64", "Slate")
     )
 
     val ICON_OPTIONS = listOf(
-        CategoryIconOption("celebration", "جشن / شادی", Icons.Rounded.Celebration),
-        CategoryIconOption("favorite", "خوشی اور تحفہ", Icons.Rounded.Favorite),
-        CategoryIconOption("groups", "خاندان", Icons.Rounded.Groups),
-        CategoryIconOption("mosque", "مذہبی / تعزیت", Icons.Rounded.Mosque),
-        CategoryIconOption("work", "کام / میٹنگ", Icons.Rounded.Work),
-        CategoryIconOption("payments", "مالی / نقد", Icons.Rounded.AccountBalanceWallet),
-        CategoryIconOption("restaurant", "دعوت / ولیمہ", Icons.Rounded.Restaurant),
-        CategoryIconOption("shopping", "خریداری / تحفہ", Icons.Rounded.ShoppingBag),
-        CategoryIconOption("home", "گھر", Icons.Rounded.Home),
-        CategoryIconOption("school", "تعلیم", Icons.Rounded.School),
-        CategoryIconOption("medical", "صحت", Icons.Rounded.MedicalServices),
-        CategoryIconOption("flight", "سفر", Icons.Rounded.Flight),
-        CategoryIconOption("sparkles", "خاص تقریب", Icons.Rounded.AutoAwesome),
-        CategoryIconOption("event", "عام تقریب", Icons.Rounded.Event)
+        CategoryIconOption("celebration", "Wedding / Party", Icons.Rounded.Celebration),
+        CategoryIconOption("favorite", "Joy & Gift", Icons.Rounded.Favorite),
+        CategoryIconOption("groups", "Family", Icons.Rounded.Groups),
+        CategoryIconOption("mosque", "Religious / Condolence", Icons.Rounded.Mosque),
+        CategoryIconOption("work", "Work / Meeting", Icons.Rounded.Work),
+        CategoryIconOption("payments", "Neondra / Cash", Icons.Rounded.AccountBalanceWallet),
+        CategoryIconOption("restaurant", "Dinner / Walima", Icons.Rounded.Restaurant),
+        CategoryIconOption("shopping", "Gifts / Shopping", Icons.Rounded.ShoppingBag),
+        CategoryIconOption("home", "Home", Icons.Rounded.Home),
+        CategoryIconOption("school", "Education", Icons.Rounded.School),
+        CategoryIconOption("medical", "Health", Icons.Rounded.MedicalServices),
+        CategoryIconOption("flight", "Travel", Icons.Rounded.Flight),
+        CategoryIconOption("sparkles", "Special Occasion", Icons.Rounded.AutoAwesome),
+        CategoryIconOption("event", "General Event", Icons.Rounded.Event)
     )
 
     val DEFAULT_SEEDS = listOf(
-        DefaultCategorySeed("شادی", "#D81B60", "celebration"),
-        DefaultCategorySeed("ولیمہ", "#0F5C4D", "restaurant"),
-        DefaultCategorySeed("عقیقہ", "#00897B", "favorite"),
-        DefaultCategorySeed("دعوت / تقریب", "#B87314", "sparkles"),
-        DefaultCategorySeed("تعزیت / فوتگی", "#455A64", "mosque"),
-        DefaultCategorySeed("سالگرہ", "#6A4C93", "celebration"),
-        DefaultCategorySeed("میٹنگ", "#1976D2", "work"),
-        DefaultCategorySeed("ذاتی", "#5D4037", "home")
-    )
-
-    private val LEGACY_SEEDS = listOf(
         DefaultCategorySeed("Wedding", "#D81B60", "celebration"),
         DefaultCategorySeed("Walima", "#0F5C4D", "restaurant"),
+        DefaultCategorySeed("Neondra", "#0F5C4D", "payments"),
         DefaultCategorySeed("Aqiqah", "#00897B", "favorite"),
         DefaultCategorySeed("Gathering", "#B87314", "sparkles"),
         DefaultCategorySeed("Condolence", "#455A64", "mosque"),
         DefaultCategorySeed("Birthday", "#6A4C93", "celebration"),
         DefaultCategorySeed("Meeting", "#1976D2", "work"),
         DefaultCategorySeed("Personal", "#5D4037", "home")
+    )
+
+    private val LEGACY_SEEDS = listOf(
+        DefaultCategorySeed("شادی", "#D81B60", "celebration"),
+        DefaultCategorySeed("ولیمہ", "#0F5C4D", "restaurant"),
+        DefaultCategorySeed("نیوندرا", "#0F5C4D", "payments"),
+        DefaultCategorySeed("عقیقہ", "#00897B", "favorite"),
+        DefaultCategorySeed("دعوت / تقریب", "#B87314", "sparkles"),
+        DefaultCategorySeed("تعزیت / فوتگی", "#455A64", "mosque"),
+        DefaultCategorySeed("سالگرہ", "#6A4C93", "celebration"),
+        DefaultCategorySeed("میٹنگ", "#1976D2", "work"),
+        DefaultCategorySeed("ذاتی", "#5D4037", "home")
     )
 
     fun parseColorOrDefault(hex: String?): Color {

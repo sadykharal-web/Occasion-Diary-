@@ -66,7 +66,7 @@ object LocalBackupManager {
             )
             context.contentResolver.openOutputStream(uri)?.use { out ->
                 out.write(json.toByteArray(Charsets.UTF_8))
-            } ?: error("بیک اپ فائل محفوظ کرنے کے لیے نہیں کھولی جا سکی۔")
+            } ?: error("Could not open backup file for writing.")
             saveLastBackupMillis(context, nowMillis)
             Result.success(nowMillis)
         } catch (e: Exception) {
@@ -82,8 +82,8 @@ object LocalBackupManager {
         try {
             val raw = context.contentResolver.openInputStream(uri)?.use { input ->
                 input.bufferedReader(Charsets.UTF_8).readText()
-            } ?: error("منتخب کردہ بیک اپ فائل نہیں پڑھی جا سکی۔")
-            require(raw.isNotBlank()) { "منتخب کردہ بیک اپ فائل خالی ہے۔" }
+            } ?: error("Could not read selected backup file.")
+            require(raw.isNotBlank()) { "Selected backup file is empty." }
             Result.success(parseBackupJson(raw))
         } catch (e: Exception) {
             Log.e(TAG, "Offline backup import failed", e)

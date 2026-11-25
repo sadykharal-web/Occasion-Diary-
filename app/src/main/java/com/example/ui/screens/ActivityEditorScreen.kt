@@ -32,10 +32,12 @@ import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PersonAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -80,6 +82,7 @@ import com.example.data.ActivityCategory
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
+import com.example.data.FamilyIdentityMatcher
 import com.example.data.FamilyProfile
 import com.example.reminders.CalendarIntentHelper
 import com.example.ui.components.AutoCompleteDropdownField
@@ -90,16 +93,16 @@ import com.example.ui.components.formatReminderOffsetLabel
 import java.util.Calendar
 
 private val QUICK_HOME_CHIPS = listOf(
-    "نقد",
-    "ہار",
-    "خواتین سوٹ",
-    "مردانہ سوٹ",
-    "جوتے اور بیگ",
-    "دوپٹہ اور ملبوسات",
-    "2 کلو مٹھائی",
-    "3 کلو سیب",
-    "3 کلو مالٹے",
-    "3 درجن کیلے"
+    "Cash",
+    "Garland (Haar)",
+    "Ladies Suit",
+    "Men's Suit",
+    "Shoes & Bag",
+    "Dupatta & Dresses",
+    "2 kg Mithai",
+    "3 kg Apples",
+    "3 kg Oranges",
+    "3 doz Bananas"
 )
 
 private val REMINDER_OFFSETS = listOf(0L, 60L, 180L, 1440L, 2880L)
@@ -138,7 +141,7 @@ fun ActivityEditorScreen(
         mutableStateOf(initialRecord?.address ?: prefilledFamily?.address ?: "")
     }
     var eventType by remember {
-        mutableStateOf(initialRecord?.eventType ?: catalog.eventTypes.firstOrNull() ?: "شادی")
+        mutableStateOf(initialRecord?.eventType ?: catalog.eventTypes.firstOrNull() ?: "Wedding")
     }
     var eventDetail by remember {
         mutableStateOf(initialRecord?.eventDetail ?: "")
@@ -195,13 +198,22 @@ fun ActivityEditorScreen(
         )
     }
 
+    val liveMatchedFamily = remember(catalog.families, name, fatherName, address) {
+        FamilyIdentityMatcher.findMatchingFamily(
+            families = catalog.families,
+            name = name,
+            fatherName = fatherName,
+            address = address
+        )
+    }
+
     val nameOptions = remember(catalog.families, catalog.names) {
         val fromFamilies = catalog.families.map { fam ->
             DropdownOptionItem(
                 primaryValue = fam.name,
                 subtitle = buildList {
                     if (fam.familyId.isNotBlank()) add("FN: ${fam.familyId}")
-                    if (fam.fatherName.isNotBlank()) add("والد: ${fam.fatherName}")
+                    if (fam.fatherName.isNotBlank()) add("Father: ${fam.fatherName}")
                     if (fam.address.isNotBlank()) add(fam.address)
                 }.joinToString(" • "),
                 payloadTag = fam.id
@@ -219,7 +231,7 @@ fun ActivityEditorScreen(
                 primaryValue = fam.familyId,
                 subtitle = buildList {
                     add(fam.name)
-                    if (fam.fatherName.isNotBlank()) add("والد: ${fam.fatherName}")
+                    if (fam.fatherName.isNotBlank()) add("Father: ${fam.fatherName}")
                     if (fam.address.isNotBlank()) add(fam.address)
                 }.joinToString(" • "),
                 payloadTag = fam.id
@@ -240,7 +252,7 @@ fun ActivityEditorScreen(
             val count = catalog.families.count { it.address.equals(addr, ignoreCase = true) }
             DropdownOptionItem(
                 primaryValue = addr,
-                subtitle = if (count > 0) "$count خاندان" else null
+                subtitle = if (count > 0) "$count families" else null
             )
         }
     }
@@ -270,11 +282,11 @@ fun ActivityEditorScreen(
                         showDatePicker = false
                     }
                 ) {
-                    Text("منتخب کریں")
+                    Text("Select")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("منسوخ کریں") }
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -291,7 +303,7 @@ fun ActivityEditorScreen(
         )
         AlertDialog(
             onDismissRequest = { showTimePicker = false },
-            title = { Text("وقت منتخب کریں") },
+            title = { Text("Select Time") },
             text = { TimePicker(state = timeState) },
             confirmButton = {
                 TextButton(
@@ -306,11 +318,11 @@ fun ActivityEditorScreen(
                         showTimePicker = false
                     }
                 ) {
-                    Text("تصدیق کریں")
+                    Text("Confirm")
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showTimePicker = false }) { Text("منسوخ کریں") }
+                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
             }
         )
     }
@@ -321,7 +333,7 @@ fun ActivityEditorScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = if (isEditing) "اندراج میں ترمیم" else "نیا کھاتہ اندراج",
+                        text = if (isEditing) "Edit Ledger Entry" else "New Ledger Entry",
                         fontWeight = FontWeight.Bold
                     )
                 },
@@ -329,7 +341,7 @@ fun ActivityEditorScreen(
                     IconButton(onClick = onBack, modifier = Modifier.testTag("editor_back_button")) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "واپس"
+                            contentDescription = "Back"
                         )
                     }
                 }
@@ -359,7 +371,7 @@ fun ActivityEditorScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "فرد اور خاندان کی تفصیلات",
+                            text = "Person & Family Details",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -371,9 +383,9 @@ fun ActivityEditorScreen(
                                 name = it
                                 selectedFamilyDocId = null
                             },
-                            label = "نام *",
-                            placeholder = "مثلاً رجب علی",
-                            supportingText = "محفوظ شدہ نام منتخب کرنے پر فیملی نمبر، والد کا نام اور پتہ خودکار بھر جائے گا",
+                            label = "Name *",
+                            placeholder = "e.g. Rajab Ali",
+                            supportingText = "Same Name + Father's Name + Address automatically share one Family Number (FN)",
                             options = nameOptions,
                             onOptionSelected = { opt ->
                                 name = opt.primaryValue
@@ -398,8 +410,8 @@ fun ActivityEditorScreen(
                             AutoCompleteDropdownField(
                                 value = familyId,
                                 onValueChange = { familyId = it },
-                                label = "فیملی نمبر (FN)",
-                                placeholder = "مثلاً 11",
+                                label = "Family Number (FN)",
+                                placeholder = "e.g. ${catalog.nextSuggestedFamilyId}",
                                 options = fnOptions,
                                 onOptionSelected = { opt ->
                                     familyId = opt.primaryValue
@@ -419,29 +431,84 @@ fun ActivityEditorScreen(
 
                             AssistChip(
                                 onClick = { familyId = catalog.nextSuggestedFamilyId },
-                                label = { Text("اگلا نمبر: ${catalog.nextSuggestedFamilyId}") },
+                                label = { Text("Next FN: ${catalog.nextSuggestedFamilyId}") },
                                 modifier = Modifier.padding(top = 8.dp)
                             )
                         }
 
                         AutoCompleteDropdownField(
                             value = fatherName,
-                            onValueChange = { fatherName = it },
-                            label = "والد کا نام",
-                            placeholder = "مثلاً محمد رمضان",
+                            onValueChange = {
+                                fatherName = it
+                                selectedFamilyDocId = null
+                            },
+                            label = "Father's Name",
+                            placeholder = "e.g. Muhammad Ramzan",
                             options = fatherOptions,
-                            onOptionSelected = { opt -> fatherName = opt.primaryValue }
+                            onOptionSelected = { opt ->
+                                fatherName = opt.primaryValue
+                                selectedFamilyDocId = null
+                            }
                         )
 
                         AutoCompleteDropdownField(
                             value = address,
-                            onValueChange = { address = it },
-                            label = "پتہ / گاؤں / علاقہ",
-                            placeholder = "مثلاً کوٹ رمضان",
+                            onValueChange = {
+                                address = it
+                                selectedFamilyDocId = null
+                            },
+                            label = "Address / Village / Area",
+                            placeholder = "e.g. Kot Ramzan",
                             options = addressOptions,
-                            onOptionSelected = { opt -> address = opt.primaryValue },
+                            onOptionSelected = { opt ->
+                                address = opt.primaryValue
+                                selectedFamilyDocId = null
+                            },
                             leadingIcon = { Icon(Icons.Rounded.LocationOn, contentDescription = null) }
                         )
+
+                        if (name.isNotBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = if (liveMatchedFamily != null) {
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                                } else {
+                                    MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (liveMatchedFamily != null) {
+                                            Icons.Rounded.CheckCircle
+                                        } else {
+                                            Icons.Rounded.PersonAdd
+                                        },
+                                        contentDescription = null,
+                                        tint = if (liveMatchedFamily != null) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.secondary
+                                        },
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = if (liveMatchedFamily != null) {
+                                            "Matched existing 3-field family • FN ${liveMatchedFamily.familyId}"
+                                        } else {
+                                            "New family (Name + Father + Address) • Will use unique FN ${familyId.trim().ifBlank { catalog.nextSuggestedFamilyId }}"
+                                        },
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -459,7 +526,7 @@ fun ActivityEditorScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "قسم، تقریب اور لین دین",
+                                text = "Occasion, Category & Type",
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold
@@ -467,15 +534,15 @@ fun ActivityEditorScreen(
                             TextButton(onClick = { showQuickCategoryDialog = true }) {
                                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text("نئی قسم")
+                                Text("New Category")
                             }
                         }
 
                         AutoCompleteDropdownField(
                             value = eventType,
                             onValueChange = { eventType = it },
-                            label = "تقریب کی قسم *",
-                            placeholder = "مثلاً شادی، ولیمہ، ملاقات",
+                            label = "Occasion Category *",
+                            placeholder = "e.g. Wedding, Walima, Meeting",
                             options = eventOptions,
                             onOptionSelected = { opt -> eventType = opt.primaryValue },
                             leadingIcon = {
@@ -515,8 +582,8 @@ fun ActivityEditorScreen(
                         OutlinedTextField(
                             value = eventDetail,
                             onValueChange = { eventDetail = it },
-                            label = { Text("تقریب کی تفصیل") },
-                            placeholder = { Text("مثلاً علی رضا ولد رجب علی") },
+                            label = { Text("Event Details") },
+                            placeholder = { Text("e.g. Ali Raza S/O Rajab Ali") },
                             singleLine = false,
                             maxLines = 2,
                             shape = RoundedCornerShape(14.dp),
@@ -553,7 +620,7 @@ fun ActivityEditorScreen(
                         }
 
                         Text(
-                            text = "لین دین کی قسم (آمدن / خرچ)",
+                            text = "Transaction Direction (In / Out)",
                             style = MaterialTheme.typography.labelLarge
                         )
 
@@ -616,7 +683,7 @@ fun ActivityEditorScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "گھریلو تحائف اور نیوندرا رقم",
+                            text = "Items / Gifts & Neondra Amount",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -625,8 +692,8 @@ fun ActivityEditorScreen(
                         OutlinedTextField(
                             value = homeItems,
                             onValueChange = { homeItems = it },
-                            label = { Text("گھریلو اشیاء / تحائف") },
-                            placeholder = { Text("مثلاً نقد 20000، ہار 3000، خواتین سوٹ...") },
+                            label = { Text("Items / Gifts") },
+                            placeholder = { Text("e.g. Cash 20000, Haar 3000, Ladies Suit...") },
                             leadingIcon = { Icon(Icons.Rounded.Home, contentDescription = null) },
                             minLines = 3,
                             maxLines = 5,
@@ -646,7 +713,7 @@ fun ActivityEditorScreen(
                                         homeItems = if (homeItems.isBlank()) {
                                             chipText
                                         } else {
-                                            "${homeItems.trimEnd()}، $chipText"
+                                            "${homeItems.trimEnd()}, $chipText"
                                         }
                                     },
                                     label = { Text("+ $chipText") }
@@ -659,8 +726,8 @@ fun ActivityEditorScreen(
                             onValueChange = { input ->
                                 neondraText = input.filter { it.isDigit() }.take(9)
                             },
-                            label = { Text("نیوندرا رقم") },
-                            placeholder = { Text("مثلاً 5000") },
+                            label = { Text("Neondra Amount") },
+                            placeholder = { Text("e.g. 5000") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
@@ -694,12 +761,12 @@ fun ActivityEditorScreen(
                                 )
                                 Column {
                                     Text(
-                                        text = "یاددہانی شامل کریں",
+                                        text = "Add Reminder",
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
-                                        text = "تقریب سے پہلے الرٹ نوٹیفکیشن مقرر کریں",
+                                        text = "Schedule an alert notification before the occasion",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -753,7 +820,7 @@ fun ActivityEditorScreen(
                                 onCheckedChange = { alsoOpenDeviceCalendar = it }
                             )
                             Text(
-                                text = "محفوظ کرنے کے بعد ڈیوائس / گوگل کیلنڈر میں بھی شامل کریں",
+                                text = "Also add to Device / Google Calendar after saving",
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
@@ -780,11 +847,11 @@ fun ActivityEditorScreen(
                         val trimmedName = name.trim()
                         val trimmedEvent = eventType.trim()
                         if (trimmedName.isEmpty()) {
-                            validationError = "براہ کرم نام درج کریں۔"
+                            validationError = "Please enter a name."
                             return@Button
                         }
                         if (trimmedEvent.isEmpty()) {
-                            validationError = "براہ کرم تقریب یا قسم درج کریں۔"
+                            validationError = "Please enter an occasion or category."
                             return@Button
                         }
                         validationError = null
@@ -836,7 +903,7 @@ fun ActivityEditorScreen(
                         )
                     } else {
                         Text(
-                            text = if (isEditing) "تبدیلیاں محفوظ کریں" else "اندراج محفوظ کریں",
+                            text = if (isEditing) "Save Changes" else "Save Entry",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )

@@ -58,8 +58,8 @@ object ReminderScheduler {
             if (record.familyId.isNotBlank()) " (FN ${record.familyId})" else ""
         val details = buildList {
             if (record.eventDetail.isNotBlank()) add(record.eventDetail)
-            if (record.address.isNotBlank()) add("پتہ: ${record.address}")
-            add("${record.parsedDirection.shortLabel} • رقم: $formattedNeondra")
+            if (record.address.isNotBlank()) add("Address: ${record.address}")
+            add("${record.parsedDirection.shortLabel} • Amount: $formattedNeondra")
             if (record.homeItems.isNotBlank()) add(record.homeItems)
         }.joinToString("\n")
 
@@ -77,13 +77,13 @@ object CalendarIntentHelper {
         val title = "${record.eventType} - ${record.name}" +
             if (record.familyId.isNotBlank()) " (FN ${record.familyId})" else ""
         val description = buildString {
-            if (record.familyId.isNotBlank()) appendLine("خاندان نمبر: ${record.familyId}")
-            if (record.fatherName.isNotBlank()) appendLine("والد کا نام: ${record.fatherName}")
-            if (record.address.isNotBlank()) appendLine("پتہ: ${record.address}")
-            if (record.eventDetail.isNotBlank()) appendLine("تفصیل: ${record.eventDetail}")
-            appendLine("قسم: ${record.parsedDirection.displayLabel}")
-            if (record.homeItems.isNotBlank()) appendLine("تحائف / اشیاء: ${record.homeItems}")
-            appendLine("رقم: $formattedNeondra")
+            if (record.familyId.isNotBlank()) appendLine("Family Number (FN): ${record.familyId}")
+            if (record.fatherName.isNotBlank()) appendLine("Father's Name: ${record.fatherName}")
+            if (record.address.isNotBlank()) appendLine("Address: ${record.address}")
+            if (record.eventDetail.isNotBlank()) appendLine("Details: ${record.eventDetail}")
+            appendLine("Type: ${record.parsedDirection.displayLabel}")
+            if (record.homeItems.isNotBlank()) appendLine("Gifts / Items: ${record.homeItems}")
+            appendLine("Amount: $formattedNeondra")
         }.trim()
 
         val beginMillis = record.eventDateMillis

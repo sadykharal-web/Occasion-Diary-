@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai.AiAssistantRepository
 import com.example.ai.AiBalanceComparisonResult
+import com.example.ai.AiFollowUpChatMessage
 import com.example.ai.AiSearchResult
 import com.example.ai.SingleFamilyInOutComparison
 import com.example.data.ActivityCategory
@@ -14,6 +15,7 @@ import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
 import com.example.data.EventEntry
+import com.example.data.FamilyIdentityMatcher
 import com.example.data.FamilyProfile
 import com.example.data.LedgerRepository
 import com.example.data.LedgerSummary
@@ -32,10 +34,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 enum class LedgerFilter(val label: String) {
-    ALL("سب"),
-    IN("آمدن (وصول)"),
-    OUT("خرچ (دیے)"),
-    REMINDERS("یاددہانیاں")
+    ALL("All"),
+    IN("In (Received)"),
+    OUT("Out (Given)"),
+    REMINDERS("Reminders")
 }
 
 data class DateRangeFilter(
@@ -112,6 +114,24 @@ class LedgerViewModel(
     private val _singleFamilyAiError = MutableStateFlow<String?>(null)
     val singleFamilyAiError: StateFlow<String?> = _singleFamilyAiError.asStateFlow()
 
+    private val _singleFamilyChatMessages = MutableStateFlow<List<AiFollowUpChatMessage>>(emptyList())
+    val singleFamilyChatMessages: StateFlow<List<AiFollowUpChatMessage>> = _singleFamilyChatMessages.asStateFlow()
+
+    private val _singleFamilyChatLoading = MutableStateFlow(false)
+    val singleFamilyChatLoading: StateFlow<Boolean> = _singleFamilyChatLoading.asStateFlow()
+
+    private val _singleFamilyChatError = MutableStateFlow<String?>(null)
+    val singleFamilyChatError: StateFlow<String?> = _singleFamilyChatError.asStateFlow()
+
+    private val _multiFamilyChatMessages = MutableStateFlow<List<AiFollowUpChatMessage>>(emptyList())
+    val multiFamilyChatMessages: StateFlow<List<AiFollowUpChatMessage>> = _multiFamilyChatMessages.asStateFlow()
+
+    private val _multiFamilyChatLoading = MutableStateFlow(false)
+    val multiFamilyChatLoading: StateFlow<Boolean> = _multiFamilyChatLoading.asStateFlow()
+
+    private val _multiFamilyChatError = MutableStateFlow<String?>(null)
+    val multiFamilyChatError: StateFlow<String?> = _multiFamilyChatError.asStateFlow()
+
     val dashboardState: StateFlow<UiState<LedgerDashboardData>> = combine(
         repository.observeActivities(),
         repository.observeFamilies(),
@@ -152,7 +172,7 @@ class LedgerViewModel(
             .filter { it.isNotEmpty() }
             .distinct()
 
-        val maxNumericFn = mergedFns.mapNotNull { it.toIntOrNull() }.maxOrNull() ?: 0
+        val nextFn = FamilyIdentityMatcher.nextUniqueFamilyNumber(families, activities)
 
         val totalIn = activities
             .filter { it.parsedDirection == ActivityDirection.IN }
@@ -173,7 +193,7 @@ class LedgerViewModel(
             addresses = mergedAddresses,
             fatherNames = mergedFathers,
             eventTypes = mergedEvents,
-            nextSuggestedFamilyId = (maxNumericFn + 1).toString()
+            nextSuggestedFamilyId = nextFn
         )
         val summary = LedgerSummary(
             totalIn = totalIn,
@@ -200,7 +220,7 @@ class LedgerViewModel(
         .catch { error ->
             if (error is CancellationException) throw error
             Log.w(TAG, "Error observing offline ledger dashboard", error)
-            emit(UiState.Error(error.localizedMessage ?: "آف لائن ڈائری ڈیٹا لوڈ کرنے میں مسئلہ پیش آیا۔"))
+            emit(UiState.Error(error.localizedMessage ?: "Failed to load offline ledger data."))
         }
         .stateIn(
             scope = viewModelScope,
@@ -259,13 +279,13 @@ class LedgerViewModel(
             _isSaving.value = false
             result.onSuccess { saved ->
                 _actionMessage.value = if (entry.id.isBlank()) {
-                    "تقریب \"${saved.title}\" موبائل میں آف لائن محفوظ ہو گئی۔"
+                    "Event \"${saved.title}\" saved offline on your device."
                 } else {
-                    "تقریب \"${saved.title}\" آف لائن اپ ڈیٹ ہو گئی۔"
+                    "Event \"${saved.title}\" updated offline."
                 }
                 onSaved(saved)
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "تقریب محفوظ کرنے میں مسئلہ پیش آیا۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to save event."
             }
         }
     }
@@ -274,10 +294,10 @@ class LedgerViewModel(
         viewModelScope.launch {
             repository.deleteEvent(eventId)
                 .onSuccess {
-                    _actionMessage.value = "تقریب حذف کر دی گئی۔"
+                    _actionMessage.value = "Event deleted."
                 }
                 .onFailure { err ->
-                    _actionMessage.value = err.localizedMessage ?: "تقریب حذف کرنے میں مسئلہ پیش آیا۔"
+                    _actionMessage.value = err.localizedMessage ?: "Failed to delete event."
                 }
         }
     }
@@ -287,7 +307,7 @@ class LedgerViewModel(
     fun runAiSearch(query: String, useOnlineAi: Boolean = true) {
         val data = (dashboardState.value as? UiState.Success)?.data
         if (data == null) {
-            _aiSearchState.value = UiState.Error("آپ کا آف لائن ریکارڈ ابھی لوڈ ہو رہا ہے۔ براہ کرم تھوڑی دیر بعد کوشش کریں۔")
+            _aiSearchState.value = UiState.Error("Your offline ledger data is still loading. Please try again.")
             return
         }
         viewModelScope.launch {
@@ -309,7 +329,7 @@ class LedgerViewModel(
             }
             _aiSearchState.value = result.fold(
                 onSuccess = { UiState.Success(it) },
-                onFailure = { UiState.Error(it.localizedMessage ?: "تلاش ناکام ہو گئی۔") }
+                onFailure = { UiState.Error(it.localizedMessage ?: "Search failed.") }
             )
         }
     }
@@ -321,9 +341,15 @@ class LedgerViewModel(
     // --- Single-Family In vs Out Entries Comparison ---
 
     fun selectSingleFamilyForCompare(familyDocId: String) {
+        val switchedFamily = _selectedSingleFamilyId.value != familyDocId
         _selectedSingleFamilyId.value = familyDocId
         _singleFamilyAiError.value = null
         _singleFamilyAiLoading.value = false
+        if (switchedFamily) {
+            _singleFamilyChatMessages.value = emptyList()
+            _singleFamilyChatError.value = null
+            _singleFamilyChatLoading.value = false
+        }
         val data = (dashboardState.value as? UiState.Success)?.data ?: return
         val family = data.families.firstOrNull { it.id == familyDocId } ?: return
         val localResult = aiRepository.compareWithinSingleFamilyLocal(
@@ -337,13 +363,13 @@ class LedgerViewModel(
     fun runSingleFamilyOnlineAiAnalysis() {
         val data = (dashboardState.value as? UiState.Success)?.data
         if (data == null) {
-            _singleFamilyAiError.value = "آپ کا آف لائن ریکارڈ ابھی لوڈ ہو رہا ہے۔ براہ کرم دوبارہ کوشش کریں۔"
+            _singleFamilyAiError.value = "Your offline ledger data is still loading. Please try again."
             return
         }
         val targetId = _selectedSingleFamilyId.value ?: data.families.firstOrNull()?.id
         val family = data.families.firstOrNull { it.id == targetId }
         if (family == null) {
-            _singleFamilyAiError.value = "آمدن اور خرچ کا موازنہ کرنے کے لیے کوئی خاندان منتخب کریں۔"
+            _singleFamilyAiError.value = "Please select a family to compare In and Out entries."
             return
         }
         _selectedSingleFamilyId.value = family.id
@@ -368,7 +394,7 @@ class LedgerViewModel(
             result.onSuccess { aiComparison ->
                 _singleFamilyComparisonState.value = UiState.Success(aiComparison)
             }.onFailure { err ->
-                _singleFamilyAiError.value = err.localizedMessage ?: "آن لائن اے آئی تجزیہ ناکام ہو گیا۔"
+                _singleFamilyAiError.value = err.localizedMessage ?: "Online AI comparison failed."
             }
         }
     }
@@ -377,6 +403,64 @@ class LedgerViewModel(
         _singleFamilyComparisonState.value = null
         _singleFamilyAiLoading.value = false
         _singleFamilyAiError.value = null
+        _singleFamilyChatMessages.value = emptyList()
+        _singleFamilyChatLoading.value = false
+        _singleFamilyChatError.value = null
+    }
+
+    fun sendSingleFamilyChatQuestion(question: String, useOnlineAi: Boolean = true) {
+        val cleanQuestion = question.trim()
+        if (cleanQuestion.isEmpty()) return
+        val comparison = (_singleFamilyComparisonState.value as? UiState.Success)?.data ?: return
+
+        val previousHistory = _singleFamilyChatMessages.value
+        val alreadyRecordedUser = previousHistory.lastOrNull()?.let {
+            it.isUser && it.text == cleanQuestion
+        } == true
+
+        val updatedWithUser = if (alreadyRecordedUser) {
+            previousHistory
+        } else {
+            previousHistory + AiFollowUpChatMessage(isUser = true, text = cleanQuestion, isOnlineAi = useOnlineAi)
+        }
+        _singleFamilyChatMessages.value = updatedWithUser
+        _singleFamilyChatError.value = null
+
+        if (!useOnlineAi) {
+            val offlineReply = aiRepository.answerSingleFamilyFollowUpOffline(cleanQuestion, comparison)
+            _singleFamilyChatMessages.value = updatedWithUser + AiFollowUpChatMessage(
+                isUser = false,
+                text = offlineReply,
+                isOnlineAi = false
+            )
+            return
+        }
+
+        val contextSnapshot = aiRepository.buildSingleFamilyChatContext(comparison)
+        viewModelScope.launch {
+            _singleFamilyChatLoading.value = true
+            val result = aiRepository.askComparisonFollowUpOnline(
+                question = cleanQuestion,
+                comparisonContext = contextSnapshot,
+                history = previousHistory
+            )
+            _singleFamilyChatLoading.value = false
+            result.onSuccess { reply ->
+                _singleFamilyChatMessages.value = _singleFamilyChatMessages.value + AiFollowUpChatMessage(
+                    isUser = false,
+                    text = reply,
+                    isOnlineAi = true
+                )
+            }.onFailure { err ->
+                _singleFamilyChatError.value = err.localizedMessage ?: "Follow-up AI chat failed."
+            }
+        }
+    }
+
+    fun clearSingleFamilyChat() {
+        _singleFamilyChatMessages.value = emptyList()
+        _singleFamilyChatLoading.value = false
+        _singleFamilyChatError.value = null
     }
 
     fun toggleFamilyForComparison(familyDocId: String) {
@@ -392,10 +476,7 @@ class LedgerViewModel(
         val data = (dashboardState.value as? UiState.Success)?.data ?: return
         val topIds = data.families
             .sortedByDescending { fam ->
-                data.activities.count {
-                    it.familyDocId == fam.id ||
-                        (it.familyId.isNotBlank() && it.familyId == fam.familyId && it.name.equals(fam.name, ignoreCase = true))
-                }
+                data.activities.count { FamilyIdentityMatcher.activityBelongsToFamily(it, fam) }
             }
             .take(limit)
             .map { it.id }
@@ -406,7 +487,7 @@ class LedgerViewModel(
     fun runAiBalanceComparison(familyIdsOverride: Set<String>? = null) {
         val data = (dashboardState.value as? UiState.Success)?.data
         if (data == null) {
-            _aiComparisonState.value = UiState.Error("آپ کا ریکارڈ ابھی لوڈ ہو رہا ہے۔ براہ کرم دوبارہ کوشش کریں۔")
+            _aiComparisonState.value = UiState.Error("Your offline ledger data is still loading. Please try again.")
             return
         }
         val targetIds = familyIdsOverride ?: _selectedCompareFamilyIds.value
@@ -415,11 +496,13 @@ class LedgerViewModel(
         }
         val selected = data.families.filter { it.id in targetIds }
         if (selected.size < 2) {
-            _aiComparisonState.value = UiState.Error("آمدن اور خرچ کے موازنے کے لیے کم از کم 2 خاندان منتخب کریں۔")
+            _aiComparisonState.value = UiState.Error("Please select at least 2 families to compare In and Out balances.")
             return
         }
         _multiFamilyAiError.value = null
         _multiFamilyAiLoading.value = false
+        _multiFamilyChatMessages.value = emptyList()
+        _multiFamilyChatError.value = null
         val result = aiRepository.compareFamilyBalances(
             selectedFamilies = selected,
             activities = data.activities,
@@ -427,19 +510,19 @@ class LedgerViewModel(
         )
         _aiComparisonState.value = result.fold(
             onSuccess = { UiState.Success(it) },
-            onFailure = { UiState.Error(it.localizedMessage ?: "بیلنس کا موازنہ ناکام ہو گیا۔") }
+            onFailure = { UiState.Error(it.localizedMessage ?: "Balance comparison failed.") }
         )
     }
 
     fun runMultiFamilyOnlineAiAnalysis() {
         val data = (dashboardState.value as? UiState.Success)?.data
         if (data == null) {
-            _multiFamilyAiError.value = "آپ کا ریکارڈ ابھی لوڈ ہو رہا ہے۔ براہ کرم دوبارہ کوشش کریں۔"
+            _multiFamilyAiError.value = "Your offline ledger data is still loading. Please try again."
             return
         }
         val selected = data.families.filter { it.id in _selectedCompareFamilyIds.value }
         if (selected.size < 2) {
-            _multiFamilyAiError.value = "آمدن اور خرچ کے موازنے کے لیے کم از کم 2 خاندان منتخب کریں۔"
+            _multiFamilyAiError.value = "Please select at least 2 families to compare In and Out balances."
             return
         }
         if (_aiComparisonState.value !is UiState.Success) {
@@ -458,7 +541,7 @@ class LedgerViewModel(
             result.onSuccess { aiComp ->
                 _aiComparisonState.value = UiState.Success(aiComp)
             }.onFailure { err ->
-                _multiFamilyAiError.value = err.localizedMessage ?: "آن لائن اے آئی موازنہ ناکام ہو گیا۔"
+                _multiFamilyAiError.value = err.localizedMessage ?: "Online AI comparison failed."
             }
         }
     }
@@ -467,6 +550,65 @@ class LedgerViewModel(
         _aiComparisonState.value = null
         _multiFamilyAiLoading.value = false
         _multiFamilyAiError.value = null
+        _multiFamilyChatMessages.value = emptyList()
+        _multiFamilyChatLoading.value = false
+        _multiFamilyChatError.value = null
+    }
+
+    fun sendMultiFamilyChatQuestion(question: String, useOnlineAi: Boolean = true) {
+        val cleanQuestion = question.trim()
+        if (cleanQuestion.isEmpty()) return
+        val comparison = (_aiComparisonState.value as? UiState.Success)?.data ?: return
+        val activities = (dashboardState.value as? UiState.Success)?.data?.activities ?: emptyList()
+
+        val previousHistory = _multiFamilyChatMessages.value
+        val alreadyRecordedUser = previousHistory.lastOrNull()?.let {
+            it.isUser && it.text == cleanQuestion
+        } == true
+
+        val updatedWithUser = if (alreadyRecordedUser) {
+            previousHistory
+        } else {
+            previousHistory + AiFollowUpChatMessage(isUser = true, text = cleanQuestion, isOnlineAi = useOnlineAi)
+        }
+        _multiFamilyChatMessages.value = updatedWithUser
+        _multiFamilyChatError.value = null
+
+        if (!useOnlineAi) {
+            val offlineReply = aiRepository.answerMultiFamilyFollowUpOffline(cleanQuestion, comparison)
+            _multiFamilyChatMessages.value = updatedWithUser + AiFollowUpChatMessage(
+                isUser = false,
+                text = offlineReply,
+                isOnlineAi = false
+            )
+            return
+        }
+
+        val contextSnapshot = aiRepository.buildMultiFamilyChatContext(comparison, activities)
+        viewModelScope.launch {
+            _multiFamilyChatLoading.value = true
+            val result = aiRepository.askComparisonFollowUpOnline(
+                question = cleanQuestion,
+                comparisonContext = contextSnapshot,
+                history = previousHistory
+            )
+            _multiFamilyChatLoading.value = false
+            result.onSuccess { reply ->
+                _multiFamilyChatMessages.value = _multiFamilyChatMessages.value + AiFollowUpChatMessage(
+                    isUser = false,
+                    text = reply,
+                    isOnlineAi = true
+                )
+            }.onFailure { err ->
+                _multiFamilyChatError.value = err.localizedMessage ?: "Follow-up AI chat failed."
+            }
+        }
+    }
+
+    fun clearMultiFamilyChat() {
+        _multiFamilyChatMessages.value = emptyList()
+        _multiFamilyChatLoading.value = false
+        _multiFamilyChatError.value = null
     }
 
     // --- Offline Local File Backup & Restore ---
@@ -488,15 +630,15 @@ class LedgerViewModel(
                     isBusy = false,
                     lastBackupMillis = exportedAt,
                     lastFileName = LocalBackupManager.DEFAULT_BACKUP_FILE_NAME,
-                    statusMessage = "آف لائن بیک اپ فائل فون میں محفوظ ہو گئی"
+                    statusMessage = "Offline backup file saved to device"
                 )
-                _actionMessage.value = "بیک اپ کامیابی سے فون میں محفوظ ہو گیا۔"
+                _actionMessage.value = "Backup saved successfully to your device."
             }.onFailure { err ->
                 _localBackupStatus.value = _localBackupStatus.value.copy(
                     isBusy = false,
-                    statusMessage = err.localizedMessage ?: "بیک اپ محفوظ نہ ہو سکا"
+                    statusMessage = err.localizedMessage ?: "Failed to export backup"
                 )
-                _actionMessage.value = err.localizedMessage ?: "بیک اپ فائل محفوظ نہیں ہو سکی۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to save backup file."
             }
         }
     }
@@ -517,25 +659,25 @@ class LedgerViewModel(
                 restoreRes.onSuccess { count ->
                     _localBackupStatus.value = _localBackupStatus.value.copy(
                         isBusy = false,
-                        statusMessage = "$count آف لائن اندراجات بحال ہو گئے"
+                        statusMessage = "$count offline records restored"
                     )
                     _actionMessage.value = if (count > 0) {
-                        "$count اندراجات آف لائن ڈیٹابیس میں شامل کر دیے گئے۔"
+                        "$count records imported into your offline database."
                     } else {
-                        "اس بیک اپ کے تمام اندراجات پہلے ہی فون میں محفوظ ہیں۔"
+                        "All records from this backup are already stored on your device."
                     }
                 }.onFailure { err ->
                     _localBackupStatus.value = _localBackupStatus.value.copy(isBusy = false)
-                    _actionMessage.value = err.localizedMessage ?: "بیک اپ اندراجات بحال کرنے میں ناکامی۔"
+                    _actionMessage.value = err.localizedMessage ?: "Failed to restore backup records."
                 }
             }.onFailure { err ->
                 _localBackupStatus.value = _localBackupStatus.value.copy(isBusy = false)
-                _actionMessage.value = err.localizedMessage ?: "بیک اپ فائل درست نہیں ہے۔"
+                _actionMessage.value = err.localizedMessage ?: "Invalid backup file."
             }
         }
     }
 
-    // --- Categories, Activities & Families ---
+    // --- Categories, Activities, Quick Neondra & Families ---
 
     fun seedDefaultCategoriesIfEmpty() {
         val currentCats = (dashboardState.value as? UiState.Success)?.data?.categories ?: return
@@ -561,10 +703,10 @@ class LedgerViewModel(
             )
             _isSaving.value = false
             result.onSuccess { saved ->
-                _actionMessage.value = "قسم آف لائن محفوظ ہو گئی۔"
+                _actionMessage.value = "Category saved offline."
                 onSaved(saved)
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "قسم محفوظ کرنے میں مسئلہ پیش آیا۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to save category."
             }
         }
     }
@@ -573,11 +715,62 @@ class LedgerViewModel(
         viewModelScope.launch {
             repository.deleteCategory(categoryId)
                 .onSuccess {
-                    _actionMessage.value = "قسم حذف کر دی گئی۔"
+                    _actionMessage.value = "Category deleted."
                 }
                 .onFailure { err ->
-                    _actionMessage.value = err.localizedMessage ?: "قسم حذف کرنے میں مسئلہ پیش آیا۔"
+                    _actionMessage.value = err.localizedMessage ?: "Failed to delete category."
                 }
+        }
+    }
+
+    fun saveQuickNeondra(
+        @Suppress("UNUSED_PARAMETER") context: Context,
+        name: String,
+        fatherName: String,
+        address: String,
+        amount: Long,
+        direction: ActivityDirection,
+        onSaved: (ActivityRecord) -> Unit = {}
+    ) {
+        val currentData = (dashboardState.value as? UiState.Success)?.data
+        val existingFamilies = currentData?.families ?: emptyList()
+        val existingActivities = currentData?.activities ?: emptyList()
+        val matchedBeforeSave = FamilyIdentityMatcher.findMatchingFamily(
+            families = existingFamilies,
+            name = name,
+            fatherName = fatherName,
+            address = address
+        )
+
+        val record = ActivityRecord(
+            name = name.trim(),
+            fatherName = fatherName.trim(),
+            address = address.trim(),
+            eventType = "Neondra",
+            eventDetail = "",
+            eventDateMillis = System.currentTimeMillis(),
+            direction = direction.wireValue,
+            neondraAmount = amount
+        )
+
+        viewModelScope.launch {
+            _isSaving.value = true
+            val result = repository.saveActivityAndSyncFamily(
+                record = record,
+                existingFamilies = existingFamilies,
+                existingActivities = existingActivities
+            )
+            _isSaving.value = false
+            result.onSuccess { saved ->
+                _actionMessage.value = if (matchedBeforeSave != null) {
+                    "Neondra saved & linked to Family FN ${saved.familyId}."
+                } else {
+                    "Neondra saved & created new Family FN ${saved.familyId}."
+                }
+                onSaved(saved)
+            }.onFailure { err ->
+                _actionMessage.value = err.localizedMessage ?: "Failed to save Neondra entry."
+            }
         }
     }
 
@@ -604,10 +797,10 @@ class LedgerViewModel(
                 } else {
                     ReminderScheduler.cancelReminder(context.applicationContext, saved.id)
                 }
-                _actionMessage.value = "اندراج موبائل ڈیٹابیس میں آف لائن محفوظ ہو گیا۔"
+                _actionMessage.value = "Entry saved offline to Family FN ${saved.familyId}."
                 onSaved(saved)
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "اندراج محفوظ کرنے میں مسئلہ پیش آیا۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to save entry."
             }
         }
     }
@@ -617,22 +810,23 @@ class LedgerViewModel(
         profile: FamilyProfile,
         onSaved: () -> Unit = {}
     ) {
-        val currentActivities = (dashboardState.value as? UiState.Success)?.data?.activities ?: emptyList()
-        val linked = currentActivities.filter { act ->
-            (profile.id.isNotBlank() && act.familyDocId == profile.id) ||
-                (act.familyId.isNotBlank() && act.familyId == profile.familyId &&
-                    act.name.equals(profile.name, ignoreCase = true))
-        }
+        val currentData = (dashboardState.value as? UiState.Success)?.data
+        val existingFamilies = currentData?.families ?: emptyList()
+        val existingActivities = currentData?.activities ?: emptyList()
 
         viewModelScope.launch {
             _isSaving.value = true
-            val result = repository.saveFamilyAndSyncActivities(profile, linked)
+            val result = repository.saveFamilyAndSyncActivities(
+                profile = profile,
+                existingFamilies = existingFamilies,
+                existingActivities = existingActivities
+            )
             _isSaving.value = false
-            result.onSuccess {
-                _actionMessage.value = "خاندان اور منسلک اندراجات آف لائن اپ ڈیٹ ہو گئے۔"
+            result.onSuccess { saved ->
+                _actionMessage.value = "Family FN ${saved.familyId} and linked entries updated offline."
                 onSaved()
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "خاندان محفوظ کرنے میں مسئلہ پیش آیا۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to save family."
             }
         }
     }
@@ -664,13 +858,13 @@ class LedgerViewModel(
                 )
                 if (enabled) {
                     ReminderScheduler.scheduleReminder(context.applicationContext, updated)
-                    _actionMessage.value = "یاددہانی فعال ہو گئی۔"
+                    _actionMessage.value = "Reminder enabled."
                 } else {
                     ReminderScheduler.cancelReminder(context.applicationContext, record.id)
-                    _actionMessage.value = "یاددہانی بند کر دی گئی۔"
+                    _actionMessage.value = "Reminder turned off."
                 }
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "یاددہانی اپ ڈیٹ کرنے میں مسئلہ پیش آیا۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to update reminder."
             }
         }
     }
@@ -679,7 +873,7 @@ class LedgerViewModel(
         viewModelScope.launch {
             repository.markCalendarSynced(recordId, true)
                 .onSuccess {
-                    _actionMessage.value = "اندراج موبائل کیلنڈر کے ساتھ ہم آہنگ ہو گیا۔"
+                    _actionMessage.value = "Entry synced with device calendar."
                 }
         }
     }
@@ -691,10 +885,10 @@ class LedgerViewModel(
             _isSaving.value = false
             result.onSuccess {
                 ReminderScheduler.cancelReminder(context.applicationContext, activityId)
-                _actionMessage.value = "اندراج حذف کر دیا گیا۔"
+                _actionMessage.value = "Entry deleted."
                 onDeleted()
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "اندراج حذف کرنے میں مسئلہ پیش آیا۔"
+                _actionMessage.value = err.localizedMessage ?: "Failed to delete entry."
             }
         }
     }
@@ -703,10 +897,10 @@ class LedgerViewModel(
         viewModelScope.launch {
             repository.deleteFamily(familyDocId)
                 .onSuccess {
-                    _actionMessage.value = "خاندان کا ریکارڈ حذف کر دیا گیا۔"
+                    _actionMessage.value = "Family record deleted."
                 }
                 .onFailure { err ->
-                    _actionMessage.value = err.localizedMessage ?: "خاندان حذف کرنے میں مسئلہ پیش آیا۔"
+                    _actionMessage.value = err.localizedMessage ?: "Failed to delete family."
                 }
         }
     }

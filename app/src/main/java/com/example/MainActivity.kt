@@ -1,5 +1,6 @@
 package com.example
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -20,6 +21,7 @@ import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.CalendarMonth
@@ -44,7 +46,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -54,11 +55,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -73,6 +72,7 @@ import com.example.ai.configureAppCheck
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
 import com.example.data.EventEntry
+import com.example.data.FamilyIdentityMatcher
 import com.example.data.FamilyProfile
 import com.example.data.LedgerRepository
 import com.example.data.UiState
@@ -80,6 +80,7 @@ import com.example.data.local.OccasionDiaryDatabase
 import com.example.drive.LocalBackupManager
 import com.example.reminders.ReminderReceiver
 import com.example.ui.components.NewEventFormSheet
+import com.example.ui.components.QuickNeondraSheet
 import com.example.ui.screens.ActivityDetailScreen
 import com.example.ui.screens.ActivityEditorScreen
 import com.example.ui.screens.AiAssistantScreen
@@ -121,11 +122,15 @@ class MainActivity : ComponentActivity() {
         ReminderReceiver.ensureNotificationChannel(this)
         setContent {
             MyApplicationTheme {
-                CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
-                    OccasionDiaryAppShell()
-                }
+                OccasionDiaryAppShell()
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        configureAppCheck(this, intent)
     }
 }
 
@@ -170,6 +175,12 @@ fun OccasionDiaryAppShell() {
     val singleFamilyComparisonState by viewModel.singleFamilyComparisonState.collectAsStateWithLifecycle()
     val singleFamilyAiLoading by viewModel.singleFamilyAiLoading.collectAsStateWithLifecycle()
     val singleFamilyAiError by viewModel.singleFamilyAiError.collectAsStateWithLifecycle()
+    val singleFamilyChatMessages by viewModel.singleFamilyChatMessages.collectAsStateWithLifecycle()
+    val singleFamilyChatLoading by viewModel.singleFamilyChatLoading.collectAsStateWithLifecycle()
+    val singleFamilyChatError by viewModel.singleFamilyChatError.collectAsStateWithLifecycle()
+    val multiFamilyChatMessages by viewModel.multiFamilyChatMessages.collectAsStateWithLifecycle()
+    val multiFamilyChatLoading by viewModel.multiFamilyChatLoading.collectAsStateWithLifecycle()
+    val multiFamilyChatError by viewModel.multiFamilyChatError.collectAsStateWithLifecycle()
 
     var didAttemptCategorySeed by remember { mutableStateOf(false) }
     LaunchedEffect(dashboardState) {
@@ -215,12 +226,33 @@ fun OccasionDiaryAppShell() {
     var prefilledDateMillis by remember { mutableStateOf<Long?>(null) }
 
     var showNewEventSheet by remember { mutableStateOf(false) }
+    var showQuickNeondraSheet by remember { mutableStateOf(false) }
     var editingEvent by remember { mutableStateOf<EventEntry?>(null) }
     var newEventPrefilledDate by remember { mutableStateOf<Long?>(null) }
     var aiInitialTabIndex by remember { mutableIntStateOf(0) }
 
     val allActivities = (dashboardState as? UiState.Success)?.data?.activities ?: emptyList()
     val catalog = (dashboardState as? UiState.Success)?.data?.catalog ?: DropdownCatalog()
+
+    if (showQuickNeondraSheet) {
+        QuickNeondraSheet(
+            catalog = catalog,
+            isSaving = isSaving,
+            onDismiss = { showQuickNeondraSheet = false },
+            onSaveNeondra = { name, fatherName, address, amount, direction ->
+                viewModel.saveQuickNeondra(
+                    context = context,
+                    name = name,
+                    fatherName = fatherName,
+                    address = address,
+                    amount = amount,
+                    direction = direction
+                ) {
+                    showQuickNeondraSheet = false
+                }
+            }
+        )
+    }
 
     if (showNewEventSheet) {
         NewEventFormSheet(
@@ -268,6 +300,15 @@ fun OccasionDiaryAppShell() {
                         },
                         actions = {
                             IconButton(
+                                onClick = { showQuickNeondraSheet = true },
+                                modifier = Modifier.testTag("topbar_quick_neondra_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.AccountBalanceWallet,
+                                    contentDescription = stringResource(R.string.action_quick_neondra)
+                                )
+                            }
+                            IconButton(
                                 onClick = {
                                     editingEvent = null
                                     newEventPrefilledDate = null
@@ -286,7 +327,7 @@ fun OccasionDiaryAppShell() {
                             ) {
                                 Icon(
                                     imageVector = Icons.Rounded.Category,
-                                    contentDescription = "اقسام کا انتظام"
+                                    contentDescription = "Manage Categories"
                                 )
                             }
                             IconButton(
@@ -304,7 +345,7 @@ fun OccasionDiaryAppShell() {
                                 } else {
                                     Icon(
                                         imageVector = Icons.Rounded.Download,
-                                        contentDescription = "آف لائن بیک اپ محفوظ کریں"
+                                        contentDescription = "Export Offline Backup"
                                     )
                                 }
                             }
@@ -407,6 +448,9 @@ fun OccasionDiaryAppShell() {
                             onManageCategoriesClick = {
                                 navController.navigate(ROUTE_CATEGORIES)
                             },
+                            onQuickNeondraClick = {
+                                showQuickNeondraSheet = true
+                            },
                             onNewEventClick = {
                                 editingEvent = null
                                 newEventPrefilledDate = null
@@ -507,6 +551,12 @@ fun OccasionDiaryAppShell() {
                             singleFamilyComparisonState = singleFamilyComparisonState,
                             singleFamilyAiLoading = singleFamilyAiLoading,
                             singleFamilyAiError = singleFamilyAiError,
+                            singleFamilyChatMessages = singleFamilyChatMessages,
+                            singleFamilyChatLoading = singleFamilyChatLoading,
+                            singleFamilyChatError = singleFamilyChatError,
+                            multiFamilyChatMessages = multiFamilyChatMessages,
+                            multiFamilyChatLoading = multiFamilyChatLoading,
+                            multiFamilyChatError = multiFamilyChatError,
                             initialTabIndex = aiInitialTabIndex,
                             onRunAiSearch = { query, useOnline ->
                                 viewModel.runAiSearch(query, useOnlineAi = useOnline)
@@ -514,10 +564,14 @@ fun OccasionDiaryAppShell() {
                             onClearAiSearch = viewModel::clearAiSearch,
                             onSelectSingleFamily = viewModel::selectSingleFamilyForCompare,
                             onRunSingleFamilyAiAnalysis = viewModel::runSingleFamilyOnlineAiAnalysis,
+                            onSendSingleFamilyChat = viewModel::sendSingleFamilyChatQuestion,
+                            onClearSingleFamilyChat = viewModel::clearSingleFamilyChat,
                             onToggleFamilyCompare = viewModel::toggleFamilyForComparison,
                             onSelectTopFamilies = { viewModel.selectTopFamiliesForComparison(3) },
                             onRunAiComparison = { viewModel.runAiBalanceComparison() },
                             onRunMultiFamilyAiAnalysis = viewModel::runMultiFamilyOnlineAiAnalysis,
+                            onSendMultiFamilyChat = viewModel::sendMultiFamilyChatQuestion,
+                            onClearMultiFamilyChat = viewModel::clearMultiFamilyChat,
                             onClearAiComparison = viewModel::clearAiComparison,
                             onActivityClick = { act ->
                                 selectedActivityId = act.id
@@ -585,10 +639,10 @@ fun OccasionDiaryAppShell() {
                         } else {
                             val related = remember(allActivities, selectedRecord) {
                                 allActivities.filter { other ->
-                                    (selectedRecord.familyDocId != null && other.familyDocId == selectedRecord.familyDocId) ||
-                                        (selectedRecord.familyId.isNotBlank() &&
-                                            other.familyId == selectedRecord.familyId &&
-                                            other.name.equals(selectedRecord.name, ignoreCase = true))
+                                    (!selectedRecord.familyDocId.isNullOrBlank() && other.familyDocId == selectedRecord.familyDocId) ||
+                                        (FamilyIdentityMatcher.normalizeField(other.name) == FamilyIdentityMatcher.normalizeField(selectedRecord.name) &&
+                                            FamilyIdentityMatcher.normalizeField(other.fatherName) == FamilyIdentityMatcher.normalizeField(selectedRecord.fatherName) &&
+                                            FamilyIdentityMatcher.normalizeField(other.address) == FamilyIdentityMatcher.normalizeField(selectedRecord.address))
                                 }
                             }
                             ActivityDetailScreen(

@@ -103,7 +103,6 @@ fun RemindersScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Offline device storage status card
             item {
                 Card(
                     shape = RoundedCornerShape(22.dp),
@@ -125,12 +124,12 @@ fun RemindersScreen(
                         )
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "آف لائن موبائل اسٹوریج",
+                                text = "Offline Mobile Storage",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "فون میں محفوظ • $eventsCount تقریبات، ${activities.size} اندراجات، $familiesCount خاندان",
+                                text = "Saved locally • $eventsCount events, ${activities.size} entries, $familiesCount families",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -139,7 +138,6 @@ fun RemindersScreen(
                 }
             }
 
-            // Offline Local Backup & Restore Card
             item {
                 Card(
                     shape = RoundedCornerShape(22.dp),
@@ -167,15 +165,15 @@ fun RemindersScreen(
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "فون فائل بیک اپ اور بحالی",
+                                    text = "Phone File Backup & Restore",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
                                     text = if (backupStatus.lastBackupMillis > 0L) {
-                                        "آخری بیک اپ: ${formatDisplayDate(backupStatus.lastBackupMillis)} • ${formatDisplayTime(backupStatus.lastBackupMillis)}"
+                                        "Last backup: ${formatDisplayDate(backupStatus.lastBackupMillis)} • ${formatDisplayTime(backupStatus.lastBackupMillis)}"
                                     } else {
-                                        "کسی بھی وقت اپنے فون میں JSON بیک اپ فائل محفوظ یا بحال کریں۔"
+                                        "Export or restore a JSON backup file on your device anytime."
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -220,7 +218,7 @@ fun RemindersScreen(
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("فائل محفوظ کریں")
+                                Text("Save Backup File")
                             }
 
                             OutlinedButton(
@@ -238,14 +236,13 @@ fun RemindersScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("فائل بحال کریں")
+                                Text("Restore File")
                             }
                         }
                     }
                 }
             }
 
-            // Categories Management Entry Card
             item {
                 Card(
                     shape = RoundedCornerShape(20.dp),
@@ -276,12 +273,12 @@ fun RemindersScreen(
                             )
                             Column {
                                 Text(
-                                    text = "تقریبات کی اقسام کا انتظام",
+                                    text = "Manage Occasion Categories",
                                     style = MaterialTheme.typography.titleSmall,
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = "$categoriesCount اقسام • رنگ اور آئیکن تبدیل کریں",
+                                    text = "$categoriesCount categories • Customize colors & icons",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -289,7 +286,7 @@ fun RemindersScreen(
                         }
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                            contentDescription = "اقسام کھولیں",
+                            contentDescription = "Open categories",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -298,7 +295,7 @@ fun RemindersScreen(
 
             item {
                 Text(
-                    text = "آنے والی تقریبات اور یاددہانیاں (${reminderItems.size})",
+                    text = "Upcoming Occasions & Reminders (${reminderItems.size})",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -327,7 +324,7 @@ fun RemindersScreen(
                                 modifier = Modifier.size(40.dp)
                             )
                             Text(
-                                text = "ابھی کوئی فعال یاددہانی یا آنے والی تقریب نہیں",
+                                text = "No active reminders or upcoming occasions yet",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = TextAlign.Center
@@ -422,7 +419,7 @@ fun RemindersScreen(
                                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                                             shape = RoundedCornerShape(8.dp)
                                         ) {
-                                            Text("ٹیسٹ الرٹ", style = MaterialTheme.typography.labelSmall)
+                                            Text("Test Alert", style = MaterialTheme.typography.labelSmall)
                                         }
                                     }
                                 }

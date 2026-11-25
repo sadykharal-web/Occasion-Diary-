@@ -1,8 +1,11 @@
 package com.example
 
+import com.example.ai.AiAssistantRepository
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.EventEntry
+import com.example.data.FamilyIdentityMatcher
+import com.example.data.FamilyProfile
 import com.example.ui.components.formatNeondraAmount
 import com.example.ui.components.formatReminderOffsetLabel
 import com.example.ui.screens.UpcomingOccasionItem
@@ -10,6 +13,8 @@ import com.example.ui.screens.buildUpcomingOccasionItems
 import com.example.ui.screens.formatRelativeDayBadge
 import com.example.ui.screens.localDayStartMillis
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.TimeUnit
@@ -33,10 +38,10 @@ class LedgerLogicTest {
     }
 
     @Test
-    fun `formatReminderOffsetLabel returns Urdu labels`() {
-        assertEquals("تقریب کے وقت", formatReminderOffsetLabel(0L))
-        assertEquals("1 گھنٹہ پہلے", formatReminderOffsetLabel(60L))
-        assertEquals("1 دن پہلے", formatReminderOffsetLabel(1440L))
+    fun `formatReminderOffsetLabel returns English labels`() {
+        assertEquals("At event time", formatReminderOffsetLabel(0L))
+        assertEquals("1 hour before", formatReminderOffsetLabel(60L))
+        assertEquals("1 day before", formatReminderOffsetLabel(1440L))
     }
 
     @Test
@@ -99,22 +104,71 @@ class LedgerLogicTest {
     }
 
     @Test
-    fun `formatRelativeDayBadge produces clear relative labels`() {
+    fun `formatRelativeDayBadge produces clear relative English labels`() {
         val now = 1_764_000_000_000L
         val today = localDayStartMillis(now) + TimeUnit.HOURS.toMillis(10)
-        assertEquals("آج", formatRelativeDayBadge(today, now))
-        assertEquals("کل", formatRelativeDayBadge(today + TimeUnit.DAYS.toMillis(1), now))
-        assertEquals("5 دن بعد", formatRelativeDayBadge(today + TimeUnit.DAYS.toMillis(5), now))
-        assertEquals("گزشتہ", formatRelativeDayBadge(today - TimeUnit.DAYS.toMillis(2), now))
+        assertEquals("Today", formatRelativeDayBadge(today, now))
+        assertEquals("Tomorrow", formatRelativeDayBadge(today + TimeUnit.DAYS.toMillis(1), now))
+        assertEquals("In 5 days", formatRelativeDayBadge(today + TimeUnit.DAYS.toMillis(5), now))
+        assertEquals("Past", formatRelativeDayBadge(today - TimeUnit.DAYS.toMillis(2), now))
+    }
+
+    @Test
+    fun `FamilyIdentityMatcher matches exact 3 fields and assigns distinct FN otherwise`() {
+        val existingFamilies = listOf(
+            FamilyProfile(
+                id = "fam_1",
+                familyId = "1",
+                name = "Ali Raza",
+                fatherName = "Muhammad Ramzan",
+                address = "Kot Ramzan"
+            )
+        )
+
+        val sameFamily = FamilyIdentityMatcher.resolveForActivity(
+            name = "  ali   raza ",
+            fatherName = "muhammad ramzan",
+            address = "  kot  ramzan ",
+            requestedFn = "",
+            existingFamilies = existingFamilies,
+            existingActivities = emptyList()
+        )
+        assertTrue(sameFamily.matchedExisting)
+        assertEquals("fam_1", sameFamily.familyProfile.id)
+        assertEquals("1", sameFamily.familyProfile.familyId)
+
+        val differentFather = FamilyIdentityMatcher.resolveForActivity(
+            name = "Ali Raza",
+            fatherName = "Ghulam Rasool",
+            address = "Kot Ramzan",
+            requestedFn = "",
+            existingFamilies = existingFamilies,
+            existingActivities = emptyList()
+        )
+        assertFalse(differentFather.matchedExisting)
+        assertNotEquals("fam_1", differentFather.familyProfile.id)
+        assertEquals("2", differentFather.familyProfile.familyId)
+
+        val differentAddress = FamilyIdentityMatcher.resolveForActivity(
+            name = "Ali Raza",
+            fatherName = "Muhammad Ramzan",
+            address = "Lahore",
+            requestedFn = "1",
+            existingFamilies = existingFamilies,
+            existingActivities = emptyList()
+        )
+        assertFalse(differentAddress.matchedExisting)
+        assertNotEquals("fam_1", differentAddress.familyProfile.id)
+        assertEquals("2", differentAddress.familyProfile.familyId)
     }
 
     @Test
     fun `offline smart search matches families upcoming occasions and highest In balance`() {
-        val repo = com.example.ai.AiAssistantRepository()
+        val repo = AiAssistantRepository()
         val now = System.currentTimeMillis()
         val families = listOf(
-            com.example.data.FamilyProfile(id = "f1", familyId = "101", name = "Ali Khan", address = "Lahore"),
-            com.example.data.FamilyProfile(id = "f2", familyId = "102", name = "Bilal Ahmed", address = "Karachi")
+            FamilyProfile(id = "f1", familyId = "101", name = "Ali Khan", address = "Lahore"),
+            FamilyProfile(id = "f2", familyId = "102", name = "Bilal Ahmed", address = "Karachi")
         )
         val activities = listOf(
             ActivityRecord(id = "a1", familyDocId = "f1", familyId = "101", name = "Ali Khan", direction = "IN", neondraAmount = 15000L, eventType = "Wedding", eventDateMillis = now),
@@ -140,9 +194,9 @@ class LedgerLogicTest {
 
     @Test
     fun `offline balance comparison calculates exact In Out and Net totals`() {
-        val repo = com.example.ai.AiAssistantRepository()
-        val fam1 = com.example.data.FamilyProfile(id = "f1", familyId = "101", name = "Ali Khan")
-        val fam2 = com.example.data.FamilyProfile(id = "f2", familyId = "102", name = "Bilal Ahmed")
+        val repo = AiAssistantRepository()
+        val fam1 = FamilyProfile(id = "f1", familyId = "101", name = "Ali Khan")
+        val fam2 = FamilyProfile(id = "f2", familyId = "102", name = "Bilal Ahmed")
         val activities = listOf(
             ActivityRecord(id = "a1", familyDocId = "f1", name = "Ali Khan", direction = "IN", neondraAmount = 20000L),
             ActivityRecord(id = "a2", familyDocId = "f1", name = "Ali Khan", direction = "OUT", neondraAmount = 5000L),
@@ -155,12 +209,16 @@ class LedgerLogicTest {
         assertEquals(20000L, aliStats.totalIn)
         assertEquals(5000L, aliStats.totalOut)
         assertEquals(15000L, aliStats.netBalance)
+
+        val followUpUrdu = repo.answerMultiFamilyFollowUpOffline("Which family has highest In?", comparison)
+        assertTrue(followUpUrdu.contains("Ali Khan"))
+        assertTrue(followUpUrdu.contains("آمدن"))
     }
 
     @Test
-    fun `single family In vs Out comparison separates In and Out entries accurately`() {
-        val repo = com.example.ai.AiAssistantRepository()
-        val fam = com.example.data.FamilyProfile(id = "f1", familyId = "101", name = "Ali Khan")
+    fun `single family In vs Out comparison and follow-up Urdu answers work accurately`() {
+        val repo = AiAssistantRepository()
+        val fam = FamilyProfile(id = "f1", familyId = "101", name = "Ali Khan")
         val activities = listOf(
             ActivityRecord(id = "a1", familyDocId = "f1", name = "Ali Khan", direction = "IN", neondraAmount = 25000L, eventType = "Wedding"),
             ActivityRecord(id = "a2", familyDocId = "f1", name = "Ali Khan", direction = "IN", neondraAmount = 5000L, eventType = "Dinner"),
@@ -177,6 +235,10 @@ class LedgerLogicTest {
         assertEquals(25000L, weddingBreakdown.totalIn)
         assertEquals(12000L, weddingBreakdown.totalOut)
         assertEquals(13000L, weddingBreakdown.netBalance)
+
+        val followUpUrdu = repo.answerSingleFamilyFollowUpOffline("How much should I give next?", singleCmp)
+        assertTrue(followUpUrdu.contains("18,000"))
+        assertTrue(followUpUrdu.contains("روپے"))
     }
 
     @Test
@@ -249,4 +311,3 @@ class LedgerLogicTest {
         assertEquals(sampleLocalStart, backToLocal)
     }
 }
-

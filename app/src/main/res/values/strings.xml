@@ -1,52 +1,53 @@
 <resources>
     <string name="app_name">Life Line</string>
-    <string name="app_tagline">خاندانی تقریبات، لین دین، بیلنس، یاددہانیوں اور موازنے کا مکمل آف لائن ریکارڈ</string>
+    <string name="app_tagline">Offline family occasion diary, In/Out ledger, reminders &amp; AI insights</string>
 
     <!-- Navigation -->
-    <string name="nav_ledger">کھاتہ</string>
-    <string name="nav_calendar">تقریبات</string>
-    <string name="nav_families">خاندان</string>
-    <string name="nav_ai">تلاش و اے آئی</string>
-    <string name="nav_reminders">ترتیبات</string>
+    <string name="nav_ledger">Ledger</string>
+    <string name="nav_calendar">Events</string>
+    <string name="nav_families">Families</string>
+    <string name="nav_ai">Search &amp; AI</string>
+    <string name="nav_reminders">Settings</string>
 
     <!-- Onboarding / App Highlights -->
-    <string name="app_welcome_title">لائف لائن میں خوش آمدید</string>
-    <string name="app_welcome_subtitle">اپنے خاندان، آنے والی تقریبات اور نیوندرا کھاتہ 100% آف لائن اپنے فون میں محفوظ رکھیں۔</string>
-    <string name="app_feature_sync">نام، خاندان نمبر (FN) اور پتے کی خودکار فہرست</string>
-    <string name="app_feature_reminders">تقریبات کی یاددہانیاں، الارم اور کیلنڈر میں شمولیت</string>
-    <string name="app_feature_ledger">آمدن اور خرچ کا مکمل حساب اور فوری موازنہ</string>
+    <string name="app_welcome_title">Welcome to Life Line</string>
+    <string name="app_welcome_subtitle">Keep your families, upcoming occasions, and Neondra ledger 100% offline on your device.</string>
+    <string name="app_feature_sync">Automatic family grouping by Name, Father\'s Name &amp; Address</string>
+    <string name="app_feature_reminders">Occasion reminders, alerts, and device calendar sync</string>
+    <string name="app_feature_ledger">Complete In &amp; Out tracking with instant comparisons</string>
 
     <!-- Fields -->
-    <string name="field_name">نام</string>
-    <string name="field_fn">خاندان نمبر (FN)</string>
-    <string name="field_father">والد کا نام</string>
-    <string name="field_address">پتہ</string>
-    <string name="field_event">تقریب / کیٹیگری</string>
-    <string name="field_e_detail">تقریب کی تفصیل</string>
-    <string name="field_date">تاریخ</string>
-    <string name="field_in_out">لین دین (آمدن / خرچ)</string>
-    <string name="field_home">گھریلو تحائف / اشیاء</string>
-    <string name="field_neondra">رقم</string>
+    <string name="field_name">Name</string>
+    <string name="field_fn">Family Number (FN)</string>
+    <string name="field_father">Father\'s Name</string>
+    <string name="field_address">Address</string>
+    <string name="field_event">Event / Category</string>
+    <string name="field_e_detail">Event Details</string>
+    <string name="field_date">Date</string>
+    <string name="field_in_out">Transaction (In / Out)</string>
+    <string name="field_home">Home Gifts / Items</string>
+    <string name="field_neondra">Neondra Amount</string>
 
     <!-- Directions -->
-    <string name="direction_in">آمدن (وصول)</string>
-    <string name="direction_out">خرچ (دیے گئے)</string>
-    <string name="direction_in_short">آمدن</string>
-    <string name="direction_out_short">خرچ</string>
+    <string name="direction_in">In (Received)</string>
+    <string name="direction_out">Out (Given)</string>
+    <string name="direction_in_short">In</string>
+    <string name="direction_out_short">Out</string>
 
     <!-- Actions -->
-    <string name="action_add_record">نیا اندراج</string>
-    <string name="action_new_event">نئی تقریب</string>
-    <string name="action_edit_record">ترمیم</string>
-    <string name="action_save">محفوظ کریں</string>
-    <string name="action_cancel">منسوخ</string>
-    <string name="action_delete">حذف کریں</string>
-    <string name="action_add_to_calendar">ڈیوائس کیلنڈر میں شامل کریں</string>
-    <string name="action_retry">دوبارہ کوشش</string>
+    <string name="action_add_record">Add Entry</string>
+    <string name="action_quick_neondra">Neondra</string>
+    <string name="action_new_event">New Event</string>
+    <string name="action_edit_record">Edit</string>
+    <string name="action_save">Save</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_add_to_calendar">Add to Device Calendar</string>
+    <string name="action_retry">Retry</string>
 
     <!-- Reminders & Calendar -->
-    <string name="reminder_enable">یاددہانی آن کریں</string>
-    <string name="reminder_channel_name">تقریبات اور کھاتہ یاددہانیاں</string>
-    <string name="reminder_channel_desc">آنے والی تقریبات اور اندراجات کی طے شدہ اطلاعات</string>
-    <string name="permission_notifications_rationale">طے شدہ یاددہانی دکھانے کے لیے نوٹیفیکیشن کی اجازت درکار ہے۔</string>
+    <string name="reminder_enable">Enable Reminder</string>
+    <string name="reminder_channel_name">Occasion &amp; Ledger Reminders</string>
+    <string name="reminder_channel_desc">Scheduled alerts for upcoming occasions and ledger entries</string>
+    <string name="permission_notifications_rationale">Notification permission is needed to show scheduled reminders.</string>
 </resources>

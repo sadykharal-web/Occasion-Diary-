@@ -50,13 +50,13 @@ class LedgerRepository(
         return try {
             val cleanTitle = entry.title.trim().take(120)
             val cleanDescription = entry.description.trim().take(1000)
-            val cleanCategory = entry.category.trim().take(80).ifEmpty { "تقریب" }
+            val cleanCategory = entry.category.trim().take(80).ifEmpty { "Occasion" }
             val cleanLocation = entry.location.trim().take(200)
             val cleanFamilyDocId = entry.familyDocId?.trim()?.take(128)?.ifEmpty { null }
             val cleanFamilyName = entry.familyName.trim().take(100)
             val safeDateMillis = entry.eventDateMillis.coerceAtLeast(0L)
 
-            require(cleanTitle.isNotEmpty()) { "براہ کرم تقریب کا نام درج کریں۔" }
+            require(cleanTitle.isNotEmpty()) { "Please enter an event title." }
 
             val now = System.currentTimeMillis()
             val resolvedId = entry.id.trim().ifEmpty { UUID.randomUUID().toString() }
@@ -85,7 +85,7 @@ class LedgerRepository(
 
     suspend fun deleteEvent(eventId: String): Result<Unit> {
         return try {
-            require(eventId.isNotBlank()) { "تقریب کی شناخت خالی نہیں ہونی چاہیے۔" }
+            require(eventId.isNotBlank()) { "Event ID cannot be blank." }
             dao.deleteEvent(eventId)
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -127,9 +127,9 @@ class LedgerRepository(
             val cleanName = category.name.trim().take(80)
             val cleanColor = category.colorHex.trim().take(9)
             val cleanIcon = category.iconKey.trim().take(40)
-            require(cleanName.isNotEmpty()) { "براہ کرم کیٹیگری کا نام درج کریں۔" }
+            require(cleanName.isNotEmpty()) { "Please enter a category name." }
             require(cleanColor.matches(Regex("^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$"))) {
-                "غلط رنگ کا کوڈ۔"
+                "Invalid color code."
             }
 
             val now = System.currentTimeMillis()
@@ -160,7 +160,7 @@ class LedgerRepository(
 
     suspend fun deleteCategory(categoryId: String): Result<Unit> {
         return try {
-            require(categoryId.isNotBlank()) { "کیٹیگری کی شناخت خالی نہیں ہونی چاہیے۔" }
+            require(categoryId.isNotBlank()) { "Category ID cannot be blank." }
             dao.deleteCategory(categoryId)
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -173,7 +173,7 @@ class LedgerRepository(
     suspend fun saveActivityAndSyncFamily(
         record: ActivityRecord,
         existingFamilies: List<FamilyProfile>,
-        @Suppress("UNUSED_PARAMETER") existingActivities: List<ActivityRecord>
+        existingActivities: List<ActivityRecord>
     ): Result<ActivityRecord> {
         return try {
             val cleanName = record.name.trim().take(100)
@@ -184,56 +184,34 @@ class LedgerRepository(
             val cleanDetail = record.eventDetail.trim().take(250)
             val cleanHome = record.homeItems.trim().take(1000)
 
-            require(cleanName.isNotEmpty()) { "براہ کرم فرد یا خاندان کا نام درج کریں۔" }
-            require(cleanEvent.isNotEmpty()) { "براہ کرم تقریب یا کیٹیگری منتخب کریں۔" }
-            require(record.neondraAmount in 0L..1_000_000_000L) { "رقم درست حد کے اندر ہونی چاہیے۔" }
+            require(cleanName.isNotEmpty()) { "Please enter a person or family name." }
+            require(cleanEvent.isNotEmpty()) { "Please select an event or category." }
+            require(record.neondraAmount in 0L..1_000_000_000L) { "Amount must be within valid limits." }
 
             val now = System.currentTimeMillis()
-            var resolvedFamilyDocId: String? = record.familyDocId?.takeIf { it.isNotBlank() }
+            val resolution = FamilyIdentityMatcher.resolveForActivity(
+                name = cleanName,
+                fatherName = cleanFather,
+                address = cleanAddress,
+                requestedFn = cleanFn,
+                existingFamilies = existingFamilies,
+                existingActivities = existingActivities,
+                nowMillis = now
+            )
 
-            if (cleanFn.isNotEmpty() || cleanName.isNotEmpty()) {
-                val effectiveFn = cleanFn.ifEmpty {
-                    val maxNum = existingFamilies.mapNotNull { it.familyId.toIntOrNull() }.maxOrNull() ?: 0
-                    (maxNum + 1).toString()
-                }
-                val matchedFamily = existingFamilies.firstOrNull { fam ->
-                    (resolvedFamilyDocId != null && fam.id == resolvedFamilyDocId) ||
-                        (fam.name.equals(cleanName, ignoreCase = true) &&
-                            (fam.familyId == effectiveFn || fam.fatherName.equals(cleanFather, ignoreCase = true))) ||
-                        (cleanFn.isNotEmpty() && fam.familyId == cleanFn && fam.name.equals(cleanName, ignoreCase = true))
-                }
-
-                if (matchedFamily != null) {
-                    resolvedFamilyDocId = matchedFamily.id
-                    dao.upsertFamily(
-                        FamilyEntity(
-                            id = matchedFamily.id,
-                            familyId = effectiveFn,
-                            name = cleanName,
-                            fatherName = cleanFather.ifEmpty { matchedFamily.fatherName },
-                            address = cleanAddress.ifEmpty { matchedFamily.address },
-                            phone = matchedFamily.phone,
-                            createdAtMillis = matchedFamily.createdAtMillis,
-                            updatedAtMillis = now
-                        )
-                    )
-                } else {
-                    val newFamId = UUID.randomUUID().toString()
-                    resolvedFamilyDocId = newFamId
-                    dao.upsertFamily(
-                        FamilyEntity(
-                            id = newFamId,
-                            familyId = effectiveFn,
-                            name = cleanName,
-                            fatherName = cleanFather,
-                            address = cleanAddress,
-                            phone = null,
-                            createdAtMillis = now,
-                            updatedAtMillis = now
-                        )
-                    )
-                }
-            }
+            val resolvedFamily = resolution.familyProfile
+            dao.upsertFamily(
+                FamilyEntity(
+                    id = resolvedFamily.id,
+                    familyId = resolvedFamily.familyId,
+                    name = resolvedFamily.name,
+                    fatherName = resolvedFamily.fatherName,
+                    address = resolvedFamily.address,
+                    phone = resolvedFamily.phone,
+                    createdAtMillis = resolvedFamily.createdAtMillis,
+                    updatedAtMillis = now
+                )
+            )
 
             val isNew = record.id.isBlank()
             val resolvedActId = if (isNew) UUID.randomUUID().toString() else record.id
@@ -244,11 +222,11 @@ class LedgerRepository(
 
             val entity = ActivityEntity(
                 id = resolvedActId,
-                familyDocId = resolvedFamilyDocId,
-                familyId = cleanFn,
-                name = cleanName,
-                fatherName = cleanFather,
-                address = cleanAddress,
+                familyDocId = resolvedFamily.id,
+                familyId = resolvedFamily.familyId,
+                name = resolvedFamily.name,
+                fatherName = resolvedFamily.fatherName,
+                address = resolvedFamily.address,
                 eventType = cleanEvent,
                 eventDetail = cleanDetail,
                 eventDateMillis = safeEventMillis,
@@ -264,13 +242,13 @@ class LedgerRepository(
             )
             dao.upsertActivity(entity)
 
-            if (!isNew && resolvedFamilyDocId != null) {
+            if (!isNew) {
                 dao.syncFamilyFieldsToActivities(
-                    familyDocId = resolvedFamilyDocId,
-                    familyId = cleanFn,
-                    name = cleanName,
-                    fatherName = cleanFather,
-                    address = cleanAddress,
+                    familyDocId = resolvedFamily.id,
+                    familyId = resolvedFamily.familyId,
+                    name = resolvedFamily.name,
+                    fatherName = resolvedFamily.fatherName,
+                    address = resolvedFamily.address,
                     updatedAtMillis = now
                 )
             }
@@ -285,7 +263,8 @@ class LedgerRepository(
 
     suspend fun saveFamilyAndSyncActivities(
         profile: FamilyProfile,
-        @Suppress("UNUSED_PARAMETER") linkedActivities: List<ActivityRecord>
+        existingFamilies: List<FamilyProfile>,
+        existingActivities: List<ActivityRecord>
     ): Result<FamilyProfile> {
         return try {
             val cleanFn = profile.familyId.trim().take(40)
@@ -294,29 +273,50 @@ class LedgerRepository(
             val cleanAddress = profile.address.trim().take(200)
             val cleanPhone = profile.phone?.trim()?.take(30)?.ifEmpty { null }
 
-            require(cleanFn.isNotEmpty()) { "براہ کرم خاندان نمبر (FN) درج کریں۔" }
-            require(cleanName.isNotEmpty()) { "براہ کرم خاندان کا نام درج کریں۔" }
+            require(cleanName.isNotEmpty()) { "Please enter a family name." }
 
             val now = System.currentTimeMillis()
-            val isNew = profile.id.isBlank()
-            val resolvedId = if (isNew) UUID.randomUUID().toString() else profile.id
+            val threeFieldMatch = FamilyIdentityMatcher.findMatchingFamily(
+                families = existingFamilies,
+                name = cleanName,
+                fatherName = cleanFather,
+                address = cleanAddress
+            )
+
+            val resolvedId = when {
+                profile.id.isNotBlank() -> profile.id
+                threeFieldMatch != null -> threeFieldMatch.id
+                else -> UUID.randomUUID().toString()
+            }
+
+            val existingTarget = existingFamilies.firstOrNull { it.id == resolvedId }
+            val resolvedFn = when {
+                threeFieldMatch != null && profile.id.isBlank() && threeFieldMatch.familyId.isNotBlank() ->
+                    threeFieldMatch.familyId
+                cleanFn.isNotEmpty() && !FamilyIdentityMatcher.isFnUsedByDifferentFamily(cleanFn, resolvedId, existingFamilies) ->
+                    cleanFn
+                existingTarget != null && existingTarget.familyId.isNotBlank() &&
+                    !FamilyIdentityMatcher.isFnUsedByDifferentFamily(existingTarget.familyId, resolvedId, existingFamilies) ->
+                    existingTarget.familyId
+                else -> FamilyIdentityMatcher.nextUniqueFamilyNumber(existingFamilies, existingActivities)
+            }
 
             val entity = FamilyEntity(
                 id = resolvedId,
-                familyId = cleanFn,
+                familyId = resolvedFn,
                 name = cleanName,
                 fatherName = cleanFather,
                 address = cleanAddress,
-                phone = cleanPhone,
-                createdAtMillis = if (isNew) now else profile.createdAtMillis,
+                phone = cleanPhone ?: existingTarget?.phone,
+                createdAtMillis = existingTarget?.createdAtMillis ?: if (profile.id.isBlank()) now else profile.createdAtMillis,
                 updatedAtMillis = now
             )
             dao.upsertFamily(entity)
 
-            if (!isNew) {
+            if (existingTarget != null) {
                 dao.syncFamilyFieldsToActivities(
                     familyDocId = resolvedId,
-                    familyId = cleanFn,
+                    familyId = resolvedFn,
                     name = cleanName,
                     fatherName = cleanFather,
                     address = cleanAddress,
@@ -389,7 +389,7 @@ class LedgerRepository(
                         name = act.name.trim().take(100),
                         fatherName = act.fatherName.trim().take(100),
                         address = act.address.trim().take(200),
-                        eventType = act.eventType.trim().take(80).ifEmpty { "شادی" },
+                        eventType = act.eventType.trim().take(80).ifEmpty { "Wedding" },
                         eventDetail = act.eventDetail.trim().take(250),
                         eventDateMillis = act.eventDateMillis.coerceAtLeast(0L),
                         direction = ActivityDirection.fromWire(act.direction).wireValue,
@@ -415,7 +415,7 @@ class LedgerRepository(
                         title = evt.title.trim().take(120),
                         description = evt.description.trim().take(1000),
                         eventDateMillis = evt.eventDateMillis.coerceAtLeast(0L),
-                        category = evt.category.trim().take(80).ifEmpty { "تقریب" },
+                        category = evt.category.trim().take(80).ifEmpty { "Occasion" },
                         location = evt.location.trim().take(200),
                         familyDocId = evt.familyDocId?.takeIf { it.isNotBlank() },
                         familyName = evt.familyName.trim().take(100),
@@ -440,7 +440,7 @@ class LedgerRepository(
         minutesBefore: Long
     ): Result<Unit> {
         return try {
-            require(activityId.isNotBlank()) { "اندراج کی شناخت خالی نہیں ہونی چاہیے۔" }
+            require(activityId.isNotBlank()) { "Entry ID cannot be blank." }
             dao.updateReminder(
                 activityId = activityId,
                 enabled = enabled,
@@ -458,7 +458,7 @@ class LedgerRepository(
 
     suspend fun markCalendarSynced(activityId: String, synced: Boolean): Result<Unit> {
         return try {
-            require(activityId.isNotBlank()) { "اندراج کی شناخت خالی نہیں ہونی چاہیے۔" }
+            require(activityId.isNotBlank()) { "Entry ID cannot be blank." }
             dao.updateCalendarSynced(activityId, synced, System.currentTimeMillis())
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -470,7 +470,7 @@ class LedgerRepository(
 
     suspend fun deleteActivity(activityId: String): Result<Unit> {
         return try {
-            require(activityId.isNotBlank()) { "اندراج کی شناخت خالی نہیں ہونی چاہیے۔" }
+            require(activityId.isNotBlank()) { "Entry ID cannot be blank." }
             dao.deleteActivity(activityId)
             Result.success(Unit)
         } catch (e: CancellationException) {
@@ -482,7 +482,7 @@ class LedgerRepository(
 
     suspend fun deleteFamily(familyDocId: String): Result<Unit> {
         return try {
-            require(familyDocId.isNotBlank()) { "خاندان کی شناخت خالی نہیں ہونی چاہیے۔" }
+            require(familyDocId.isNotBlank()) { "Family ID cannot be blank." }
             dao.deleteFamily(familyDocId)
             Result.success(Unit)
         } catch (e: CancellationException) {
