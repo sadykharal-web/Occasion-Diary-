@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,6 +30,8 @@ import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,6 +55,8 @@ import com.example.data.ActivityDirection
 import com.example.data.DropdownCatalog
 import com.example.data.FamilyIdentityMatcher
 
+private val QUICK_NEONDRA_EVENT_TYPES = listOf("Aqiqah", "Birthday", "Shadi", "Nikah")
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QuickNeondraSheet(
@@ -61,6 +67,7 @@ fun QuickNeondraSheet(
         name: String,
         fatherName: String,
         address: String,
+        eventType: String,
         eventDetail: String,
         amount: Long,
         direction: ActivityDirection
@@ -86,6 +93,7 @@ fun QuickNeondraSheet(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun QuickNeondraContent(
     catalog: DropdownCatalog,
@@ -95,6 +103,7 @@ fun QuickNeondraContent(
         name: String,
         fatherName: String,
         address: String,
+        eventType: String,
         eventDetail: String,
         amount: Long,
         direction: ActivityDirection
@@ -104,6 +113,7 @@ fun QuickNeondraContent(
     var name by remember { mutableStateOf("") }
     var fatherName by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
+    var eventType by remember { mutableStateOf(QUICK_NEONDRA_EVENT_TYPES.first()) }
     var eventDetail by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
     var direction by remember { mutableStateOf(ActivityDirection.OUT) }
@@ -290,6 +300,47 @@ fun QuickNeondraContent(
             }
         }
 
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "Event Type *",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                QUICK_NEONDRA_EVENT_TYPES.forEach { typeName ->
+                    val isSelected = eventType == typeName
+                    val (catColor, catIcon) = catalog.resolveCategoryVisual(typeName)
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { eventType = typeName },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (isSelected) Icons.Rounded.Check else catIcon,
+                                contentDescription = null,
+                                tint = catColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        },
+                        label = {
+                            Text(
+                                text = typeName,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = catColor.copy(alpha = 0.16f),
+                            selectedLabelColor = catColor
+                        ),
+                        modifier = Modifier.testTag("quick_neondra_event_type_${typeName.lowercase()}")
+                    )
+                }
+            }
+        }
+
         OutlinedTextField(
             value = eventDetail,
             onValueChange = {
@@ -297,7 +348,7 @@ fun QuickNeondraContent(
                 if (validationError != null) validationError = null
             },
             label = { Text("Event Detail") },
-            placeholder = { Text("e.g. Son Wedding, Walima, Family Gathering...") },
+            placeholder = { Text("e.g. Son Wedding, Nikah ceremony...") },
             leadingIcon = { Icon(Icons.Rounded.Description, contentDescription = null) },
             minLines = 1,
             maxLines = 2,
@@ -427,6 +478,7 @@ fun QuickNeondraContent(
                             cleanName,
                             cleanFather,
                             cleanAddress,
+                            eventType,
                             cleanDetail,
                             amount,
                             direction

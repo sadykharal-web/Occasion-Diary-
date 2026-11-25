@@ -283,6 +283,8 @@ object CategoryStyleCatalog {
     )
 
     private val LEGACY_SEEDS = listOf(
+        DefaultCategorySeed("Shadi", "#D81B60", "celebration"),
+        DefaultCategorySeed("Nikah", "#0F5C4D", "mosque"),
         DefaultCategorySeed("شادی", "#D81B60", "celebration"),
         DefaultCategorySeed("ولیمہ", "#0F5C4D", "restaurant"),
         DefaultCategorySeed("نیوندرا", "#0F5C4D", "payments"),

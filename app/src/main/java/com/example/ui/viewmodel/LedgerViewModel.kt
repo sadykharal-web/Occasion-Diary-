@@ -24,6 +24,7 @@ import com.example.drive.LocalBackupManager
 import com.example.drive.LocalBackupStatus
 import com.example.reminders.ReminderScheduler
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -131,6 +132,12 @@ class LedgerViewModel(
 
     private val _multiFamilyChatError = MutableStateFlow<String?>(null)
     val multiFamilyChatError: StateFlow<String?> = _multiFamilyChatError.asStateFlow()
+
+    private var aiSearchJob: Job? = null
+    private var singleFamilyAiJob: Job? = null
+    private var multiFamilyAiJob: Job? = null
+    private var singleFamilyChatJob: Job? = null
+    private var multiFamilyChatJob: Job? = null
 
     val dashboardState: StateFlow<UiState<LedgerDashboardData>> = combine(
         repository.observeActivities(),
@@ -310,7 +317,8 @@ class LedgerViewModel(
             _aiSearchState.value = UiState.Error("Your offline ledger data is still loading. Please try again.")
             return
         }
-        viewModelScope.launch {
+        aiSearchJob?.cancel()
+        aiSearchJob = viewModelScope.launch {
             _aiSearchState.value = UiState.Loading
             val result = if (useOnlineAi) {
                 aiRepository.searchFamiliesAndEventsOnline(
@@ -335,6 +343,7 @@ class LedgerViewModel(
     }
 
     fun clearAiSearch() {
+        aiSearchJob?.cancel()
         _aiSearchState.value = null
     }
 
@@ -343,9 +352,11 @@ class LedgerViewModel(
     fun selectSingleFamilyForCompare(familyDocId: String) {
         val switchedFamily = _selectedSingleFamilyId.value != familyDocId
         _selectedSingleFamilyId.value = familyDocId
-        _singleFamilyAiError.value = null
-        _singleFamilyAiLoading.value = false
         if (switchedFamily) {
+            singleFamilyAiJob?.cancel()
+            singleFamilyChatJob?.cancel()
+            _singleFamilyAiError.value = null
+            _singleFamilyAiLoading.value = false
             _singleFamilyChatMessages.value = emptyList()
             _singleFamilyChatError.value = null
             _singleFamilyChatLoading.value = false
@@ -382,24 +393,32 @@ class LedgerViewModel(
                 )
             )
         }
-        viewModelScope.launch {
+        singleFamilyAiJob?.cancel()
+        singleFamilyAiJob = viewModelScope.launch {
             _singleFamilyAiLoading.value = true
             _singleFamilyAiError.value = null
-            val result = aiRepository.analyzeWithinSingleFamilyOnline(
-                family = family,
-                activities = data.activities,
-                events = data.events
-            )
-            _singleFamilyAiLoading.value = false
-            result.onSuccess { aiComparison ->
-                _singleFamilyComparisonState.value = UiState.Success(aiComparison)
-            }.onFailure { err ->
-                _singleFamilyAiError.value = err.localizedMessage ?: "Online AI comparison failed."
+            try {
+                val result = aiRepository.analyzeWithinSingleFamilyOnline(
+                    family = family,
+                    activities = data.activities,
+                    events = data.events
+                )
+                if (_selectedSingleFamilyId.value == family.id) {
+                    result.onSuccess { aiComparison ->
+                        _singleFamilyComparisonState.value = UiState.Success(aiComparison)
+                    }.onFailure { err ->
+                        _singleFamilyAiError.value = err.localizedMessage ?: "Online AI comparison failed."
+                    }
+                }
+            } finally {
+                _singleFamilyAiLoading.value = false
             }
         }
     }
 
     fun clearSingleFamilyComparison() {
+        singleFamilyAiJob?.cancel()
+        singleFamilyChatJob?.cancel()
         _singleFamilyComparisonState.value = null
         _singleFamilyAiLoading.value = false
         _singleFamilyAiError.value = null
@@ -437,27 +456,32 @@ class LedgerViewModel(
         }
 
         val contextSnapshot = aiRepository.buildSingleFamilyChatContext(comparison)
-        viewModelScope.launch {
+        singleFamilyChatJob?.cancel()
+        singleFamilyChatJob = viewModelScope.launch {
             _singleFamilyChatLoading.value = true
-            val result = aiRepository.askComparisonFollowUpOnline(
-                question = cleanQuestion,
-                comparisonContext = contextSnapshot,
-                history = previousHistory
-            )
-            _singleFamilyChatLoading.value = false
-            result.onSuccess { reply ->
-                _singleFamilyChatMessages.value = _singleFamilyChatMessages.value + AiFollowUpChatMessage(
-                    isUser = false,
-                    text = reply,
-                    isOnlineAi = true
+            try {
+                val result = aiRepository.askComparisonFollowUpOnline(
+                    question = cleanQuestion,
+                    comparisonContext = contextSnapshot,
+                    history = previousHistory
                 )
-            }.onFailure { err ->
-                _singleFamilyChatError.value = err.localizedMessage ?: "Follow-up AI chat failed."
+                result.onSuccess { reply ->
+                    _singleFamilyChatMessages.value = _singleFamilyChatMessages.value + AiFollowUpChatMessage(
+                        isUser = false,
+                        text = reply,
+                        isOnlineAi = true
+                    )
+                }.onFailure { err ->
+                    _singleFamilyChatError.value = err.localizedMessage ?: "Follow-up AI chat failed."
+                }
+            } finally {
+                _singleFamilyChatLoading.value = false
             }
         }
     }
 
     fun clearSingleFamilyChat() {
+        singleFamilyChatJob?.cancel()
         _singleFamilyChatMessages.value = emptyList()
         _singleFamilyChatLoading.value = false
         _singleFamilyChatError.value = null
@@ -529,24 +553,30 @@ class LedgerViewModel(
             val local = aiRepository.compareFamilyBalances(selected, data.activities, data.events)
             local.onSuccess { _aiComparisonState.value = UiState.Success(it) }
         }
-        viewModelScope.launch {
+        multiFamilyAiJob?.cancel()
+        multiFamilyAiJob = viewModelScope.launch {
             _multiFamilyAiLoading.value = true
             _multiFamilyAiError.value = null
-            val result = aiRepository.analyzeMultiFamilyOnline(
-                selectedFamilies = selected,
-                activities = data.activities,
-                events = data.events
-            )
-            _multiFamilyAiLoading.value = false
-            result.onSuccess { aiComp ->
-                _aiComparisonState.value = UiState.Success(aiComp)
-            }.onFailure { err ->
-                _multiFamilyAiError.value = err.localizedMessage ?: "Online AI comparison failed."
+            try {
+                val result = aiRepository.analyzeMultiFamilyOnline(
+                    selectedFamilies = selected,
+                    activities = data.activities,
+                    events = data.events
+                )
+                result.onSuccess { aiComp ->
+                    _aiComparisonState.value = UiState.Success(aiComp)
+                }.onFailure { err ->
+                    _multiFamilyAiError.value = err.localizedMessage ?: "Online AI comparison failed."
+                }
+            } finally {
+                _multiFamilyAiLoading.value = false
             }
         }
     }
 
     fun clearAiComparison() {
+        multiFamilyAiJob?.cancel()
+        multiFamilyChatJob?.cancel()
         _aiComparisonState.value = null
         _multiFamilyAiLoading.value = false
         _multiFamilyAiError.value = null
@@ -585,27 +615,32 @@ class LedgerViewModel(
         }
 
         val contextSnapshot = aiRepository.buildMultiFamilyChatContext(comparison, activities)
-        viewModelScope.launch {
+        multiFamilyChatJob?.cancel()
+        multiFamilyChatJob = viewModelScope.launch {
             _multiFamilyChatLoading.value = true
-            val result = aiRepository.askComparisonFollowUpOnline(
-                question = cleanQuestion,
-                comparisonContext = contextSnapshot,
-                history = previousHistory
-            )
-            _multiFamilyChatLoading.value = false
-            result.onSuccess { reply ->
-                _multiFamilyChatMessages.value = _multiFamilyChatMessages.value + AiFollowUpChatMessage(
-                    isUser = false,
-                    text = reply,
-                    isOnlineAi = true
+            try {
+                val result = aiRepository.askComparisonFollowUpOnline(
+                    question = cleanQuestion,
+                    comparisonContext = contextSnapshot,
+                    history = previousHistory
                 )
-            }.onFailure { err ->
-                _multiFamilyChatError.value = err.localizedMessage ?: "Follow-up AI chat failed."
+                result.onSuccess { reply ->
+                    _multiFamilyChatMessages.value = _multiFamilyChatMessages.value + AiFollowUpChatMessage(
+                        isUser = false,
+                        text = reply,
+                        isOnlineAi = true
+                    )
+                }.onFailure { err ->
+                    _multiFamilyChatError.value = err.localizedMessage ?: "Follow-up AI chat failed."
+                }
+            } finally {
+                _multiFamilyChatLoading.value = false
             }
         }
     }
 
     fun clearMultiFamilyChat() {
+        multiFamilyChatJob?.cancel()
         _multiFamilyChatMessages.value = emptyList()
         _multiFamilyChatLoading.value = false
         _multiFamilyChatError.value = null
@@ -728,6 +763,7 @@ class LedgerViewModel(
         name: String,
         fatherName: String,
         address: String,
+        eventType: String,
         eventDetail: String,
         amount: Long,
         direction: ActivityDirection,
@@ -747,7 +783,7 @@ class LedgerViewModel(
             name = name.trim(),
             fatherName = fatherName.trim(),
             address = address.trim(),
-            eventType = "Neondra",
+            eventType = eventType.trim().ifEmpty { "Shadi" },
             eventDetail = eventDetail.trim(),
             eventDateMillis = System.currentTimeMillis(),
             direction = direction.wireValue,

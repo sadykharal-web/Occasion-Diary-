@@ -9,12 +9,19 @@ import com.example.data.FamilyProfile
 import com.example.ui.screens.localDayStartMillis
 import com.google.firebase.Firebase
 import com.google.firebase.FirebaseApp
+import com.google.firebase.ai.GenerativeModel
 import com.google.firebase.ai.ai
+import com.google.firebase.ai.type.Content
+import com.google.firebase.ai.type.GenerativeBackend
 import com.google.firebase.ai.type.Schema
+import com.google.firebase.ai.type.ThinkingLevel
 import com.google.firebase.ai.type.content
 import com.google.firebase.ai.type.generationConfig
+import com.google.firebase.ai.type.thinkingConfig
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
@@ -168,46 +175,105 @@ class AiAssistantRepository {
         )
     }
 
-    private val searchModel by lazy {
-        Firebase.ai.generativeModel(
-            modelName = MODEL_NAME,
+    private val searchModel by lazy { createJsonModel(PRIMARY_MODEL_NAME, searchSchema, useLowThinking = true) }
+    private val searchFallbackModel by lazy { createJsonModel(FAST_FALLBACK_MODEL_NAME, searchSchema, useLowThinking = false) }
+
+    private val singleFamilyModel by lazy { createJsonModel(PRIMARY_MODEL_NAME, singleFamilySchema, useLowThinking = true) }
+    private val singleFamilyFallbackModel by lazy { createJsonModel(FAST_FALLBACK_MODEL_NAME, singleFamilySchema, useLowThinking = false) }
+
+    private val multiFamilyModel by lazy { createJsonModel(PRIMARY_MODEL_NAME, multiFamilySchema, useLowThinking = true) }
+    private val multiFamilyFallbackModel by lazy { createJsonModel(FAST_FALLBACK_MODEL_NAME, multiFamilySchema, useLowThinking = false) }
+
+    private val followUpChatModel by lazy { createChatModel(PRIMARY_MODEL_NAME, useLowThinking = true) }
+    private val followUpChatFallbackModel by lazy { createChatModel(FAST_FALLBACK_MODEL_NAME, useLowThinking = false) }
+
+    private fun createJsonModel(
+        modelName: String,
+        schema: Schema,
+        useLowThinking: Boolean
+    ): GenerativeModel {
+        return Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
+            modelName = modelName,
             generationConfig = generationConfig {
                 responseMimeType = "application/json"
-                responseSchema = searchSchema
-                temperature = 0.2f
+                responseSchema = schema
+                maxOutputTokens = 1536
+                if (useLowThinking) {
+                    thinkingConfig = thinkingConfig {
+                        thinkingLevel = ThinkingLevel.LOW
+                    }
+                }
             }
         )
     }
 
-    private val singleFamilyModel by lazy {
-        Firebase.ai.generativeModel(
-            modelName = MODEL_NAME,
+    private fun createChatModel(
+        modelName: String,
+        useLowThinking: Boolean
+    ): GenerativeModel {
+        return Firebase.ai(backend = GenerativeBackend.googleAI()).generativeModel(
+            modelName = modelName,
             generationConfig = generationConfig {
-                responseMimeType = "application/json"
-                responseSchema = singleFamilySchema
-                temperature = 0.25f
+                maxOutputTokens = 1536
+                if (useLowThinking) {
+                    thinkingConfig = thinkingConfig {
+                        thinkingLevel = ThinkingLevel.LOW
+                    }
+                }
             }
         )
     }
 
-    private val multiFamilyModel by lazy {
-        Firebase.ai.generativeModel(
-            modelName = MODEL_NAME,
-            generationConfig = generationConfig {
-                responseMimeType = "application/json"
-                responseSchema = multiFamilySchema
-                temperature = 0.25f
+    private suspend fun collectStreamTextWithFallback(
+        primaryModel: GenerativeModel,
+        fallbackModel: GenerativeModel,
+        prompt: String,
+        operationLabel: String
+    ): String {
+        return try {
+            withTimeout(PRIMARY_TIMEOUT_MILLIS) {
+                val sb = StringBuilder()
+                primaryModel.generateContentStream(prompt).collect { chunk ->
+                    chunk.text?.let { sb.append(it) }
+                }
+                sb.toString()
             }
-        )
+        } catch (primaryTimeout: TimeoutCancellationException) {
+            Log.w(TAG, "$operationLabel primary model timed out after ${PRIMARY_TIMEOUT_MILLIS}ms; retrying with $FAST_FALLBACK_MODEL_NAME", primaryTimeout)
+            withTimeout(FALLBACK_TIMEOUT_MILLIS) {
+                val sb = StringBuilder()
+                fallbackModel.generateContentStream(prompt).collect { chunk ->
+                    chunk.text?.let { sb.append(it) }
+                }
+                sb.toString()
+            }
+        }
     }
 
-    private val followUpChatModel by lazy {
-        Firebase.ai.generativeModel(
-            modelName = MODEL_NAME,
-            generationConfig = generationConfig {
-                temperature = 0.35f
+    private suspend fun collectChatReplyWithFallback(
+        history: List<Content>,
+        question: String
+    ): String {
+        return try {
+            withTimeout(PRIMARY_TIMEOUT_MILLIS) {
+                val chat = followUpChatModel.startChat(history = history)
+                val sb = StringBuilder()
+                chat.sendMessageStream(question).collect { chunk ->
+                    chunk.text?.let { sb.append(it) }
+                }
+                sb.toString()
             }
-        )
+        } catch (primaryTimeout: TimeoutCancellationException) {
+            Log.w(TAG, "Follow-up chat primary model timed out; retrying with $FAST_FALLBACK_MODEL_NAME", primaryTimeout)
+            withTimeout(FALLBACK_TIMEOUT_MILLIS) {
+                val chat = followUpChatFallbackModel.startChat(history = history)
+                val sb = StringBuilder()
+                chat.sendMessageStream(question).collect { chunk ->
+                    chunk.text?.let { sb.append(it) }
+                }
+                sb.toString()
+            }
+        }
     }
 
     suspend fun searchFamiliesAndEventsOnline(
@@ -215,25 +281,26 @@ class AiAssistantRepository {
         families: List<FamilyProfile>,
         activities: List<ActivityRecord>,
         events: List<EventEntry>
-    ): Result<AiSearchResult> {
+    ): Result<AiSearchResult> = withContext(Dispatchers.IO) {
         val cleanQuery = query.trim()
         if (cleanQuery.isEmpty()) {
-            return Result.failure(IllegalArgumentException("Please enter a question or search query."))
+            return@withContext Result.failure(IllegalArgumentException("Please enter a question or search query."))
         }
 
         if (!isFirebaseConfigured()) {
-            return Result.failure(
+            return@withContext Result.failure(
                 IllegalStateException(MISSING_FIREBASE_CONFIG_MESSAGE)
             )
         }
 
-        return try {
+        try {
             val prompt = buildOnlineSearchPrompt(cleanQuery, families, activities, events)
-            val response = withTimeout(AI_TIMEOUT_MILLIS) {
-                searchModel.generateContent(prompt)
-            }
-            val rawJson = response.text
-                ?.takeIf { it.isNotBlank() }
+            val rawJson = collectStreamTextWithFallback(
+                primaryModel = searchModel,
+                fallbackModel = searchFallbackModel,
+                prompt = prompt,
+                operationLabel = "Online AI search"
+            ).takeIf { it.isNotBlank() }
                 ?: throw IllegalStateException("AI returned an empty response.")
 
             val json = JSONObject(rawJson)
@@ -263,7 +330,7 @@ class AiAssistantRepository {
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Online AI search timed out", e)
             Result.failure(
-                IllegalStateException("Online AI search timed out after 60 seconds. Please check your connection and try again.")
+                IllegalStateException("Online AI search timed out. Please check your internet connection or use Offline Quick Filter.")
             )
         } catch (e: CancellationException) {
             throw e
@@ -360,20 +427,21 @@ class AiAssistantRepository {
         family: FamilyProfile,
         activities: List<ActivityRecord>,
         events: List<EventEntry>
-    ): Result<SingleFamilyInOutComparison> {
+    ): Result<SingleFamilyInOutComparison> = withContext(Dispatchers.IO) {
         val base = compareWithinSingleFamilyLocal(family, activities, events)
         if (!isFirebaseConfigured()) {
-            return Result.failure(
+            return@withContext Result.failure(
                 IllegalStateException(MISSING_FIREBASE_CONFIG_MESSAGE)
             )
         }
-        return try {
+        try {
             val prompt = buildSingleFamilyPrompt(base)
-            val response = withTimeout(AI_TIMEOUT_MILLIS) {
-                singleFamilyModel.generateContent(prompt)
-            }
-            val rawJson = response.text
-                ?.takeIf { it.isNotBlank() }
+            val rawJson = collectStreamTextWithFallback(
+                primaryModel = singleFamilyModel,
+                fallbackModel = singleFamilyFallbackModel,
+                prompt = prompt,
+                operationLabel = "Online AI single-family analysis"
+            ).takeIf { it.isNotBlank() }
                 ?: throw IllegalStateException("AI returned an empty response.")
 
             val json = JSONObject(rawJson)
@@ -392,7 +460,7 @@ class AiAssistantRepository {
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Online AI single-family analysis timed out", e)
             Result.failure(
-                IllegalStateException("Online AI comparison timed out after 60 seconds. Please check your connection and retry.")
+                IllegalStateException("Online AI comparison timed out. Please check your internet connection and retry.")
             )
         } catch (e: CancellationException) {
             throw e
@@ -625,21 +693,22 @@ class AiAssistantRepository {
         selectedFamilies: List<FamilyProfile>,
         activities: List<ActivityRecord>,
         events: List<EventEntry>
-    ): Result<AiBalanceComparisonResult> {
+    ): Result<AiBalanceComparisonResult> = withContext(Dispatchers.IO) {
         val baseResult = compareFamilyBalances(selectedFamilies, activities, events)
-        val base = baseResult.getOrElse { return Result.failure(it) }
+        val base = baseResult.getOrElse { return@withContext Result.failure(it) }
         if (!isFirebaseConfigured()) {
-            return Result.failure(
+            return@withContext Result.failure(
                 IllegalStateException(MISSING_FIREBASE_CONFIG_MESSAGE)
             )
         }
-        return try {
+        try {
             val prompt = buildMultiFamilyPrompt(base, activities)
-            val response = withTimeout(AI_TIMEOUT_MILLIS) {
-                multiFamilyModel.generateContent(prompt)
-            }
-            val rawJson = response.text
-                ?.takeIf { it.isNotBlank() }
+            val rawJson = collectStreamTextWithFallback(
+                primaryModel = multiFamilyModel,
+                fallbackModel = multiFamilyFallbackModel,
+                prompt = prompt,
+                operationLabel = "Online AI multi-family comparison"
+            ).takeIf { it.isNotBlank() }
                 ?: throw IllegalStateException("AI returned an empty response.")
 
             val json = JSONObject(rawJson)
@@ -676,7 +745,7 @@ class AiAssistantRepository {
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Online AI multi-family comparison timed out", e)
             Result.failure(
-                IllegalStateException("Online AI comparison timed out after 60 seconds. Please check your connection and retry.")
+                IllegalStateException("Online AI comparison timed out. Please check your internet connection and retry.")
             )
         } catch (e: CancellationException) {
             throw e
@@ -696,16 +765,16 @@ class AiAssistantRepository {
         question: String,
         comparisonContext: String,
         history: List<AiFollowUpChatMessage>
-    ): Result<String> {
+    ): Result<String> = withContext(Dispatchers.IO) {
         val cleanQuestion = question.trim()
         if (cleanQuestion.isEmpty()) {
-            return Result.failure(IllegalArgumentException("Please enter a follow-up question."))
+            return@withContext Result.failure(IllegalArgumentException("Please enter a follow-up question."))
         }
         if (!isFirebaseConfigured()) {
-            return Result.failure(IllegalStateException(MISSING_FIREBASE_CONFIG_MESSAGE))
+            return@withContext Result.failure(IllegalStateException(MISSING_FIREBASE_CONFIG_MESSAGE))
         }
 
-        return try {
+        try {
             val chatHistory = buildList {
                 add(
                     content(role = "user") {
@@ -735,17 +804,16 @@ class AiAssistantRepository {
                 }
             }
 
-            val chat = followUpChatModel.startChat(history = chatHistory)
-            val response = withTimeout(AI_TIMEOUT_MILLIS) {
-                chat.sendMessage(cleanQuestion)
-            }
-            val answer = response.text?.trim()?.takeIf { it.isNotEmpty() }
+            val answer = collectChatReplyWithFallback(
+                history = chatHistory,
+                question = cleanQuestion
+            ).trim().takeIf { it.isNotEmpty() }
                 ?: throw IllegalStateException("AI returned an empty chat response.")
             Result.success(answer)
         } catch (e: TimeoutCancellationException) {
             Log.e(TAG, "Follow-up AI chat timed out", e)
             Result.failure(
-                IllegalStateException("AI chat request timed out after 60 seconds. Please retry or use Offline Answer.")
+                IllegalStateException("AI chat request timed out. Please retry or use Offline.")
             )
         } catch (e: CancellationException) {
             throw e
@@ -968,7 +1036,7 @@ class AiAssistantRepository {
     ): String {
         val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
         val familiesArr = JSONArray().apply {
-            families.take(120).forEach { fam ->
+            families.take(60).forEach { fam ->
                 val famActs = activitiesForFamily(fam, activities)
                 val inSum = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.neondraAmount }
                 val outSum = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.neondraAmount }
@@ -977,60 +1045,54 @@ class AiAssistantRepository {
                         put("id", fam.id)
                         put("fn", fam.familyId)
                         put("name", fam.name)
-                        put("fatherName", fam.fatherName)
-                        put("address", fam.address)
-                        put("totalIn", inSum)
-                        put("totalOut", outSum)
-                        put("netBalance", inSum - outSum)
-                        put("entriesCount", famActs.size)
+                        if (fam.fatherName.isNotBlank()) put("father", fam.fatherName)
+                        if (fam.address.isNotBlank()) put("addr", fam.address)
+                        put("in", inSum)
+                        put("out", outSum)
+                        put("net", inSum - outSum)
+                        put("count", famActs.size)
                     }
                 )
             }
         }
 
         val eventsArr = JSONArray().apply {
-            events.take(120).forEach { evt ->
+            events.take(40).forEach { evt ->
                 put(
                     JSONObject().apply {
                         put("id", evt.id)
                         put("title", evt.title)
                         put("date", dateFmt.format(Date(evt.eventDateMillis)))
-                        put("category", evt.category)
-                        put("location", evt.location)
-                        put("familyName", evt.familyName)
-                        put("description", evt.description)
+                        if (evt.category.isNotBlank()) put("cat", evt.category)
+                        if (evt.familyName.isNotBlank()) put("family", evt.familyName)
                     }
                 )
             }
         }
 
         val activitiesArr = JSONArray().apply {
-            activities.sortedByDescending { it.eventDateMillis }.take(160).forEach { act ->
+            activities.sortedByDescending { it.eventDateMillis }.take(80).forEach { act ->
                 put(
                     JSONObject().apply {
                         put("id", act.id)
-                        put("familyDocId", act.familyDocId ?: "")
                         put("fn", act.familyId)
                         put("name", act.name)
-                        put("fatherName", act.fatherName)
-                        put("address", act.address)
-                        put("category", act.eventType)
-                        put("detail", act.eventDetail)
+                        if (act.eventType.isNotBlank()) put("type", act.eventType)
+                        if (act.eventDetail.isNotBlank()) put("detail", act.eventDetail)
                         put("date", dateFmt.format(Date(act.eventDateMillis)))
-                        put("direction", act.direction)
-                        put("homeItems", act.homeItems)
-                        put("amount", act.neondraAmount)
+                        put("dir", act.direction)
+                        if (act.homeItems.isNotBlank()) put("items", act.homeItems)
+                        put("amt", act.neondraAmount)
                     }
                 )
             }
         }
 
         return """
-            You are the AI assistant inside "Life Line", an offline-first family occasion and gift/neondra ledger app.
+            You are the AI assistant inside "Life Line", an offline-first family occasion and Neondra ledger app.
             Today's date is ${dateFmt.format(Date(System.currentTimeMillis()))}.
             CRITICAL LANGUAGE REQUIREMENT: Even if the user asks in English or Roman Urdu, write ALL human-readable response fields (`answerSummary` and every item in `keyInsights`) strictly in clear, natural URDU (اردو). Keep IDs exact.
-            Answer the user's question accurately using ONLY the user's offline Room database records below.
-            Return exact matching document IDs (`id` fields) in matchedFamilyIds, matchedActivityIds, and matchedEventIds.
+            Answer concisely using ONLY the offline database records below. Return exact matching document IDs (`id`) in matchedFamilyIds, matchedActivityIds, and matchedEventIds.
 
             USER QUESTION:
             $query
@@ -1038,7 +1100,7 @@ class AiAssistantRepository {
             OFFLINE FAMILIES (${families.size} total):
             $familiesArr
 
-            OFFLINE OCCASIONS / EVENTS (${events.size} total):
+            OFFLINE EVENTS (${events.size} total):
             $eventsArr
 
             OFFLINE LEDGER ENTRIES (${activities.size} total):
@@ -1048,50 +1110,56 @@ class AiAssistantRepository {
 
     private fun buildSingleFamilyPrompt(base: SingleFamilyInOutComparison): String {
         val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val catArr = JSONArray().apply {
+            base.categoryBreakdowns.forEach { cat ->
+                put(
+                    JSONObject().apply {
+                        put("type", cat.categoryName)
+                        put("in", cat.totalIn)
+                        put("inCount", cat.inCount)
+                        put("out", cat.totalOut)
+                        put("outCount", cat.outCount)
+                    }
+                )
+            }
+        }
         val inArr = JSONArray().apply {
-            base.inEntries.take(80).forEach { act ->
+            base.inEntries.take(25).forEach { act ->
                 put(
                     JSONObject().apply {
                         put("date", dateFmt.format(Date(act.eventDateMillis)))
-                        put("category", act.eventType)
-                        put("detail", act.eventDetail)
-                        put("homeItems", act.homeItems)
-                        put("amount", act.neondraAmount)
+                        put("type", act.eventType)
+                        if (act.eventDetail.isNotBlank()) put("detail", act.eventDetail)
+                        if (act.homeItems.isNotBlank()) put("items", act.homeItems)
+                        put("amt", act.neondraAmount)
                     }
                 )
             }
         }
         val outArr = JSONArray().apply {
-            base.outEntries.take(80).forEach { act ->
+            base.outEntries.take(25).forEach { act ->
                 put(
                     JSONObject().apply {
                         put("date", dateFmt.format(Date(act.eventDateMillis)))
-                        put("category", act.eventType)
-                        put("detail", act.eventDetail)
-                        put("homeItems", act.homeItems)
-                        put("amount", act.neondraAmount)
+                        put("type", act.eventType)
+                        if (act.eventDetail.isNotBlank()) put("detail", act.eventDetail)
+                        if (act.homeItems.isNotBlank()) put("items", act.homeItems)
+                        put("amt", act.neondraAmount)
                     }
                 )
             }
         }
 
         return """
-            You are the AI analyst inside "Life Line", a family occasion and gift/neondra ledger app.
-            CRITICAL LANGUAGE REQUIREMENT: Write `headline`, `summary`, and EVERY item in `insights` strictly in clear, natural URDU (اردو).
-            Compare the In (آمدن / وصول) entries vs Out (خرچ / دیے گئے) entries WITHIN THIS SINGLE FAMILY using their offline ledger records.
-            Explain the exact reciprocity balance in Urdu, which categories or occasions have more In vs Out, any notable gifts/items, and practical next steps.
+            You are the AI analyst inside "Life Line", a family occasion and Neondra ledger app.
+            CRITICAL LANGUAGE REQUIREMENT: Write `headline`, `summary`, and EVERY item in `insights` strictly in clear, concise, natural URDU (اردو).
+            Compare the In (آمدن / وصول) vs Out (خرچ / دیے گئے) entries WITHIN THIS SINGLE FAMILY using the totals and entries below. Mention exact reciprocity balance, key event types, and practical next steps.
 
-            FAMILY:
-            Name: ${base.family.name} (FN ${base.family.familyId}), Father: ${base.family.fatherName}, Address: ${base.family.address}
-            Total In (Received): ${base.totalIn} across ${base.inEntries.size} entries
-            Total Out (Given): ${base.totalOut} across ${base.outEntries.size} entries
-            Net Balance (In - Out): ${base.netBalance}
-
-            IN ENTRIES (RECEIVED):
-            $inArr
-
-            OUT ENTRIES (GIVEN):
-            $outArr
+            FAMILY: ${base.family.name} (FN ${base.family.familyId}), Father: ${base.family.fatherName}, Address: ${base.family.address}
+            Total In: ${base.totalIn} (${base.inEntries.size} entries) | Total Out: ${base.totalOut} (${base.outEntries.size} entries) | Net: ${base.netBalance}
+            EVENT TYPE TOTALS: $catArr
+            RECENT IN ENTRIES: $inArr
+            RECENT OUT ENTRIES: $outArr
         """.trimIndent()
     }
 
@@ -1106,17 +1174,17 @@ class AiAssistantRepository {
                     act.familyDocId == fam.familyDocId ||
                         (act.familyId.isNotBlank() && act.familyId == fam.familyId &&
                             act.name.equals(fam.familyName, ignoreCase = true))
-                }.sortedByDescending { it.eventDateMillis }.take(20)
+                }.sortedByDescending { it.eventDateMillis }.take(12)
 
                 val recentArr = JSONArray().apply {
                     famActs.forEach { act ->
                         put(
                             JSONObject().apply {
                                 put("date", dateFmt.format(Date(act.eventDateMillis)))
-                                put("category", act.eventType)
-                                put("direction", act.direction)
-                                put("amount", act.neondraAmount)
-                                put("items", act.homeItems)
+                                put("type", act.eventType)
+                                put("dir", act.direction)
+                                put("amt", act.neondraAmount)
+                                if (act.homeItems.isNotBlank()) put("items", act.homeItems)
                             }
                         )
                     }
@@ -1131,7 +1199,6 @@ class AiAssistantRepository {
                         put("totalOut", fam.totalOut)
                         put("netBalance", fam.netBalance)
                         put("entriesCount", fam.entriesCount)
-                        put("eventsCount", fam.eventsCount)
                         put("recentEntries", recentArr)
                     }
                 )
@@ -1139,8 +1206,8 @@ class AiAssistantRepository {
         }
 
         return """
-            You are the AI analyst inside "Life Line", a family occasion and gift/neondra ledger app.
-            CRITICAL LANGUAGE REQUIREMENT: Write `headline`, `summary`, every `familyInsights[].insight`, and every item in `recommendations` strictly in clear, natural URDU (اردو). Keep `familyDocId` values exact.
+            You are the AI analyst inside "Life Line", a family occasion and Neondra ledger app.
+            CRITICAL LANGUAGE REQUIREMENT: Write `headline`, `summary`, every `familyInsights[].insight`, and every item in `recommendations` strictly in clear, concise, natural URDU (اردو). Keep `familyDocId` values exact.
             Compare the In (آمدن / وصول) and Out (خرچ / دیے گئے) balances across these selected families based on the offline data below.
 
             SELECTED FAMILIES:
@@ -1178,8 +1245,10 @@ class AiAssistantRepository {
 
     private companion object {
         const val TAG = "AiAssistantRepository"
-        const val MODEL_NAME = "gemini-3.8-flash"
-        const val AI_TIMEOUT_MILLIS = 60_000L
+        const val PRIMARY_MODEL_NAME = "gemini-3.8-flash"
+        const val FAST_FALLBACK_MODEL_NAME = "gemini-3.5-flash-lite"
+        const val PRIMARY_TIMEOUT_MILLIS = 35_000L
+        const val FALLBACK_TIMEOUT_MILLIS = 30_000L
         const val MISSING_FIREBASE_CONFIG_MESSAGE =
             "Online AI requires google-services.json. You can continue using Offline Quick Filter and Family Comparisons anytime."
     }

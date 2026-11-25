@@ -228,12 +228,13 @@ fun OccasionDiaryAppShell() {
             catalog = catalog,
             isSaving = isSaving,
             onDismiss = { showQuickNeondraSheet = false },
-            onSaveNeondra = { name, fatherName, address, eventDetail, amount, direction ->
+            onSaveNeondra = { name, fatherName, address, eventType, eventDetail, amount, direction ->
                 viewModel.saveQuickNeondra(
                     context = context,
                     name = name,
                     fatherName = fatherName,
                     address = address,
+                    eventType = eventType,
                     eventDetail = eventDetail,
                     amount = amount,
                     direction = direction
