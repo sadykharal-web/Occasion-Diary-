@@ -24,9 +24,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.EventNote
+import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Clear
 import androidx.compose.material.icons.rounded.DateRange
 import androidx.compose.material.icons.rounded.Edit
@@ -46,6 +48,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DateRangePicker
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
@@ -103,6 +107,7 @@ import com.example.ui.theme.OutBadgeFgLight
 import com.example.ui.viewmodel.DateRangeFilter
 import com.example.ui.viewmodel.LedgerDashboardData
 import com.example.ui.viewmodel.LedgerFilter
+import com.example.ui.viewmodel.LedgerSortOrder
 import java.util.Calendar
 import java.util.Locale
 import java.util.TimeZone
@@ -120,8 +125,11 @@ data class SameDateEventGroup(
     val netBalance: Long get() = totalIn - totalOut
 }
 
-fun buildSameDateEventLists(activities: List<ActivityRecord>): List<SameDateEventGroup> {
-    return activities
+fun buildSameDateEventLists(
+    activities: List<ActivityRecord>,
+    sortOrder: LedgerSortOrder = LedgerSortOrder.DATE_NEWEST
+): List<SameDateEventGroup> {
+    val groups = activities
         .filter { it.eventDetail.trim().isNotEmpty() }
         .groupBy { act ->
             val dayStart = localDayStartMillis(act.eventDateMillis)
@@ -129,7 +137,14 @@ fun buildSameDateEventLists(activities: List<ActivityRecord>): List<SameDateEven
             "${dayStart}__$normalizedName"
         }
         .map { (key, groupEntries) ->
-            val sortedEntries = groupEntries.sortedByDescending { it.eventDateMillis }
+            val sortedEntries = when (sortOrder) {
+                LedgerSortOrder.DATE_OLDEST -> groupEntries.sortedBy { it.eventDateMillis }
+                LedgerSortOrder.AMOUNT_HIGHEST -> groupEntries.sortedByDescending { it.totalAmount }
+                LedgerSortOrder.AMOUNT_LOWEST -> groupEntries.sortedBy { it.totalAmount }
+                LedgerSortOrder.EVENT_TYPE -> groupEntries.sortedBy { it.eventType.lowercase(Locale.ENGLISH) }
+                LedgerSortOrder.NAME_AZ -> groupEntries.sortedBy { it.name.lowercase(Locale.ENGLISH) }
+                LedgerSortOrder.DATE_NEWEST -> groupEntries.sortedByDescending { it.eventDateMillis }
+            }
             val displayName = sortedEntries.first().eventDetail.trim().replace(Regex("\\s+"), " ")
             val dayStart = localDayStartMillis(sortedEntries.first().eventDateMillis)
             val eventTypes = sortedEntries.map { it.eventType.trim() }.filter { it.isNotEmpty() }.distinct()
@@ -145,11 +160,35 @@ fun buildSameDateEventLists(activities: List<ActivityRecord>): List<SameDateEven
                 totalOut = totalOut
             )
         }
-        .sortedWith(
+
+    return when (sortOrder) {
+        LedgerSortOrder.DATE_OLDEST -> groups.sortedWith(
+            compareBy<SameDateEventGroup> { it.eventDayStartMillis }
+                .thenByDescending { it.entries.size }
+                .thenBy { it.eventName }
+        )
+        LedgerSortOrder.AMOUNT_HIGHEST -> groups.sortedWith(
+            compareByDescending<SameDateEventGroup> { it.totalIn + it.totalOut }
+                .thenByDescending { it.eventDayStartMillis }
+        )
+        LedgerSortOrder.AMOUNT_LOWEST -> groups.sortedWith(
+            compareBy<SameDateEventGroup> { it.totalIn + it.totalOut }
+                .thenByDescending { it.eventDayStartMillis }
+        )
+        LedgerSortOrder.EVENT_TYPE -> groups.sortedWith(
+            compareBy<SameDateEventGroup> { it.eventTypes.firstOrNull().orEmpty().lowercase(Locale.ENGLISH) }
+                .thenByDescending { it.eventDayStartMillis }
+        )
+        LedgerSortOrder.NAME_AZ -> groups.sortedWith(
+            compareBy<SameDateEventGroup> { it.eventName.lowercase(Locale.ENGLISH) }
+                .thenByDescending { it.eventDayStartMillis }
+        )
+        LedgerSortOrder.DATE_NEWEST -> groups.sortedWith(
             compareByDescending<SameDateEventGroup> { it.eventDayStartMillis }
                 .thenByDescending { it.entries.size }
                 .thenBy { it.eventName }
         )
+    }
 }
 
 sealed interface UpcomingOccasionItem {
@@ -228,14 +267,16 @@ fun filterLedgerActivities(
     searchQuery: String,
     selectedFilter: LedgerFilter,
     selectedAddress: String?,
-    selectedCategoryFilter: String?,
-    dateRangeFilter: DateRangeFilter
+    selectedCategoryFilter: String? = null,
+    dateRangeFilter: DateRangeFilter,
+    selectedEventTypes: Set<String> = emptySet(),
+    sortOrder: LedgerSortOrder = LedgerSortOrder.DATE_NEWEST
 ): List<ActivityRecord> {
     val q = searchQuery.trim()
     val rangeStart = dateRangeFilter.startDateMillis?.let(::localDayStartMillis)
     val rangeEnd = (dateRangeFilter.endDateMillis ?: dateRangeFilter.startDateMillis)?.let(::localDayEndMillis)
 
-    return activities.filter { act ->
+    val filtered = activities.filter { act ->
         val matchesDirection = when (selectedFilter) {
             LedgerFilter.ALL -> true
             LedgerFilter.IN -> act.parsedDirection == ActivityDirection.IN
@@ -244,8 +285,14 @@ fun filterLedgerActivities(
         }
         val matchesAddress = selectedAddress == null ||
             act.address.equals(selectedAddress, ignoreCase = true)
-        val matchesCategory = selectedCategoryFilter == null ||
-            act.eventType.equals(selectedCategoryFilter, ignoreCase = true)
+        val matchesEventType = when {
+            selectedEventTypes.isNotEmpty() -> selectedEventTypes.any {
+                act.eventType.trim().equals(it.trim(), ignoreCase = true)
+            }
+            selectedCategoryFilter != null ->
+                act.eventType.trim().equals(selectedCategoryFilter.trim(), ignoreCase = true)
+            else -> true
+        }
         val matchesDateRange = (rangeStart == null || act.eventDateMillis >= rangeStart) &&
             (rangeEnd == null || act.eventDateMillis <= rangeEnd)
         val matchesSearch = q.isEmpty() ||
@@ -256,7 +303,28 @@ fun filterLedgerActivities(
             act.eventType.contains(q, ignoreCase = true) ||
             act.eventDetail.contains(q, ignoreCase = true) ||
             act.homeItems.contains(q, ignoreCase = true)
-        matchesDirection && matchesAddress && matchesCategory && matchesDateRange && matchesSearch
+        matchesDirection && matchesAddress && matchesEventType && matchesDateRange && matchesSearch
+    }
+
+    return when (sortOrder) {
+        LedgerSortOrder.DATE_NEWEST -> filtered.sortedByDescending { it.eventDateMillis }
+        LedgerSortOrder.DATE_OLDEST -> filtered.sortedBy { it.eventDateMillis }
+        LedgerSortOrder.AMOUNT_HIGHEST -> filtered.sortedWith(
+            compareByDescending<ActivityRecord> { it.totalAmount }
+                .thenByDescending { it.eventDateMillis }
+        )
+        LedgerSortOrder.AMOUNT_LOWEST -> filtered.sortedWith(
+            compareBy<ActivityRecord> { it.totalAmount }
+                .thenByDescending { it.eventDateMillis }
+        )
+        LedgerSortOrder.EVENT_TYPE -> filtered.sortedWith(
+            compareBy<ActivityRecord> { it.eventType.trim().lowercase(Locale.ENGLISH) }
+                .thenByDescending { it.eventDateMillis }
+        )
+        LedgerSortOrder.NAME_AZ -> filtered.sortedWith(
+            compareBy<ActivityRecord> { it.name.trim().lowercase(Locale.ENGLISH) }
+                .thenByDescending { it.eventDateMillis }
+        )
     }
 }
 
@@ -329,11 +397,15 @@ fun LedgerScreen(
     onFilterChange: (LedgerFilter) -> Unit,
     selectedAddress: String?,
     onAddressFilterChange: (String?) -> Unit,
-    selectedCategoryFilter: String?,
-    onCategoryFilterChange: (String?) -> Unit,
+    selectedEventTypes: Set<String> = emptySet(),
+    onToggleEventTypeFilter: (String) -> Unit = {},
+    onClearEventTypeFilters: () -> Unit = {},
+    sortOrder: LedgerSortOrder = LedgerSortOrder.DATE_NEWEST,
+    onSortOrderChange: (LedgerSortOrder) -> Unit = {},
     dateRangeFilter: DateRangeFilter = DateRangeFilter(),
     onDateRangeChange: (startMillis: Long?, endMillis: Long?, presetLabel: String?) -> Unit = { _, _, _ -> },
     onClearDateRange: () -> Unit = {},
+    onClearAllFilters: () -> Unit = {},
     onManageCategoriesClick: () -> Unit,
     onQuickNeondraClick: () -> Unit = {},
     onActivityClick: (ActivityRecord) -> Unit,
@@ -344,6 +416,7 @@ fun LedgerScreen(
 ) {
     var showDateRangeDialog by remember { mutableStateOf(false) }
     var showEventListsMode by remember { mutableStateOf(false) }
+    var showSortMenu by remember { mutableStateOf(false) }
 
     if (showDateRangeDialog) {
         LedgerDateRangePickerDialog(
@@ -413,16 +486,18 @@ fun LedgerScreen(
                         searchQuery,
                         selectedFilter,
                         selectedAddress,
-                        selectedCategoryFilter,
-                        dateRangeFilter
+                        selectedEventTypes,
+                        dateRangeFilter,
+                        sortOrder
                     ) {
                         filterLedgerActivities(
                             activities = data.activities,
                             searchQuery = searchQuery,
                             selectedFilter = selectedFilter,
                             selectedAddress = selectedAddress,
-                            selectedCategoryFilter = selectedCategoryFilter,
-                            dateRangeFilter = dateRangeFilter
+                            dateRangeFilter = dateRangeFilter,
+                            selectedEventTypes = selectedEventTypes,
+                            sortOrder = sortOrder
                         )
                     }
 
@@ -430,22 +505,37 @@ fun LedgerScreen(
                         data.activities,
                         searchQuery,
                         selectedAddress,
-                        selectedCategoryFilter,
-                        dateRangeFilter
+                        selectedEventTypes,
+                        dateRangeFilter,
+                        sortOrder
                     ) {
                         filterLedgerActivities(
                             activities = data.activities,
                             searchQuery = searchQuery,
                             selectedFilter = LedgerFilter.ALL,
                             selectedAddress = selectedAddress,
-                            selectedCategoryFilter = selectedCategoryFilter,
-                            dateRangeFilter = dateRangeFilter
+                            dateRangeFilter = dateRangeFilter,
+                            selectedEventTypes = selectedEventTypes,
+                            sortOrder = sortOrder
                         )
                     }
 
-                    val sameDateEventLists = remember(filteredList) {
-                        buildSameDateEventLists(filteredList)
+                    val sameDateEventLists = remember(filteredList, sortOrder) {
+                        buildSameDateEventLists(filteredList, sortOrder)
                     }
+
+                    val availableEventTypes = remember(data.catalog.eventTypes, data.activities) {
+                        (data.catalog.eventTypes + data.activities.map { it.eventType.trim() })
+                            .filter { it.isNotEmpty() }
+                            .distinct()
+                    }
+
+                    val hasAnyActiveFilterOrSort = selectedFilter != LedgerFilter.ALL ||
+                        selectedAddress != null ||
+                        selectedEventTypes.isNotEmpty() ||
+                        dateRangeFilter.isActive ||
+                        searchQuery.isNotBlank() ||
+                        sortOrder != LedgerSortOrder.DATE_NEWEST
 
                     LazyColumn(
                         modifier = Modifier
@@ -483,7 +573,11 @@ fun LedgerScreen(
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Neondra", fontWeight = FontWeight.Bold)
+                                    Text(
+                                        text = "نیوندرا",
+                                        fontFamily = NotoArabicFamily,
+                                        fontWeight = FontWeight.Bold
+                                    )
                                 }
 
                                 OutlinedButton(
@@ -554,15 +648,91 @@ fun LedgerScreen(
                                 modifier = Modifier.padding(top = 4.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
-                                    text = if (showEventListsMode) {
-                                        "Same-Date Event Lists (${sameDateEventLists.size})"
-                                    } else {
-                                        "Ledger Entries (${filteredList.size})"
-                                    },
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (showEventListsMode) {
+                                            "Same-Date Event Lists (${sameDateEventLists.size})"
+                                        } else {
+                                            "Ledger Entries (${filteredList.size})"
+                                        },
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.weight(1f)
+                                    )
+
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (hasAnyActiveFilterOrSort) {
+                                            AssistChip(
+                                                onClick = onClearAllFilters,
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Rounded.Clear,
+                                                        contentDescription = null,
+                                                        modifier = Modifier.size(15.dp)
+                                                    )
+                                                },
+                                                label = { Text("Reset") },
+                                                modifier = Modifier.testTag("ledger_clear_filters_button")
+                                            )
+                                        }
+
+                                        Box {
+                                            AssistChip(
+                                                onClick = { showSortMenu = true },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.AutoMirrored.Rounded.Sort,
+                                                        contentDescription = "Sort entries",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                },
+                                                label = {
+                                                    Text(
+                                                        text = "Sort: ${sortOrder.shortLabel}",
+                                                        fontWeight = FontWeight.SemiBold
+                                                    )
+                                                },
+                                                modifier = Modifier.testTag("ledger_sort_button")
+                                            )
+                                            DropdownMenu(
+                                                expanded = showSortMenu,
+                                                onDismissRequest = { showSortMenu = false }
+                                            ) {
+                                                LedgerSortOrder.entries.forEach { option ->
+                                                    DropdownMenuItem(
+                                                        text = {
+                                                            Text(
+                                                                text = option.label,
+                                                                fontWeight = if (option == sortOrder) FontWeight.Bold else FontWeight.Normal
+                                                            )
+                                                        },
+                                                        trailingIcon = if (option == sortOrder) {
+                                                            {
+                                                                Icon(
+                                                                    imageVector = Icons.Rounded.Check,
+                                                                    contentDescription = null,
+                                                                    tint = MaterialTheme.colorScheme.primary
+                                                                )
+                                                            }
+                                                        } else null,
+                                                        onClick = {
+                                                            onSortOrderChange(option)
+                                                            showSortMenu = false
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
 
                                 Row(
                                     modifier = Modifier
@@ -612,32 +782,37 @@ fun LedgerScreen(
                                         modifier = Modifier.testTag("manage_categories_chip")
                                     )
                                     FilterChip(
-                                        selected = selectedCategoryFilter == null,
-                                        onClick = { onCategoryFilterChange(null) },
-                                        label = { Text("All Event Types") }
+                                        selected = selectedEventTypes.isEmpty(),
+                                        onClick = onClearEventTypeFilters,
+                                        label = { Text("All Event Types") },
+                                        modifier = Modifier.testTag("event_type_filter_all")
                                     )
-                                    data.catalog.eventTypes.forEach { catName ->
+                                    availableEventTypes.forEach { catName ->
+                                        val isSelected = selectedEventTypes.any { it.equals(catName, ignoreCase = true) }
                                         val (catColor, catIcon) = data.catalog.resolveCategoryVisual(catName)
                                         FilterChip(
-                                            selected = selectedCategoryFilter == catName,
-                                            onClick = {
-                                                onCategoryFilterChange(
-                                                    if (selectedCategoryFilter == catName) null else catName
-                                                )
-                                            },
+                                            selected = isSelected,
+                                            onClick = { onToggleEventTypeFilter(catName) },
                                             leadingIcon = {
                                                 Icon(
-                                                    imageVector = catIcon,
+                                                    imageVector = if (isSelected) Icons.Rounded.Check else catIcon,
                                                     contentDescription = null,
                                                     tint = catColor,
                                                     modifier = Modifier.size(16.dp)
                                                 )
                                             },
-                                            label = { Text(catName) },
+                                            label = {
+                                                Text(
+                                                    text = catName,
+                                                    fontFamily = NotoArabicFamily,
+                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                                )
+                                            },
                                             colors = FilterChipDefaults.filterChipColors(
                                                 selectedContainerColor = catColor.copy(alpha = 0.16f),
                                                 selectedLabelColor = catColor
-                                            )
+                                            ),
+                                            modifier = Modifier.testTag("event_type_filter_$catName")
                                         )
                                     }
                                 }
@@ -1258,7 +1433,7 @@ private fun ActivitySummaryCard(
                         MoneyTagChip(label = "سلامی", amount = record.salamiAmount)
                     }
                     if (record.neondraAmount > 0L) {
-                        MoneyTagChip(label = "Neondra", amount = record.neondraAmount)
+                        MoneyTagChip(label = "نیوندرا", amount = record.neondraAmount)
                     }
                 }
             }
@@ -1598,7 +1773,7 @@ private fun EmptyLedgerState(
                 text = if (hasAnyData) {
                     "Try adjusting your filters or search query."
                 } else {
-                    "Tap the (+) button below to record your first entry or Neondra. Families sharing Name, Father's Name & Address are grouped automatically under one unique FN."
+                    "Tap the (+) button below to record your first entry or نیوندرا. Families sharing Name, Father's Name & Address are grouped automatically under one unique FN."
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

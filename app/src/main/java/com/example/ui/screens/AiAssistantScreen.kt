@@ -114,9 +114,9 @@ import kotlin.math.max
 
 private val AI_SEARCH_PROMPTS = listOf(
     "Who has the highest In balance?",
-    "شادی entries and Neondra details",
+    "شادی entries and نیوندرا details",
     "Families with negative balance",
-    "Recent نقد gifts & Neondra"
+    "Recent نقد gifts & نیوندرا"
 )
 
 private val FOLLOW_UP_CHAT_SUGGESTIONS = listOf(
@@ -420,64 +420,169 @@ fun AiAssistantScreen(
                         }
 
                         val matchedFamilies = families.filter { it.id in result.matchedFamilyIds }
-                        if (matchedFamilies.isNotEmpty()) {
-                            item {
-                                Text(
-                                    text = "Matched Families (${matchedFamilies.size})",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            items(matchedFamilies, key = { "fam_${it.id}" }) { fam ->
-                                val famActs = activities.filter {
-                                    FamilyIdentityMatcher.activityBelongsToFamily(it, fam)
-                                }
-                                val fIn = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.totalAmount }
-                                val fOut = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.totalAmount }
+                        val matchedEvents = events.filter { it.id in result.matchedEventIds }
+                        val matchedActivities = activities.filter { it.id in result.matchedActivityIds }
 
-                                MatchedFamilyCard(
-                                    family = fam,
-                                    totalIn = fIn,
-                                    totalOut = fOut,
-                                    entriesCount = famActs.size,
+                        if (matchedFamilies.size == 1) {
+                            val singleFam = matchedFamilies.first()
+                            val famAllActs = activities.filter {
+                                FamilyIdentityMatcher.activityBelongsToFamily(it, singleFam)
+                            }
+                            val fInAll = famAllActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.totalAmount }
+                            val fOutAll = famAllActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.totalAmount }
+
+                            item(key = "single_search_family_header_${singleFam.id}") {
+                                SingleFamilySearchHeaderCard(
+                                    family = singleFam,
+                                    totalIn = fInAll,
+                                    totalOut = fOutAll,
+                                    entriesCount = famAllActs.size,
                                     onCompareClick = {
-                                        onCompareThisFamily(fam.id)
+                                        onCompareThisFamily(singleFam.id)
                                         compareSubMode = 0
                                         selectedTab = 1
                                     }
                                 )
                             }
-                        }
 
-                        val matchedEvents = events.filter { it.id in result.matchedEventIds }
-                        if (matchedEvents.isNotEmpty()) {
-                            item {
-                                Text(
-                                    text = "Matched Events (${matchedEvents.size})",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            items(matchedEvents, key = { "evt_${it.id}" }) { evt ->
-                                MatchedEventCard(event = evt, catalog = catalog)
-                            }
-                        }
+                            val familyMatchedEntries = matchedActivities
+                                .filter { FamilyIdentityMatcher.activityBelongsToFamily(it, singleFam) }
+                                .ifEmpty { famAllActs.sortedByDescending { it.eventDateMillis } }
 
-                        val matchedActivities = activities.filter { it.id in result.matchedActivityIds }
-                        if (matchedActivities.isNotEmpty()) {
-                            item {
-                                Text(
-                                    text = "Matched Ledger Entries (${matchedActivities.size})",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold
-                                )
+                            val inEntries = familyMatchedEntries.filter { it.parsedDirection == ActivityDirection.IN }
+                            val outEntries = familyMatchedEntries.filter { it.parsedDirection == ActivityDirection.OUT }
+
+                            if (inEntries.isNotEmpty()) {
+                                item(key = "search_sf_in_header") {
+                                    SectionDirectionHeader(
+                                        title = "In Entries (Received)",
+                                        count = inEntries.size,
+                                        totalAmount = inEntries.sumOf { it.totalAmount },
+                                        isIn = true
+                                    )
+                                }
+                                items(inEntries, key = { "search_sf_in_${it.id}" }) { act ->
+                                    SingleFamilyEntryCard(
+                                        record = act,
+                                        catalog = catalog,
+                                        onClick = { onActivityClick(act) }
+                                    )
+                                }
                             }
-                            items(matchedActivities, key = { "act_${it.id}" }) { act ->
-                                MatchedActivityCard(
-                                    record = act,
-                                    catalog = catalog,
-                                    onClick = { onActivityClick(act) }
-                                )
+
+                            if (outEntries.isNotEmpty()) {
+                                item(key = "search_sf_out_header") {
+                                    SectionDirectionHeader(
+                                        title = "Out Entries (Given)",
+                                        count = outEntries.size,
+                                        totalAmount = outEntries.sumOf { it.totalAmount },
+                                        isIn = false
+                                    )
+                                }
+                                items(outEntries, key = { "search_sf_out_${it.id}" }) { act ->
+                                    SingleFamilyEntryCard(
+                                        record = act,
+                                        catalog = catalog,
+                                        onClick = { onActivityClick(act) }
+                                    )
+                                }
+                            }
+
+                            if (familyMatchedEntries.isEmpty()) {
+                                item(key = "search_sf_empty_entries") {
+                                    EmptyDirectionEntryCard("No In or Out entries recorded for ${singleFam.name} yet.")
+                                }
+                            }
+
+                            val otherMatchedActivities = matchedActivities.filter {
+                                !FamilyIdentityMatcher.activityBelongsToFamily(it, singleFam)
+                            }
+                            if (matchedEvents.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = "Matched Events (${matchedEvents.size})",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                items(matchedEvents, key = { "evt_${it.id}" }) { evt ->
+                                    MatchedEventCard(event = evt, catalog = catalog)
+                                }
+                            }
+                            if (otherMatchedActivities.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = "Other Matched Entries (${otherMatchedActivities.size})",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                items(otherMatchedActivities, key = { "other_act_${it.id}" }) { act ->
+                                    MatchedActivityCard(
+                                        record = act,
+                                        catalog = catalog,
+                                        onClick = { onActivityClick(act) }
+                                    )
+                                }
+                            }
+                        } else {
+                            if (matchedFamilies.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = "Matched Families (${matchedFamilies.size})",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                items(matchedFamilies, key = { "fam_${it.id}" }) { fam ->
+                                    val famActs = activities.filter {
+                                        FamilyIdentityMatcher.activityBelongsToFamily(it, fam)
+                                    }
+                                    val fIn = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.totalAmount }
+                                    val fOut = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.totalAmount }
+
+                                    MatchedFamilyCard(
+                                        family = fam,
+                                        totalIn = fIn,
+                                        totalOut = fOut,
+                                        entriesCount = famActs.size,
+                                        onCompareClick = {
+                                            onCompareThisFamily(fam.id)
+                                            compareSubMode = 0
+                                            selectedTab = 1
+                                        }
+                                    )
+                                }
+                            }
+
+                            if (matchedEvents.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = "Matched Events (${matchedEvents.size})",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                items(matchedEvents, key = { "evt_${it.id}" }) { evt ->
+                                    MatchedEventCard(event = evt, catalog = catalog)
+                                }
+                            }
+
+                            if (matchedActivities.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        text = "Matched Ledger Entries (${matchedActivities.size})",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                items(matchedActivities, key = { "act_${it.id}" }) { act ->
+                                    MatchedActivityCard(
+                                        record = act,
+                                        catalog = catalog,
+                                        onClick = { onActivityClick(act) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -689,7 +794,7 @@ fun AiAssistantScreen(
                                 }
                             } else {
                                 items(comp.inEntries, key = { "sf_in_${it.id}" }) { act ->
-                                    MatchedActivityCard(
+                                    SingleFamilyEntryCard(
                                         record = act,
                                         catalog = catalog,
                                         onClick = { onActivityClick(act) }
@@ -711,7 +816,7 @@ fun AiAssistantScreen(
                                 }
                             } else {
                                 items(comp.outEntries, key = { "sf_out_${it.id}" }) { act ->
-                                    MatchedActivityCard(
+                                    SingleFamilyEntryCard(
                                         record = act,
                                         catalog = catalog,
                                         onClick = { onActivityClick(act) }
@@ -1189,7 +1294,7 @@ private fun ComparisonFollowUpChatCard(
                 value = draftQuestion,
                 onValueChange = { draftQuestion = it },
                 label = { Text("Ask a follow-up question...") },
-                placeholder = { Text("e.g. Which occasion had the highest Neondra?") },
+                placeholder = { Text("e.g. Which occasion had the highest نیوندرا?") },
                 maxLines = 3,
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
@@ -1838,6 +1943,238 @@ private fun MatchedEventCard(
 }
 
 @Composable
+private fun SingleFamilySearchHeaderCard(
+    family: FamilyProfile,
+    totalIn: Long,
+    totalOut: Long,
+    entriesCount: Int,
+    onCompareClick: () -> Unit
+) {
+    val isDark = isSystemInDarkTheme()
+    val inColor = if (isDark) InBadgeFgDark else InBadgeFgLight
+    val outColor = if (isDark) OutBadgeFgDark else OutBadgeFgLight
+    val netBalance = totalIn - totalOut
+    val netPrefix = if (netBalance >= 0L) "+" else ""
+
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("single_family_search_header_${family.id}")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (family.familyId.isNotBlank()) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text(
+                                text = "FN ${family.familyId}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                fontFamily = JakartaSansFamily,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            )
+                        }
+                    }
+                    Column {
+                        Text(
+                            text = family.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (family.fatherName.isNotBlank()) {
+                            Text(
+                                text = "Father: ${family.fatherName}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (family.address.isNotBlank()) {
+                            Text(
+                                text = family.address,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = onCompareClick,
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text("Compare", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Surface(
+                    color = inColor.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                        Text("In", style = MaterialTheme.typography.labelSmall, color = inColor)
+                        Text(
+                            text = formatNeondraAmount(totalIn),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = inColor
+                        )
+                    }
+                }
+                Surface(
+                    color = outColor.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                        Text("Out", style = MaterialTheme.typography.labelSmall, color = outColor)
+                        Text(
+                            text = formatNeondraAmount(totalOut),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = outColor
+                        )
+                    }
+                }
+                Surface(
+                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+                        Text(
+                            text = "Net ($entriesCount)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = "$netPrefix${formatNeondraAmount(netBalance)}",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SingleFamilyEntryCard(
+    record: ActivityRecord,
+    catalog: DropdownCatalog,
+    onClick: () -> Unit
+) {
+    val (catColor, catIcon) = catalog.resolveCategoryVisual(record.eventType)
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .testTag("single_family_entry_${record.id}")
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    DirectionPill(direction = record.parsedDirection)
+                    CategoryBadge(label = record.eventType, color = catColor, icon = catIcon)
+                }
+                Text(
+                    text = formatDisplayDate(record.eventDateMillis),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontFamily = JakartaSansFamily
+                )
+            }
+
+            if (record.eventDetail.isNotBlank()) {
+                Text(
+                    text = record.eventDetail,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            if (record.homeItems.isNotBlank()) {
+                Text(
+                    text = "Home Gift / Items: ${record.homeItems}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = NotoArabicFamily,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            val hasExtraMoney = record.cashAmount > 0L || record.haarAmount > 0L || record.salamiAmount > 0L
+            if (hasExtraMoney) {
+                val breakdownText = buildList {
+                    if (record.cashAmount > 0L) add("نقد ${formatNeondraAmount(record.cashAmount)}")
+                    if (record.haarAmount > 0L) add("ہار ${formatNeondraAmount(record.haarAmount)}")
+                    if (record.salamiAmount > 0L) add("سلامی ${formatNeondraAmount(record.salamiAmount)}")
+                    if (record.neondraAmount > 0L) add("نیوندرا ${formatNeondraAmount(record.neondraAmount)}")
+                }.joinToString(" • ")
+                if (breakdownText.isNotEmpty()) {
+                    Text(
+                        text = breakdownText,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontFamily = NotoArabicFamily,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Amount: ${formatNeondraAmount(record.totalAmount)}",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun MatchedActivityCard(
     record: ActivityRecord,
     catalog: DropdownCatalog,
@@ -1884,6 +2221,7 @@ private fun MatchedActivityCard(
                 Text(
                     text = "Home Gift / Items: ${record.homeItems}",
                     style = MaterialTheme.typography.bodySmall,
+                    fontFamily = NotoArabicFamily,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }

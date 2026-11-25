@@ -310,8 +310,9 @@ fun ActivityDetailScreen(
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
                                         Text(
-                                            text = "Neondra Amount",
+                                            text = "نیوندرا",
                                             style = MaterialTheme.typography.bodyMedium,
+                                            fontFamily = NotoArabicFamily,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                         Text(
@@ -323,8 +324,9 @@ fun ActivityDetailScreen(
                                 }
                             }
                             Text(
-                                text = if (hasExtraMoney) "Total Amount" else "Neondra Amount",
+                                text = if (hasExtraMoney) "Total Amount" else "نیوندرا",
                                 style = MaterialTheme.typography.labelMedium,
+                                fontFamily = if (hasExtraMoney) null else NotoArabicFamily,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(

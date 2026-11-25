@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.ActivityDirection
 import com.example.data.DropdownCatalog
 import com.example.data.FamilyIdentityMatcher
+import com.example.ui.theme.NotoArabicFamily
 
 private val QUICK_NEONDRA_EVENT_TYPES = listOf("شادی", "نکاح", "عقیقہ", "سالگرہ")
 
@@ -179,8 +180,9 @@ fun QuickNeondraContent(
                 )
                 Column {
                     Text(
-                        text = "Neondra Entry",
+                        text = "نیوندرا Entry",
                         style = MaterialTheme.typography.titleLarge,
+                        fontFamily = NotoArabicFamily,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
@@ -194,7 +196,7 @@ fun QuickNeondraContent(
                 onClick = onDismiss,
                 modifier = Modifier.testTag("close_quick_neondra_button")
             ) {
-                Icon(Icons.Rounded.Close, contentDescription = "Close Neondra")
+                Icon(Icons.Rounded.Close, contentDescription = "Close نیوندرا")
             }
         }
 
@@ -429,7 +431,13 @@ fun QuickNeondraContent(
                 amountText = input.filter { it.isDigit() }.take(9)
                 if (validationError != null) validationError = null
             },
-            label = { Text("Neondra Amount *") },
+            label = {
+                Text(
+                    text = "نیوندرا *",
+                    fontFamily = NotoArabicFamily,
+                    fontWeight = FontWeight.SemiBold
+                )
+            },
             placeholder = { Text("e.g. 5000") },
             leadingIcon = { Icon(Icons.Rounded.AccountBalanceWallet, contentDescription = null) },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -469,7 +477,7 @@ fun QuickNeondraContent(
                     cleanName.isEmpty() -> validationError = "Please enter Name."
                     cleanFather.isEmpty() -> validationError = "Please enter Father's Name."
                     cleanAddress.isEmpty() -> validationError = "Please enter Address."
-                    amount <= 0L -> validationError = "Please enter a valid Neondra amount."
+                    amount <= 0L -> validationError = "Please enter a valid نیوندرا amount."
                     else -> {
                         validationError = null
                         onSaveNeondra(
@@ -499,8 +507,9 @@ fun QuickNeondraContent(
                 )
             } else {
                 Text(
-                    text = "Save Neondra",
+                    text = "Save نیوندرا",
                     style = MaterialTheme.typography.titleMedium,
+                    fontFamily = NotoArabicFamily,
                     fontWeight = FontWeight.Bold
                 )
             }

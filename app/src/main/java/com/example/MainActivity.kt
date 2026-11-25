@@ -153,7 +153,8 @@ fun OccasionDiaryAppShell() {
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
     val selectedFilter by viewModel.selectedFilter.collectAsStateWithLifecycle()
     val selectedAddress by viewModel.selectedAddress.collectAsStateWithLifecycle()
-    val selectedCategoryFilter by viewModel.selectedCategoryFilter.collectAsStateWithLifecycle()
+    val selectedEventTypes by viewModel.selectedEventTypes.collectAsStateWithLifecycle()
+    val selectedSortOrder by viewModel.selectedSortOrder.collectAsStateWithLifecycle()
     val dateRangeFilter by viewModel.dateRangeFilter.collectAsStateWithLifecycle()
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
     val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
@@ -391,11 +392,15 @@ fun OccasionDiaryAppShell() {
                             onFilterChange = viewModel::setFilter,
                             selectedAddress = selectedAddress,
                             onAddressFilterChange = viewModel::setAddressFilter,
-                            selectedCategoryFilter = selectedCategoryFilter,
-                            onCategoryFilterChange = viewModel::setCategoryFilter,
+                            selectedEventTypes = selectedEventTypes,
+                            onToggleEventTypeFilter = viewModel::toggleEventTypeFilter,
+                            onClearEventTypeFilters = viewModel::clearEventTypeFilters,
+                            sortOrder = selectedSortOrder,
+                            onSortOrderChange = viewModel::setSortOrder,
                             dateRangeFilter = dateRangeFilter,
                             onDateRangeChange = viewModel::setDateRangeFilter,
                             onClearDateRange = viewModel::clearDateRangeFilter,
+                            onClearAllFilters = viewModel::clearAllLedgerFilters,
                             onManageCategoriesClick = {
                                 navController.navigate(ROUTE_CATEGORIES)
                             },

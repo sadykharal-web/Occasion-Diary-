@@ -113,7 +113,7 @@ fun formatSuitGiftItem(label: String, count: Int): String {
 
 fun formatKgGiftItem(label: String, kg: Int): String {
     val safeKg = kg.coerceAtLeast(1)
-    return "$safeKg KG $label"
+    return "$safeKg کلوگرام $label"
 }
 
 private val REMINDER_OFFSETS = listOf(0L, 60L, 180L, 1440L, 2880L)
@@ -680,7 +680,7 @@ fun ActivityEditorScreen(
                             value = homeItems,
                             onValueChange = { homeItems = it },
                             label = { Text("Home Gift / Items") },
-                            placeholder = { Text("e.g. 2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 KG پھل, 2 KG مٹھائی...") },
+                            placeholder = { Text("e.g. 2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 کلوگرام پھل, 2 کلوگرام مٹھائی...") },
                             leadingIcon = { Icon(Icons.Rounded.Home, contentDescription = null) },
                             minLines = 2,
                             maxLines = 5,
@@ -740,12 +740,12 @@ fun ActivityEditorScreen(
                                     addButtonTag = "home_gift_gents_suit_add_button"
                                 )
 
-                                // پھل (Fruits) + No. KG dropdown
+                                // پھل (Fruits) + No. کلوگرام dropdown
                                 GiftCategoryQuantityRow(
                                     label = "پھل",
                                     options = KG_COUNT_OPTIONS,
                                     selectedValue = selectedFruitsKg,
-                                    unitSuffix = " KG",
+                                    unitSuffix = " کلوگرام",
                                     onValueSelected = { selectedFruitsKg = it },
                                     onAddClick = {
                                         homeItems = appendHomeGiftItem(
@@ -757,12 +757,12 @@ fun ActivityEditorScreen(
                                     addButtonTag = "home_gift_fruits_add_button"
                                 )
 
-                                // مٹھائی (Sweets) + No. KG dropdown
+                                // مٹھائی (Sweets) + No. کلوگرام dropdown
                                 GiftCategoryQuantityRow(
                                     label = "مٹھائی",
                                     options = KG_COUNT_OPTIONS,
                                     selectedValue = selectedSweetsKg,
-                                    unitSuffix = " KG",
+                                    unitSuffix = " کلوگرام",
                                     onValueSelected = { selectedSweetsKg = it },
                                     onAddClick = {
                                         homeItems = appendHomeGiftItem(
@@ -845,7 +845,13 @@ fun ActivityEditorScreen(
                             onValueChange = { input ->
                                 neondraText = input.filter { it.isDigit() }.take(9)
                             },
-                            label = { Text("Neondra Amount") },
+                            label = {
+                                Text(
+                                    text = "نیوندرا",
+                                    fontFamily = NotoArabicFamily,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
                             placeholder = { Text("e.g. 5000") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
@@ -1107,7 +1113,7 @@ private fun GiftCategoryQuantityRow(
             expanded = expanded,
             onExpandedChange = { expanded = !expanded },
             modifier = Modifier
-                .width(if (unitSuffix.isNotEmpty()) 118.dp else 96.dp)
+                .width(if (unitSuffix.isNotEmpty()) 142.dp else 96.dp)
                 .testTag(dropdownTag)
         ) {
             OutlinedTextField(
@@ -1115,7 +1121,7 @@ private fun GiftCategoryQuantityRow(
                 onValueChange = {},
                 readOnly = true,
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
+                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = NotoArabicFamily),
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
@@ -1133,6 +1139,7 @@ private fun GiftCategoryQuantityRow(
                             Text(
                                 text = "$count$unitSuffix",
                                 style = MaterialTheme.typography.bodyMedium,
+                                fontFamily = NotoArabicFamily,
                                 fontWeight = if (count == selectedValue) FontWeight.Bold else FontWeight.Normal
                             )
                         },

@@ -524,7 +524,12 @@ class AiAssistantRepository {
             "sweet" to listOf("مٹھائی"),
             "sweets" to listOf("مٹھائی"),
             "mithai" to listOf("مٹھائی"),
-            "مٹھائی" to listOf("sweets", "sweet")
+            "مٹھائی" to listOf("sweets", "sweet"),
+            "kg" to listOf("کلوگرام", "kilogram"),
+            "kilogram" to listOf("کلوگرام", "kg"),
+            "کلوگرام" to listOf("kg", "kilogram"),
+            "neondra" to listOf("نیوندرا"),
+            "نیوندرا" to listOf("neondra")
         )
         val tokens = (baseTokens + baseTokens.flatMap { bilingualSynonyms[it].orEmpty() }).distinct()
 
@@ -589,14 +594,27 @@ class AiAssistantRepository {
         val wantsIn = "in" in tokens || "received" in tokens || "آمدن" in cleanQuery || "وصول" in cleanQuery
         val wantsOut = "out" in tokens || "given" in tokens || "gifts" in tokens ||
             "خرچ" in cleanQuery || "دیے" in cleanQuery || "دیا" in cleanQuery || "تحفے" in cleanQuery
-        val matchedActivities = activities.filter { act ->
+        val rawMatchedActivities = activities.filter { act ->
             val haystack = "${act.name} ${act.familyId} fn${act.familyId} ${act.fatherName} ${act.address} ${act.eventType} ${act.eventDetail} ${act.homeItems} ${act.direction}".lowercase(Locale.ENGLISH)
             val textHit = tokens.any { it in haystack } || lowerQuery in haystack
             val dirHit = (wantsIn && act.parsedDirection == ActivityDirection.IN) ||
                 (wantsOut && act.parsedDirection == ActivityDirection.OUT)
             val upcomingHit = !wantsUpcoming || act.eventDateMillis >= todayStart
             (textHit || dirHit) && upcomingHit
-        }.sortedByDescending { it.eventDateMillis }.take(25)
+        }.sortedByDescending { it.eventDateMillis }.take(50)
+
+        val matchedActivities = if (matchedFamilies.size == 1 && !wantsIn && !wantsOut && !wantsUpcoming) {
+            val singleFam = matchedFamilies.first()
+            val singleFamHaystack = "${singleFam.familyId} fn${singleFam.familyId} ${singleFam.name} ${singleFam.fatherName} ${singleFam.address}".lowercase(Locale.ENGLISH)
+            val nonFamilyTokens = tokens.filter { it !in singleFamHaystack }
+            if (nonFamilyTokens.isEmpty()) {
+                activitiesForFamily(singleFam, activities).sortedByDescending { it.eventDateMillis }
+            } else {
+                rawMatchedActivities
+            }
+        } else {
+            rawMatchedActivities
+        }
 
         val insights = buildList {
             if (matchedFamilies.isNotEmpty()) {

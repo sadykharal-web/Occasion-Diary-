@@ -280,7 +280,7 @@ class LedgerLogicTest {
             selectedCategoryFilter = null,
             dateRangeFilter = rangeFilter
         )
-        assertEquals(listOf("r2", "r3"), allInPeriod.map { it.id })
+        assertEquals(listOf("r3", "r2"), allInPeriod.map { it.id })
 
         val inOnlyInPeriod = com.example.ui.screens.filterLedgerActivities(
             activities = records,
@@ -338,7 +338,7 @@ class LedgerLogicTest {
             items,
             com.example.ui.screens.formatKgGiftItem("مٹھائی", 5)
         )
-        assertEquals("2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 KG پھل, 5 KG مٹھائی", items)
+        assertEquals("2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 کلوگرام پھل, 5 کلوگرام مٹھائی", items)
     }
 
     @Test
@@ -531,4 +531,153 @@ class LedgerLogicTest {
         val englishGiftHit = repo.searchFamiliesAndEvents("fruit", families, activities, emptyList()).getOrThrow()
         assertEquals(listOf("a1"), englishGiftHit.matchedActivityIds)
     }
+
+    @Test
+    fun `filterLedgerActivities supports multi-select eventTypes and all sort orders`() {
+        val base = 1_764_000_000_000L
+        val r1 = ActivityRecord(
+            id = "r1",
+            name = "Zafar",
+            eventType = "شادی",
+            eventDateMillis = base + 1_000L,
+            neondraAmount = 5000L
+        )
+        val r2 = ActivityRecord(
+            id = "r2",
+            name = "Bilal",
+            eventType = "نکاح",
+            eventDateMillis = base + 3_000L,
+            neondraAmount = 2000L
+        )
+        val r3 = ActivityRecord(
+            id = "r3",
+            name = "Asif",
+            eventType = "عقیقہ",
+            eventDateMillis = base + 2_000L,
+            neondraAmount = 9000L
+        )
+        val all = listOf(r1, r2, r3)
+
+        val multiFiltered = com.example.ui.screens.filterLedgerActivities(
+            activities = all,
+            searchQuery = "",
+            selectedFilter = com.example.ui.viewmodel.LedgerFilter.ALL,
+            selectedAddress = null,
+            dateRangeFilter = com.example.ui.viewmodel.DateRangeFilter(),
+            selectedEventTypes = setOf("شادی", "عقیقہ"),
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.AMOUNT_HIGHEST
+        )
+        assertEquals(listOf("r3", "r1"), multiFiltered.map { it.id })
+
+        val oldest = com.example.ui.screens.filterLedgerActivities(
+            activities = all,
+            searchQuery = "",
+            selectedFilter = com.example.ui.viewmodel.LedgerFilter.ALL,
+            selectedAddress = null,
+            dateRangeFilter = com.example.ui.viewmodel.DateRangeFilter(),
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.DATE_OLDEST
+        )
+        assertEquals(listOf("r1", "r3", "r2"), oldest.map { it.id })
+
+        val lowestAmount = com.example.ui.screens.filterLedgerActivities(
+            activities = all,
+            searchQuery = "",
+            selectedFilter = com.example.ui.viewmodel.LedgerFilter.ALL,
+            selectedAddress = null,
+            dateRangeFilter = com.example.ui.viewmodel.DateRangeFilter(),
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.AMOUNT_LOWEST
+        )
+        assertEquals(listOf("r2", "r1", "r3"), lowestAmount.map { it.id })
+
+        val byName = com.example.ui.screens.filterLedgerActivities(
+            activities = all,
+            searchQuery = "",
+            selectedFilter = com.example.ui.viewmodel.LedgerFilter.ALL,
+            selectedAddress = null,
+            dateRangeFilter = com.example.ui.viewmodel.DateRangeFilter(),
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.NAME_AZ
+        )
+        assertEquals(listOf("r3", "r2", "r1"), byName.map { it.id })
+    }
+
+    @Test
+    fun `buildSameDateEventLists respects sortOrder for groups and nested entries`() {
+        val cal = java.util.Calendar.getInstance().apply {
+            set(2026, java.util.Calendar.NOVEMBER, 12, 10, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val day1 = cal.timeInMillis
+        cal.set(2026, java.util.Calendar.NOVEMBER, 14, 10, 0, 0)
+        val day2 = cal.timeInMillis
+
+        val activities = listOf(
+            ActivityRecord(id = "a1", name = "Zaid", eventDetail = "Walima", eventDateMillis = day1, direction = "IN", neondraAmount = 1000L),
+            ActivityRecord(id = "a2", name = "Ali", eventDetail = "Walima", eventDateMillis = day1 + 1000L, direction = "OUT", neondraAmount = 8000L),
+            ActivityRecord(id = "a3", name = "Bilal", eventDetail = "Aqeeqah", eventDateMillis = day2, direction = "IN", neondraAmount = 2000L)
+        )
+
+        val byHighestAmount = com.example.ui.screens.buildSameDateEventLists(
+            activities = activities,
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.AMOUNT_HIGHEST
+        )
+        assertEquals(listOf("Walima", "Aqeeqah"), byHighestAmount.map { it.eventName })
+        assertEquals(listOf("a2", "a1"), byHighestAmount.first().entries.map { it.id })
+
+        val byNameAz = com.example.ui.screens.buildSameDateEventLists(
+            activities = activities,
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.NAME_AZ
+        )
+        assertEquals(listOf("Aqeeqah", "Walima"), byNameAz.map { it.eventName })
+        assertEquals(listOf("a2", "a1"), byNameAz[1].entries.map { it.id })
+    }
+
+    @Test
+    fun `offline search matches کلوگرام and returns all In Out entries for a single matched family`() {
+        val repo = AiAssistantRepository()
+        val families = listOf(
+            FamilyProfile(id = "f1", familyId = "12", name = "Haji Akram", fatherName = "Haji Yousaf", address = "Lahore"),
+            FamilyProfile(id = "f2", familyId = "13", name = "Tariq Mehmood", fatherName = "Nazeer", address = "Multan")
+        )
+        val activities = listOf(
+            ActivityRecord(
+                id = "a1",
+                familyDocId = "f1",
+                familyId = "12",
+                name = "Haji Akram",
+                fatherName = "Haji Yousaf",
+                direction = "IN",
+                homeItems = "3 کلوگرام پھل",
+                neondraAmount = 4000L
+            ),
+            ActivityRecord(
+                id = "a2",
+                familyDocId = "f1",
+                familyId = "12",
+                name = "Haji Akram",
+                fatherName = "Haji Yousaf",
+                direction = "OUT",
+                neondraAmount = 6000L
+            ),
+            ActivityRecord(
+                id = "a3",
+                familyDocId = "f2",
+                familyId = "13",
+                name = "Tariq Mehmood",
+                direction = "IN",
+                homeItems = "2 کلوگرام مٹھائی",
+                neondraAmount = 3000L
+            )
+        )
+
+        val singleFamilyByName = repo.searchFamiliesAndEvents("Haji Akram", families, activities, emptyList()).getOrThrow()
+        assertEquals(listOf("f1"), singleFamilyByName.matchedFamilyIds)
+        assertEquals(setOf("a1", "a2"), singleFamilyByName.matchedActivityIds.toSet())
+
+        val kgSynonymHit = repo.searchFamiliesAndEvents("kg", families, activities, emptyList()).getOrThrow()
+        assertEquals(setOf("a1", "a3"), kgSynonymHit.matchedActivityIds.toSet())
+
+        val urduKgHit = repo.searchFamiliesAndEvents("کلوگرام", families, activities, emptyList()).getOrThrow()
+        assertEquals(setOf("a1", "a3"), urduKgHit.matchedActivityIds.toSet())
+    }
 }
+

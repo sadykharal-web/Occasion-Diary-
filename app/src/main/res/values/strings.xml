@@ -10,7 +10,7 @@
 
     <!-- Onboarding / App Highlights -->
     <string name="app_welcome_title">Welcome to Life Line</string>
-    <string name="app_welcome_subtitle">Keep your families, events, and Neondra ledger 100% offline on your device.</string>
+    <string name="app_welcome_subtitle">Keep your families, events, and نیوندرا ledger 100% offline on your device.</string>
     <string name="app_feature_sync">Automatic family grouping by Name, Father\'s Name &amp; Address</string>
     <string name="app_feature_reminders">Event reminders, alerts, and device calendar sync</string>
     <string name="app_feature_ledger">Complete In &amp; Out tracking with instant comparisons</string>
@@ -25,7 +25,7 @@
     <string name="field_date">Event Date</string>
     <string name="field_in_out">Transaction (In / Out)</string>
     <string name="field_home">Home Gift / Items</string>
-    <string name="field_neondra">Neondra Amount</string>
+    <string name="field_neondra">نیوندرا</string>
 
     <!-- Directions -->
     <string name="direction_in">In (Received)</string>
@@ -35,7 +35,7 @@
 
     <!-- Actions -->
     <string name="action_add_record">Add Entry</string>
-    <string name="action_quick_neondra">Neondra</string>
+    <string name="action_quick_neondra">نیوندرا</string>
     <string name="action_new_event">New Event</string>
     <string name="action_edit_record">Edit</string>
     <string name="action_save">Save</string>

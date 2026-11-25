@@ -41,6 +41,15 @@ enum class LedgerFilter(val label: String) {
     REMINDERS("Reminders")
 }
 
+enum class LedgerSortOrder(val label: String, val shortLabel: String) {
+    DATE_NEWEST("Date: Newest First", "Newest"),
+    DATE_OLDEST("Date: Oldest First", "Oldest"),
+    AMOUNT_HIGHEST("Amount: High to Low", "Highest Amt"),
+    AMOUNT_LOWEST("Amount: Low to High", "Lowest Amt"),
+    EVENT_TYPE("Event Type (A–Z)", "Event Type"),
+    NAME_AZ("Name (A–Z)", "Name A–Z")
+}
+
 data class DateRangeFilter(
     val startDateMillis: Long? = null,
     val endDateMillis: Long? = null,
@@ -73,8 +82,11 @@ class LedgerViewModel(
     private val _selectedAddress = MutableStateFlow<String?>(null)
     val selectedAddress: StateFlow<String?> = _selectedAddress.asStateFlow()
 
-    private val _selectedCategoryFilter = MutableStateFlow<String?>(null)
-    val selectedCategoryFilter: StateFlow<String?> = _selectedCategoryFilter.asStateFlow()
+    private val _selectedEventTypes = MutableStateFlow<Set<String>>(emptySet())
+    val selectedEventTypes: StateFlow<Set<String>> = _selectedEventTypes.asStateFlow()
+
+    private val _selectedSortOrder = MutableStateFlow(LedgerSortOrder.DATE_NEWEST)
+    val selectedSortOrder: StateFlow<LedgerSortOrder> = _selectedSortOrder.asStateFlow()
 
     private val _dateRangeFilter = MutableStateFlow(DateRangeFilter())
     val dateRangeFilter: StateFlow<DateRangeFilter> = _dateRangeFilter.asStateFlow()
@@ -251,8 +263,23 @@ class LedgerViewModel(
         _selectedAddress.value = address
     }
 
-    fun setCategoryFilter(categoryName: String?) {
-        _selectedCategoryFilter.value = categoryName
+    fun toggleEventTypeFilter(eventType: String) {
+        val clean = eventType.trim()
+        if (clean.isEmpty()) return
+        val current = _selectedEventTypes.value
+        _selectedEventTypes.value = if (clean in current) {
+            current - clean
+        } else {
+            current + clean
+        }
+    }
+
+    fun clearEventTypeFilters() {
+        _selectedEventTypes.value = emptySet()
+    }
+
+    fun setSortOrder(order: LedgerSortOrder) {
+        _selectedSortOrder.value = order
     }
 
     fun setDateRangeFilter(startMillis: Long?, endMillis: Long?, presetLabel: String? = null) {
@@ -265,6 +292,15 @@ class LedgerViewModel(
 
     fun clearDateRangeFilter() {
         _dateRangeFilter.value = DateRangeFilter()
+    }
+
+    fun clearAllLedgerFilters() {
+        _searchQuery.value = ""
+        _selectedFilter.value = LedgerFilter.ALL
+        _selectedAddress.value = null
+        _selectedEventTypes.value = emptySet()
+        _dateRangeFilter.value = DateRangeFilter()
+        _selectedSortOrder.value = LedgerSortOrder.DATE_NEWEST
     }
 
     fun clearActionMessage() {
@@ -788,13 +824,13 @@ class LedgerViewModel(
             _isSaving.value = false
             result.onSuccess { saved ->
                 _actionMessage.value = if (matchedBeforeSave != null) {
-                    "Neondra saved & linked to Family FN ${saved.familyId}."
+                    "نیوندرا saved & linked to Family FN ${saved.familyId}."
                 } else {
-                    "Neondra saved & created new Family FN ${saved.familyId}."
+                    "نیوندرا saved & created new Family FN ${saved.familyId}."
                 }
                 onSaved(saved)
             }.onFailure { err ->
-                _actionMessage.value = err.localizedMessage ?: "Failed to save Neondra entry."
+                _actionMessage.value = err.localizedMessage ?: "Failed to save نیوندرا entry."
             }
         }
     }
