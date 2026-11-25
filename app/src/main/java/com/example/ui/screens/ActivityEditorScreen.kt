@@ -106,11 +106,6 @@ fun appendHomeGiftItem(existing: String, newItem: String): String {
     return if (cleanExisting.isEmpty()) cleanItem else "$cleanExisting, $cleanItem"
 }
 
-fun formatCashGiftItem(amountText: String): String {
-    val amount = amountText.filter { it.isDigit() }.toLongOrNull() ?: 0L
-    return if (amount > 0L) "نقد ${formatNeondraAmount(amount)}" else "نقد"
-}
-
 fun formatSuitGiftItem(label: String, count: Int): String {
     val safeCount = count.coerceAtLeast(1)
     return "$safeCount $label"
@@ -129,6 +124,8 @@ fun ActivityEditorScreen(
     initialRecord: ActivityRecord?,
     prefilledFamily: FamilyProfile?,
     prefilledDateMillis: Long?,
+    prefilledEventName: String? = null,
+    prefilledEventType: String? = null,
     catalog: DropdownCatalog,
     isSaving: Boolean,
     onBack: () -> Unit,
@@ -157,10 +154,15 @@ fun ActivityEditorScreen(
         mutableStateOf(initialRecord?.address ?: prefilledFamily?.address ?: "")
     }
     var eventType by remember {
-        mutableStateOf(initialRecord?.eventType ?: catalog.eventTypes.firstOrNull() ?: "شادی")
+        mutableStateOf(
+            initialRecord?.eventType
+                ?: prefilledEventType?.takeIf { it.isNotBlank() }
+                ?: catalog.eventTypes.firstOrNull()
+                ?: "شادی"
+        )
     }
     var eventDetail by remember {
-        mutableStateOf(initialRecord?.eventDetail ?: "")
+        mutableStateOf(initialRecord?.eventDetail ?: prefilledEventName ?: "")
     }
     var eventDateMillis by remember {
         mutableLongStateOf(
@@ -175,11 +177,19 @@ fun ActivityEditorScreen(
     var homeItems by remember {
         mutableStateOf(initialRecord?.homeItems ?: "")
     }
-    var cashGiftAmountText by remember { mutableStateOf("") }
     var selectedLadySuitCount by remember { mutableIntStateOf(1) }
     var selectedGentsSuitCount by remember { mutableIntStateOf(1) }
     var selectedFruitsKg by remember { mutableIntStateOf(1) }
     var selectedSweetsKg by remember { mutableIntStateOf(1) }
+    var cashAmountText by remember {
+        mutableStateOf(initialRecord?.cashAmount?.takeIf { it > 0L }?.toString() ?: "")
+    }
+    var haarAmountText by remember {
+        mutableStateOf(initialRecord?.haarAmount?.takeIf { it > 0L }?.toString() ?: "")
+    }
+    var salamiAmountText by remember {
+        mutableStateOf(initialRecord?.salamiAmount?.takeIf { it > 0L }?.toString() ?: "")
+    }
     var neondraText by remember {
         mutableStateOf(
             initialRecord?.neondraAmount?.takeIf { it > 0L }?.toString() ?: ""
@@ -573,12 +583,14 @@ fun ActivityEditorScreen(
                         OutlinedTextField(
                             value = eventDetail,
                             onValueChange = { eventDetail = it },
-                            label = { Text("Event Details") },
-                            placeholder = { Text("e.g. Ali Raza S/O Rajab Ali") },
+                            label = { Text("Event Name") },
+                            placeholder = { Text("e.g. Ali Raza Wedding") },
                             singleLine = false,
                             maxLines = 2,
                             shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("editor_event_name_input")
                         )
 
                         OutlinedButton(
@@ -658,7 +670,7 @@ fun ActivityEditorScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "Home Gift / Items & Neondra Amount",
+                            text = "Home Gift / Items & Amounts",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -668,7 +680,7 @@ fun ActivityEditorScreen(
                             value = homeItems,
                             onValueChange = { homeItems = it },
                             label = { Text("Home Gift / Items") },
-                            placeholder = { Text("e.g. نقد 5,000, 2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 KG پھل...") },
+                            placeholder = { Text("e.g. 2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 KG پھل, 2 KG مٹھائی...") },
                             leadingIcon = { Icon(Icons.Rounded.Home, contentDescription = null) },
                             minLines = 2,
                             maxLines = 5,
@@ -693,51 +705,6 @@ fun ActivityEditorScreen(
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
                                 )
-
-                                // نقد (Cash)
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "نقد",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontFamily = NotoArabicFamily,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.width(96.dp)
-                                    )
-                                    OutlinedTextField(
-                                        value = cashGiftAmountText,
-                                        onValueChange = { input ->
-                                            cashGiftAmountText = input.filter { it.isDigit() }.take(9)
-                                        },
-                                        placeholder = { Text("Amount") },
-                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                        singleLine = true,
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .testTag("home_gift_cash_input")
-                                    )
-                                    FilledTonalButton(
-                                        onClick = {
-                                            homeItems = appendHomeGiftItem(
-                                                homeItems,
-                                                formatCashGiftItem(cashGiftAmountText)
-                                            )
-                                            cashGiftAmountText = ""
-                                        },
-                                        shape = RoundedCornerShape(12.dp),
-                                        modifier = Modifier
-                                            .height(48.dp)
-                                            .testTag("home_gift_cash_add_button")
-                                    ) {
-                                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("Add")
-                                    }
-                                }
 
                                 // زنانہ سوٹ (Lady Suit) + No. dropdown
                                 GiftCategoryQuantityRow(
@@ -809,6 +776,70 @@ fun ActivityEditorScreen(
                             }
                         }
 
+                        // 3 Entries Above Neondra: نقد (Cash), ہار (Haar), سلامی (Salami)
+                        OutlinedTextField(
+                            value = cashAmountText,
+                            onValueChange = { input ->
+                                cashAmountText = input.filter { it.isDigit() }.take(9)
+                            },
+                            label = {
+                                Text(
+                                    text = "نقد",
+                                    fontFamily = NotoArabicFamily,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            placeholder = { Text("e.g. 5000") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("editor_cash_amount_input")
+                        )
+
+                        OutlinedTextField(
+                            value = haarAmountText,
+                            onValueChange = { input ->
+                                haarAmountText = input.filter { it.isDigit() }.take(9)
+                            },
+                            label = {
+                                Text(
+                                    text = "ہار",
+                                    fontFamily = NotoArabicFamily,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            placeholder = { Text("e.g. 2000") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("editor_haar_amount_input")
+                        )
+
+                        OutlinedTextField(
+                            value = salamiAmountText,
+                            onValueChange = { input ->
+                                salamiAmountText = input.filter { it.isDigit() }.take(9)
+                            },
+                            label = {
+                                Text(
+                                    text = "سلامی",
+                                    fontFamily = NotoArabicFamily,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            placeholder = { Text("e.g. 1000") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("editor_salami_amount_input")
+                        )
+
                         OutlinedTextField(
                             value = neondraText,
                             onValueChange = { input ->
@@ -819,8 +850,43 @@ fun ActivityEditorScreen(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("editor_neondra_amount_input")
                         )
+
+                        val liveTotal = (cashAmountText.toLongOrNull() ?: 0L) +
+                            (haarAmountText.toLongOrNull() ?: 0L) +
+                            (salamiAmountText.toLongOrNull() ?: 0L) +
+                            (neondraText.toLongOrNull() ?: 0L)
+                        if (liveTotal > 0L) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Total Amount",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        text = formatNeondraAmount(liveTotal),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -943,6 +1009,9 @@ fun ActivityEditorScreen(
                             return@Button
                         }
                         validationError = null
+                        val cashAmount = cashAmountText.toLongOrNull() ?: 0L
+                        val haarAmount = haarAmountText.toLongOrNull() ?: 0L
+                        val salamiAmount = salamiAmountText.toLongOrNull() ?: 0L
                         val neondraAmount = neondraText.toLongOrNull() ?: 0L
                         val reminderAt = if (reminderEnabled) {
                             (eventDateMillis - reminderMinutesBefore * 60_000L)
@@ -963,6 +1032,9 @@ fun ActivityEditorScreen(
                             eventDateMillis = eventDateMillis,
                             direction = direction.wireValue,
                             homeItems = homeItems.trim(),
+                            cashAmount = cashAmount,
+                            haarAmount = haarAmount,
+                            salamiAmount = salamiAmount,
                             neondraAmount = neondraAmount,
                             reminderEnabled = reminderEnabled,
                             reminderAtMillis = reminderAt,

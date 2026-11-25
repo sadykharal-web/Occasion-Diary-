@@ -356,8 +356,8 @@ class AiAssistantRepository {
         val inEntries = famActs.filter { it.parsedDirection == ActivityDirection.IN }
         val outEntries = famActs.filter { it.parsedDirection == ActivityDirection.OUT }
 
-        val totalIn = inEntries.sumOf { it.neondraAmount }
-        val totalOut = outEntries.sumOf { it.neondraAmount }
+        val totalIn = inEntries.sumOf { it.totalAmount }
+        val totalOut = outEntries.sumOf { it.totalAmount }
         val netBalance = totalIn - totalOut
 
         val categoryBreakdowns = famActs
@@ -367,8 +367,8 @@ class AiAssistantRepository {
                 val catOut = records.filter { it.parsedDirection == ActivityDirection.OUT }
                 CategoryInOutBreakdown(
                     categoryName = catName,
-                    totalIn = catIn.sumOf { it.neondraAmount },
-                    totalOut = catOut.sumOf { it.neondraAmount },
+                    totalIn = catIn.sumOf { it.totalAmount },
+                    totalOut = catOut.sumOf { it.totalAmount },
                     inCount = catIn.size,
                     outCount = catOut.size
                 )
@@ -390,14 +390,14 @@ class AiAssistantRepository {
 
         val insights = buildList {
             if (inEntries.isNotEmpty()) {
-                val topIn = inEntries.maxByOrNull { it.neondraAmount }!!
-                add("سب سے بڑی آمدن (وصول): ${topIn.eventType}${if (topIn.eventDetail.isNotBlank()) " (${topIn.eventDetail})" else ""} پر ${fmt.format(topIn.neondraAmount)} روپے۔")
+                val topIn = inEntries.maxByOrNull { it.totalAmount }!!
+                add("سب سے بڑی آمدن (وصول): ${topIn.eventType}${if (topIn.eventDetail.isNotBlank()) " (${topIn.eventDetail})" else ""} پر ${fmt.format(topIn.totalAmount)} روپے۔")
             } else {
                 add("${family.name} کے لیے ابھی کوئی آمدن (وصول) کا اندراج درج نہیں ہے۔")
             }
             if (outEntries.isNotEmpty()) {
-                val topOut = outEntries.maxByOrNull { it.neondraAmount }!!
-                add("سب سے بڑا خرچ (دیا گیا): ${topOut.eventType}${if (topOut.eventDetail.isNotBlank()) " (${topOut.eventDetail})" else ""} پر ${fmt.format(topOut.neondraAmount)} روپے۔")
+                val topOut = outEntries.maxByOrNull { it.totalAmount }!!
+                add("سب سے بڑا خرچ (دیا گیا): ${topOut.eventType}${if (topOut.eventDetail.isNotBlank()) " (${topOut.eventDetail})" else ""} پر ${fmt.format(topOut.totalAmount)} روپے۔")
             } else {
                 add("${family.name} کے لیے ابھی کوئی خرچ (دیا گیا) کا اندراج درج نہیں ہے۔")
             }
@@ -534,8 +534,8 @@ class AiAssistantRepository {
 
         val familyStats = families.map { fam ->
             val famActs = activitiesForFamily(fam, activities)
-            val inTotal = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.neondraAmount }
-            val outTotal = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.neondraAmount }
+            val inTotal = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.totalAmount }
+            val outTotal = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.totalAmount }
             Triple(fam, Triple(inTotal, outTotal, inTotal - outTotal), famActs.size)
         }
 
@@ -612,8 +612,8 @@ class AiAssistantRepository {
                 add("اگلی متعلقہ تقریب: ${nextEvt.title} (${dateFmt.format(Date(nextEvt.eventDateMillis))})۔")
             }
             if (matchedActivities.isNotEmpty()) {
-                val inSum = matchedActivities.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.neondraAmount }
-                val outSum = matchedActivities.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.neondraAmount }
+                val inSum = matchedActivities.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.totalAmount }
+                val outSum = matchedActivities.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.totalAmount }
                 add("${matchedActivities.size} متعلقہ اندراجات ملے (آمدن: ${fmt.format(inSum)} | خرچ: ${fmt.format(outSum)} روپے)۔")
             }
         }
@@ -653,8 +653,8 @@ class AiAssistantRepository {
             val famEvents = events.filter { evt ->
                 evt.familyDocId == fam.id || evt.familyName.equals(fam.name, ignoreCase = true)
             }
-            val totalIn = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.neondraAmount }
-            val totalOut = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.neondraAmount }
+            val totalIn = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.totalAmount }
+            val totalOut = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.totalAmount }
             val net = totalIn - totalOut
             ComputedFamilyStat(fam, famActs, famEvents, totalIn, totalOut, net)
         }
@@ -866,20 +866,20 @@ class AiAssistantRepository {
 
         return when {
             "in" in cleanQ || "received" in cleanQ || "آمدن" in question || "وصول" in question -> {
-                val topIn = comparison.inEntries.maxByOrNull { it.neondraAmount }
+                val topIn = comparison.inEntries.maxByOrNull { it.totalAmount }
                 if (topIn == null) {
                     "$famName$fnSuffix سے ابھی تک کوئی آمدن (وصول) درج نہیں ہے۔"
                 } else {
-                    "$famName$fnSuffix کی کل آمدن ${comparison.inEntries.size} اندراجات میں ${fmt.format(comparison.totalIn)} روپے ہے۔ سب سے زیادہ رقم ${fmt.format(topIn.neondraAmount)} روپے (${topIn.eventType}) پر وصول ہوئی۔"
+                    "$famName$fnSuffix کی کل آمدن ${comparison.inEntries.size} اندراجات میں ${fmt.format(comparison.totalIn)} روپے ہے۔ سب سے زیادہ رقم ${fmt.format(topIn.totalAmount)} روپے (${topIn.eventType}) پر وصول ہوئی۔"
                 }
             }
 
             "out" in cleanQ || "given" in cleanQ || "spent" in cleanQ || "خرچ" in question || "دیا" in question || "دیے" in question -> {
-                val topOut = comparison.outEntries.maxByOrNull { it.neondraAmount }
+                val topOut = comparison.outEntries.maxByOrNull { it.totalAmount }
                 if (topOut == null) {
                     "$famName$fnSuffix کو ابھی تک کوئی خرچ یا نیوندرا نہیں دیا گیا۔"
                 } else {
-                    "$famName$fnSuffix کو کل ${comparison.outEntries.size} اندراجات میں ${fmt.format(comparison.totalOut)} روپے دیے گئے۔ سب سے بڑی رقم ${fmt.format(topOut.neondraAmount)} روپے (${topOut.eventType}) تھی۔"
+                    "$famName$fnSuffix کو کل ${comparison.outEntries.size} اندراجات میں ${fmt.format(comparison.totalOut)} روپے دیے گئے۔ سب سے بڑی رقم ${fmt.format(topOut.totalAmount)} روپے (${topOut.eventType}) تھی۔"
                 }
             }
 
@@ -975,7 +975,7 @@ class AiAssistantRepository {
                                 put("date", dateFmt.format(Date(act.eventDateMillis)))
                                 put("category", act.eventType)
                                 put("detail", act.eventDetail)
-                                put("amount", act.neondraAmount)
+                                put("amount", act.totalAmount)
                                 put("items", act.homeItems)
                             }
                         )
@@ -991,7 +991,7 @@ class AiAssistantRepository {
                                 put("date", dateFmt.format(Date(act.eventDateMillis)))
                                 put("category", act.eventType)
                                 put("detail", act.eventDetail)
-                                put("amount", act.neondraAmount)
+                                put("amount", act.totalAmount)
                                 put("items", act.homeItems)
                             }
                         )
@@ -1031,7 +1031,7 @@ class AiAssistantRepository {
                                             put("date", dateFmt.format(Date(act.eventDateMillis)))
                                             put("category", act.eventType)
                                             put("direction", act.direction)
-                                            put("amount", act.neondraAmount)
+                                            put("amount", act.totalAmount)
                                             put("items", act.homeItems)
                                         }
                                     )
@@ -1068,8 +1068,8 @@ class AiAssistantRepository {
         val familiesArr = JSONArray().apply {
             families.take(60).forEach { fam ->
                 val famActs = activitiesForFamily(fam, activities)
-                val inSum = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.neondraAmount }
-                val outSum = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.neondraAmount }
+                val inSum = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.totalAmount }
+                val outSum = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.totalAmount }
                 put(
                     JSONObject().apply {
                         put("id", fam.id)
@@ -1112,7 +1112,7 @@ class AiAssistantRepository {
                         put("date", dateFmt.format(Date(act.eventDateMillis)))
                         put("dir", act.direction)
                         if (act.homeItems.isNotBlank()) put("items", act.homeItems)
-                        put("amt", act.neondraAmount)
+                        put("amt", act.totalAmount)
                     }
                 )
             }
@@ -1161,7 +1161,7 @@ class AiAssistantRepository {
                         put("type", act.eventType)
                         if (act.eventDetail.isNotBlank()) put("detail", act.eventDetail)
                         if (act.homeItems.isNotBlank()) put("items", act.homeItems)
-                        put("amt", act.neondraAmount)
+                        put("amt", act.totalAmount)
                     }
                 )
             }
@@ -1174,7 +1174,7 @@ class AiAssistantRepository {
                         put("type", act.eventType)
                         if (act.eventDetail.isNotBlank()) put("detail", act.eventDetail)
                         if (act.homeItems.isNotBlank()) put("items", act.homeItems)
-                        put("amt", act.neondraAmount)
+                        put("amt", act.totalAmount)
                     }
                 )
             }
@@ -1213,7 +1213,7 @@ class AiAssistantRepository {
                                 put("date", dateFmt.format(Date(act.eventDateMillis)))
                                 put("type", act.eventType)
                                 put("dir", act.direction)
-                                put("amt", act.neondraAmount)
+                                put("amt", act.totalAmount)
                                 if (act.homeItems.isNotBlank()) put("items", act.homeItems)
                             }
                         )

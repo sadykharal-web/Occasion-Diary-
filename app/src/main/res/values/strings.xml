@@ -21,7 +21,7 @@
     <string name="field_father">Father\'s Name</string>
     <string name="field_address">Address</string>
     <string name="field_event">Event Type</string>
-    <string name="field_e_detail">Event Details</string>
+    <string name="field_e_detail">Event Name</string>
     <string name="field_date">Event Date</string>
     <string name="field_in_out">Transaction (In / Out)</string>
     <string name="field_home">Home Gift / Items</string>

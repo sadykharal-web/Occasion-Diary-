@@ -200,7 +200,10 @@ class LedgerRepository(
 
             require(cleanName.isNotEmpty()) { "Please enter a person or family name." }
             require(cleanEvent.isNotEmpty()) { "Please select an event type." }
-            require(record.neondraAmount in 0L..1_000_000_000L) { "Amount must be within valid limits." }
+            require(record.cashAmount in 0L..1_000_000_000L) { "Cash amount must be within valid limits." }
+            require(record.haarAmount in 0L..1_000_000_000L) { "Haar amount must be within valid limits." }
+            require(record.salamiAmount in 0L..1_000_000_000L) { "Salami amount must be within valid limits." }
+            require(record.neondraAmount in 0L..1_000_000_000L) { "Neondra amount must be within valid limits." }
 
             val now = System.currentTimeMillis()
             val resolution = FamilyIdentityMatcher.resolveForActivity(
@@ -246,6 +249,9 @@ class LedgerRepository(
                 eventDateMillis = safeEventMillis,
                 direction = resolvedDirection,
                 homeItems = cleanHome,
+                cashAmount = record.cashAmount,
+                haarAmount = record.haarAmount,
+                salamiAmount = record.salamiAmount,
                 neondraAmount = record.neondraAmount,
                 reminderEnabled = record.reminderEnabled,
                 reminderAtMillis = safeReminderAt,
@@ -408,6 +414,9 @@ class LedgerRepository(
                         eventDateMillis = act.eventDateMillis.coerceAtLeast(0L),
                         direction = ActivityDirection.fromWire(act.direction).wireValue,
                         homeItems = act.homeItems.trim().take(1000),
+                        cashAmount = act.cashAmount.coerceIn(0L, 1_000_000_000L),
+                        haarAmount = act.haarAmount.coerceIn(0L, 1_000_000_000L),
+                        salamiAmount = act.salamiAmount.coerceIn(0L, 1_000_000_000L),
                         neondraAmount = act.neondraAmount.coerceIn(0L, 1_000_000_000L),
                         reminderEnabled = act.reminderEnabled,
                         reminderAtMillis = if (act.reminderEnabled) act.reminderAtMillis.coerceAtLeast(0L) else 0L,

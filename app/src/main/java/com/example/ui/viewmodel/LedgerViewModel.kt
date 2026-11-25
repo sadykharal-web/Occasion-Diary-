@@ -181,10 +181,10 @@ class LedgerViewModel(
 
         val totalIn = activities
             .filter { it.parsedDirection == ActivityDirection.IN }
-            .sumOf { it.neondraAmount }
+            .sumOf { it.totalAmount }
         val totalOut = activities
             .filter { it.parsedDirection == ActivityDirection.OUT }
-            .sumOf { it.neondraAmount }
+            .sumOf { it.totalAmount }
 
         val activeRemindersCount = activities.count {
             it.reminderEnabled && it.reminderAtMillis > System.currentTimeMillis()
@@ -654,15 +654,15 @@ class LedgerViewModel(
                     isBusy = false,
                     lastBackupMillis = exportedAt,
                     lastFileName = LocalBackupManager.DEFAULT_BACKUP_FILE_NAME,
-                    statusMessage = "Offline backup file saved to device"
+                    statusMessage = "Excel backup (.xlsx) saved to device"
                 )
-                _actionMessage.value = "Backup saved successfully to your device."
+                _actionMessage.value = "Excel backup saved successfully to your device."
             }.onFailure { err ->
                 _localBackupStatus.value = _localBackupStatus.value.copy(
                     isBusy = false,
-                    statusMessage = err.localizedMessage ?: "Failed to export backup"
+                    statusMessage = err.localizedMessage ?: "Failed to export Excel backup"
                 )
-                _actionMessage.value = err.localizedMessage ?: "Failed to save backup file."
+                _actionMessage.value = err.localizedMessage ?: "Failed to save Excel backup file."
             }
         }
     }

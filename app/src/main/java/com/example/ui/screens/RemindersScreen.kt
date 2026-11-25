@@ -165,7 +165,7 @@ fun RemindersScreen(
                             )
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Phone File Backup & Restore",
+                                    text = "Excel Backup & Restore",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
@@ -173,7 +173,7 @@ fun RemindersScreen(
                                     text = if (backupStatus.lastBackupMillis > 0L) {
                                         "Last backup: ${formatDisplayDate(backupStatus.lastBackupMillis)} • ${formatDisplayTime(backupStatus.lastBackupMillis)}"
                                     } else {
-                                        "Export or restore a JSON backup file on your device anytime."
+                                        "Export or restore an Excel (.xlsx) backup file on your device anytime."
                                     },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant

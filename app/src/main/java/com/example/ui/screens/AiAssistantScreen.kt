@@ -432,8 +432,8 @@ fun AiAssistantScreen(
                                 val famActs = activities.filter {
                                     FamilyIdentityMatcher.activityBelongsToFamily(it, fam)
                                 }
-                                val fIn = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.neondraAmount }
-                                val fOut = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.neondraAmount }
+                                val fIn = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.totalAmount }
+                                val fOut = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.totalAmount }
 
                                 MatchedFamilyCard(
                                     family = fam,
@@ -1894,7 +1894,7 @@ private fun MatchedActivityCard(
             ) {
                 CategoryBadge(label = record.eventType, color = catColor, icon = catIcon)
                 Text(
-                    text = "Amount: ${formatNeondraAmount(record.neondraAmount)}",
+                    text = "Amount: ${formatNeondraAmount(record.totalAmount)}",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold

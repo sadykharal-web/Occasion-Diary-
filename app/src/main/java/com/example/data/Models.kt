@@ -207,6 +207,9 @@ data class ActivityRecord(
     val eventDateMillis: Long = System.currentTimeMillis(),
     val direction: String = ActivityDirection.OUT.wireValue,
     val homeItems: String = "",
+    val cashAmount: Long = 0L,
+    val haarAmount: Long = 0L,
+    val salamiAmount: Long = 0L,
     val neondraAmount: Long = 0L,
     val reminderEnabled: Boolean = false,
     val reminderAtMillis: Long = 0L,
@@ -217,6 +220,9 @@ data class ActivityRecord(
 ) {
     val parsedDirection: ActivityDirection
         get() = ActivityDirection.fromWire(direction)
+
+    val totalAmount: Long
+        get() = cashAmount + haarAmount + salamiAmount + neondraAmount
 }
 
 data class EventEntry(

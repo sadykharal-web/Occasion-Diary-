@@ -53,13 +53,13 @@ object ReminderScheduler {
     }
 
     private fun buildReminderIntent(context: Context, record: ActivityRecord): Intent {
-        val formattedNeondra = NumberFormat.getNumberInstance(Locale.US).format(record.neondraAmount)
+        val formattedTotal = NumberFormat.getNumberInstance(Locale.US).format(record.totalAmount)
         val title = "${record.eventType}: ${record.name}" +
             if (record.familyId.isNotBlank()) " (FN ${record.familyId})" else ""
         val details = buildList {
-            if (record.eventDetail.isNotBlank()) add(record.eventDetail)
+            if (record.eventDetail.isNotBlank()) add("Event Name: ${record.eventDetail}")
             if (record.address.isNotBlank()) add("Address: ${record.address}")
-            add("${record.parsedDirection.shortLabel} • Amount: $formattedNeondra")
+            add("${record.parsedDirection.shortLabel} • Amount: $formattedTotal")
             if (record.homeItems.isNotBlank()) add(record.homeItems)
         }.joinToString("\n")
 
@@ -73,17 +73,17 @@ object ReminderScheduler {
 
 object CalendarIntentHelper {
     fun buildInsertCalendarIntent(record: ActivityRecord): Intent {
-        val formattedNeondra = NumberFormat.getNumberInstance(Locale.US).format(record.neondraAmount)
+        val formattedTotal = NumberFormat.getNumberInstance(Locale.US).format(record.totalAmount)
         val title = "${record.eventType} - ${record.name}" +
             if (record.familyId.isNotBlank()) " (FN ${record.familyId})" else ""
         val description = buildString {
             if (record.familyId.isNotBlank()) appendLine("FN: ${record.familyId}")
             if (record.fatherName.isNotBlank()) appendLine("Father's Name: ${record.fatherName}")
             if (record.address.isNotBlank()) appendLine("Address: ${record.address}")
-            if (record.eventDetail.isNotBlank()) appendLine("Details: ${record.eventDetail}")
+            if (record.eventDetail.isNotBlank()) appendLine("Event Name: ${record.eventDetail}")
             appendLine("Type: ${record.parsedDirection.displayLabel}")
             if (record.homeItems.isNotBlank()) appendLine("Home Gift / Items: ${record.homeItems}")
-            appendLine("Amount: $formattedNeondra")
+            appendLine("Amount: $formattedTotal")
         }.trim()
 
         val beginMillis = record.eventDateMillis

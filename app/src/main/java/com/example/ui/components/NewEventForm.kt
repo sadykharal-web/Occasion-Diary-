@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Title
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
@@ -126,6 +127,31 @@ fun NewEventFormContent(
 
     var validationError by remember { mutableStateOf<String?>(null) }
     var showDatePicker by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirm && initialEvent != null && onDeleteEvent != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Event?") },
+            text = { Text("Are you sure you want to delete \"${initialEvent.title}\"?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDeleteEvent(initialEvent.id)
+                    },
+                    modifier = Modifier.testTag("confirm_delete_event_button")
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirm = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     val familyOptions = remember(catalog.families) {
         catalog.families.map { fam ->
@@ -400,7 +426,7 @@ fun NewEventFormContent(
 
         if (initialEvent != null && onDeleteEvent != null) {
             OutlinedButton(
-                onClick = { onDeleteEvent(initialEvent.id) },
+                onClick = { showDeleteConfirm = true },
                 enabled = !isSaving,
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier

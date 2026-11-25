@@ -66,6 +66,7 @@ import com.example.ui.components.DirectionPill
 import com.example.ui.components.formatDisplayDate
 import com.example.ui.components.formatNeondraAmount
 import com.example.ui.components.formatReminderOffsetLabel
+import com.example.ui.theme.NotoArabicFamily
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -215,7 +216,7 @@ fun ActivityDetailScreen(
                                 )
                             }
                         }
-                        DetailFieldRow(label = "Event Details", value = record.eventDetail.ifBlank { "—" })
+                        DetailFieldRow(label = "Event Name", value = record.eventDetail.ifBlank { "—" })
                         DetailFieldRow(
                             label = "Event Date",
                             value = formatDisplayDate(record.eventDateMillis)
@@ -246,14 +247,88 @@ fun ActivityDetailScreen(
 
                         HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
 
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            val hasExtraMoney = record.cashAmount > 0L || record.haarAmount > 0L || record.salamiAmount > 0L
+                            if (hasExtraMoney) {
+                                if (record.cashAmount > 0L) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "نقد",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontFamily = NotoArabicFamily,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = formatNeondraAmount(record.cashAmount),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                                if (record.haarAmount > 0L) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "ہار",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontFamily = NotoArabicFamily,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = formatNeondraAmount(record.haarAmount),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                                if (record.salamiAmount > 0L) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "سلامی",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontFamily = NotoArabicFamily,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = formatNeondraAmount(record.salamiAmount),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                                if (record.neondraAmount > 0L) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(
+                                            text = "Neondra Amount",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = formatNeondraAmount(record.neondraAmount),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
                             Text(
-                                text = "Neondra Amount",
+                                text = if (hasExtraMoney) "Total Amount" else "Neondra Amount",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = formatNeondraAmount(record.neondraAmount),
+                                text = formatNeondraAmount(record.totalAmount),
                                 style = MaterialTheme.typography.headlineSmall,
                                 color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.Bold
@@ -365,10 +440,10 @@ fun ActivityDetailScreen(
                 if (relatedRecords.size > 1) {
                     val familyIn = relatedRecords
                         .filter { it.parsedDirection == ActivityDirection.IN }
-                        .sumOf { it.neondraAmount }
+                        .sumOf { it.totalAmount }
                     val familyOut = relatedRecords
                         .filter { it.parsedDirection == ActivityDirection.OUT }
-                        .sumOf { it.neondraAmount }
+                        .sumOf { it.totalAmount }
 
                     Card(
                         modifier = Modifier.fillMaxWidth(),

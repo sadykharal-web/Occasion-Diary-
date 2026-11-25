@@ -68,6 +68,7 @@ fun FamiliesScreen(
     var search by remember { mutableStateOf("") }
     var editingFamily by remember { mutableStateOf<FamilyProfile?>(null) }
     var showFamilyDialog by remember { mutableStateOf(false) }
+    var deletingFamily by remember { mutableStateOf<FamilyProfile?>(null) }
 
     val data = (state as? UiState.Success)?.data
     val families = data?.families ?: emptyList()
@@ -92,6 +93,41 @@ fun FamiliesScreen(
             onConfirm = { profile ->
                 showFamilyDialog = false
                 onSaveFamily(profile)
+            }
+        )
+    }
+
+    deletingFamily?.let { famToDelete ->
+        val linkedCount = activities.count { FamilyIdentityMatcher.activityBelongsToFamily(it, famToDelete) }
+        AlertDialog(
+            onDismissRequest = { deletingFamily = null },
+            title = { Text("Delete Family (FN ${famToDelete.familyId})?") },
+            text = {
+                Text(
+                    buildString {
+                        append("Are you sure you want to delete \"${famToDelete.name}\" (FN ${famToDelete.familyId})?")
+                        if (linkedCount > 0) {
+                            append("\n\nThis family currently has $linkedCount ledger ")
+                            append(if (linkedCount == 1) "entry." else "entries.")
+                        }
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deletingFamily = null
+                        onDeleteFamily(famToDelete.id)
+                    },
+                    modifier = Modifier.testTag("confirm_delete_family_button")
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingFamily = null }) {
+                    Text("Cancel")
+                }
             }
         )
     }
@@ -222,8 +258,8 @@ fun FamiliesScreen(
                         val famActs = activities.filter { act ->
                             FamilyIdentityMatcher.activityBelongsToFamily(act, family)
                         }
-                        val totalIn = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.neondraAmount }
-                        val totalOut = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.neondraAmount }
+                        val totalIn = famActs.filter { it.parsedDirection == ActivityDirection.IN }.sumOf { it.totalAmount }
+                        val totalOut = famActs.filter { it.parsedDirection == ActivityDirection.OUT }.sumOf { it.totalAmount }
 
                         Card(
                             shape = RoundedCornerShape(20.dp),
@@ -282,7 +318,10 @@ fun FamiliesScreen(
                                         ) {
                                             Icon(Icons.Rounded.Edit, contentDescription = "Edit Family")
                                         }
-                                        IconButton(onClick = { onDeleteFamily(family.id) }) {
+                                        IconButton(
+                                            onClick = { deletingFamily = family },
+                                            modifier = Modifier.testTag("delete_family_${family.id}")
+                                        ) {
                                             Icon(
                                                 Icons.Rounded.DeleteOutline,
                                                 contentDescription = "Delete Family",

@@ -10,6 +10,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.ActivityCategory
 import com.example.data.ActivityRecord
 import com.example.data.EventEntry
@@ -73,6 +75,9 @@ data class ActivityEntity(
     val eventDateMillis: Long,
     val direction: String,
     val homeItems: String,
+    val cashAmount: Long = 0L,
+    val haarAmount: Long = 0L,
+    val salamiAmount: Long = 0L,
     val neondraAmount: Long,
     val reminderEnabled: Boolean,
     val reminderAtMillis: Long,
@@ -94,6 +99,9 @@ data class ActivityEntity(
         eventDateMillis = eventDateMillis,
         direction = direction,
         homeItems = homeItems,
+        cashAmount = cashAmount,
+        haarAmount = haarAmount,
+        salamiAmount = salamiAmount,
         neondraAmount = neondraAmount,
         reminderEnabled = reminderEnabled,
         reminderAtMillis = reminderAtMillis,
@@ -215,7 +223,7 @@ interface OccasionDiaryDao {
         ActivityEntity::class,
         EventEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class OccasionDiaryDatabase : RoomDatabase() {
@@ -225,6 +233,14 @@ abstract class OccasionDiaryDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: OccasionDiaryDatabase? = null
 
+        val MIGRATION_1_2: Migration = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE activities ADD COLUMN cashAmount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE activities ADD COLUMN haarAmount INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE activities ADD COLUMN salamiAmount INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         fun getInstance(context: Context): OccasionDiaryDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -232,6 +248,7 @@ abstract class OccasionDiaryDatabase : RoomDatabase() {
                     OccasionDiaryDatabase::class.java,
                     "occasion_diary_offline.db"
                 )
+                    .addMigrations(MIGRATION_1_2)
                     .fallbackToDestructiveMigration(dropAllTables = true)
                     .build()
                     .also { INSTANCE = it }

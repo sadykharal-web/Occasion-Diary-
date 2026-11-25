@@ -324,10 +324,6 @@ class LedgerLogicTest {
         var items = ""
         items = com.example.ui.screens.appendHomeGiftItem(
             items,
-            com.example.ui.screens.formatCashGiftItem("5000")
-        )
-        items = com.example.ui.screens.appendHomeGiftItem(
-            items,
             com.example.ui.screens.formatSuitGiftItem("زنانہ سوٹ", 2)
         )
         items = com.example.ui.screens.appendHomeGiftItem(
@@ -342,8 +338,174 @@ class LedgerLogicTest {
             items,
             com.example.ui.screens.formatKgGiftItem("مٹھائی", 5)
         )
-        assertEquals("نقد 5,000, 2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 KG پھل, 5 KG مٹھائی", items)
-        assertEquals("نقد", com.example.ui.screens.formatCashGiftItem(""))
+        assertEquals("2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 KG پھل, 5 KG مٹھائی", items)
+    }
+
+    @Test
+    fun `ActivityRecord totalAmount sums نقد ہار سلامی and Neondra accurately`() {
+        val record = ActivityRecord(
+            id = "a1",
+            name = "Asif",
+            cashAmount = 5000L,
+            haarAmount = 2000L,
+            salamiAmount = 1000L,
+            neondraAmount = 3000L
+        )
+        assertEquals(11000L, record.totalAmount)
+    }
+
+    @Test
+    fun `buildSameDateEventLists groups entries sharing same date and normalized Event Name`() {
+        val cal = java.util.Calendar.getInstance().apply {
+            set(2026, java.util.Calendar.NOVEMBER, 10, 9, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val day1Morning = cal.timeInMillis
+        cal.set(2026, java.util.Calendar.NOVEMBER, 10, 20, 30, 0)
+        val day1Evening = cal.timeInMillis
+        cal.set(2026, java.util.Calendar.NOVEMBER, 11, 12, 0, 0)
+        val day2Noon = cal.timeInMillis
+
+        val activities = listOf(
+            ActivityRecord(
+                id = "a1",
+                name = "Ali",
+                eventType = "شادی",
+                eventDetail = "Bilal  Wedding",
+                eventDateMillis = day1Morning,
+                direction = "IN",
+                cashAmount = 2000L,
+                neondraAmount = 3000L
+            ),
+            ActivityRecord(
+                id = "a2",
+                name = "Usman",
+                eventType = "شادی",
+                eventDetail = " bilal wedding ",
+                eventDateMillis = day1Evening,
+                direction = "OUT",
+                haarAmount = 1000L,
+                salamiAmount = 500L,
+                neondraAmount = 1500L
+            ),
+            ActivityRecord(
+                id = "a3",
+                name = "Tariq",
+                eventType = "شادی",
+                eventDetail = "Bilal Wedding",
+                eventDateMillis = day2Noon,
+                direction = "IN",
+                neondraAmount = 4000L
+            ),
+            ActivityRecord(
+                id = "a4",
+                name = "No Event Name",
+                eventType = "نکاح",
+                eventDetail = "   ",
+                eventDateMillis = day1Morning,
+                direction = "IN",
+                neondraAmount = 1000L
+            )
+        )
+
+        val groups = com.example.ui.screens.buildSameDateEventLists(activities)
+        assertEquals(2, groups.size)
+
+        val day2Group = groups[0]
+        assertEquals(localDayStartMillis(day2Noon), day2Group.eventDayStartMillis)
+        assertEquals(1, day2Group.entries.size)
+        assertEquals(4000L, day2Group.totalIn)
+
+        val day1Group = groups[1]
+        assertEquals(localDayStartMillis(day1Morning), day1Group.eventDayStartMillis)
+        assertEquals(2, day1Group.entries.size)
+        assertEquals(5000L, day1Group.totalIn)
+        assertEquals(3000L, day1Group.totalOut)
+        assertEquals(2000L, day1Group.netBalance)
+    }
+
+    @Test
+    fun `LocalBackupManager exports valid Excel xlsx and round-trips all sheets cleanly`() {
+        val now = 1_764_000_000_000L
+        val categories = listOf(
+            com.example.data.ActivityCategory(id = "c1", name = "شادی", colorHex = "#D81B60", iconKey = "celebration")
+        )
+        val families = listOf(
+            FamilyProfile(
+                id = "f1",
+                familyId = "7",
+                name = "Rajab Ali",
+                fatherName = "Muhammad Ramzan",
+                address = "Kot Ramzan",
+                phone = "03001234567"
+            )
+        )
+        val activities = listOf(
+            ActivityRecord(
+                id = "a1",
+                familyDocId = "f1",
+                familyId = "7",
+                name = "Rajab Ali",
+                fatherName = "Muhammad Ramzan",
+                address = "Kot Ramzan",
+                eventType = "شادی",
+                eventDetail = "Asif & Bilal Wedding",
+                eventDateMillis = now,
+                direction = "OUT",
+                homeItems = "2 زنانہ سوٹ, 3 KG مٹھائی",
+                cashAmount = 5000L,
+                haarAmount = 1500L,
+                salamiAmount = 1000L,
+                neondraAmount = 3000L,
+                reminderEnabled = true,
+                reminderAtMillis = now + 3600_000L,
+                reminderMinutesBefore = 60L,
+                calendarSynced = true
+            )
+        )
+        val events = listOf(
+            EventEntry(
+                id = "e1",
+                title = "Family Dinner",
+                description = "Night dinner",
+                eventDateMillis = now,
+                category = "عقیقہ",
+                location = "Pearl Hall",
+                familyDocId = "f1",
+                familyName = "Rajab Ali"
+            )
+        )
+
+        val xlsxBytes = com.example.drive.LocalBackupManager.serializeBackupXlsxToBytes(
+            exportedAtMillis = now,
+            categories = categories,
+            families = families,
+            activities = activities,
+            events = events
+        )
+        // Verify PK zip signature for .xlsx
+        assertEquals(0x50.toByte(), xlsxBytes[0])
+        assertEquals(0x4B.toByte(), xlsxBytes[1])
+
+        val restored = com.example.drive.LocalBackupManager.parseBackupAuto(xlsxBytes)
+        assertEquals(1, restored.categories.size)
+        assertEquals("شادی", restored.categories.first().name)
+        assertEquals(1, restored.families.size)
+        assertEquals("7", restored.families.first().familyId)
+        assertEquals("Rajab Ali", restored.families.first().name)
+        assertEquals(1, restored.activities.size)
+        val restoredAct = restored.activities.first()
+        assertEquals("Asif & Bilal Wedding", restoredAct.eventDetail)
+        assertEquals(5000L, restoredAct.cashAmount)
+        assertEquals(1500L, restoredAct.haarAmount)
+        assertEquals(1000L, restoredAct.salamiAmount)
+        assertEquals(3000L, restoredAct.neondraAmount)
+        assertEquals(10500L, restoredAct.totalAmount)
+        assertEquals("2 زنانہ سوٹ, 3 KG مٹھائی", restoredAct.homeItems)
+        assertTrue(restoredAct.reminderEnabled)
+        assertTrue(restoredAct.calendarSynced)
+        assertEquals(1, restored.events.size)
+        assertEquals("عقیقہ", restored.events.first().category)
     }
 
     @Test
@@ -357,15 +519,16 @@ class LedgerLogicTest {
                 familyId = "1",
                 name = "Asif Ali",
                 eventType = "شادی",
-                homeItems = "نقد 5,000, 2 زنانہ سوٹ, 3 KG پھل",
+                homeItems = "2 زنانہ سوٹ, 3 KG پھل",
                 direction = "OUT",
-                neondraAmount = 5000L
+                cashAmount = 2000L,
+                neondraAmount = 3000L
             )
         )
         val urduEventHit = repo.searchFamiliesAndEvents("شادی", families, activities, emptyList()).getOrThrow()
         assertEquals(listOf("a1"), urduEventHit.matchedActivityIds)
 
-        val englishGiftHit = repo.searchFamiliesAndEvents("cash", families, activities, emptyList()).getOrThrow()
+        val englishGiftHit = repo.searchFamiliesAndEvents("fruit", families, activities, emptyList()).getOrThrow()
         assertEquals(listOf("a1"), englishGiftHit.matchedActivityIds)
     }
 }

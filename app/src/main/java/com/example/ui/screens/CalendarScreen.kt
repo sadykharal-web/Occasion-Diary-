@@ -583,7 +583,7 @@ fun CalendarScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Amount: ${formatNeondraAmount(event.neondraAmount)}",
+                                        text = "Amount: ${formatNeondraAmount(event.totalAmount)}",
                                         style = MaterialTheme.typography.labelLarge,
                                         color = MaterialTheme.colorScheme.primary
                                     )

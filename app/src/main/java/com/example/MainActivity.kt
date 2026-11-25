@@ -184,7 +184,7 @@ fun OccasionDiaryAppShell() {
     }
 
     val exportBackupLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json")
+        contract = ActivityResultContracts.CreateDocument(LocalBackupManager.XLSX_MIME_TYPE)
     ) { uri ->
         if (uri != null) {
             viewModel.exportOfflineBackupToUri(context, uri)
@@ -214,6 +214,8 @@ fun OccasionDiaryAppShell() {
     var editingActivity by remember { mutableStateOf<ActivityRecord?>(null) }
     var prefilledFamily by remember { mutableStateOf<FamilyProfile?>(null) }
     var prefilledDateMillis by remember { mutableStateOf<Long?>(null) }
+    var prefilledEventName by remember { mutableStateOf<String?>(null) }
+    var prefilledEventType by remember { mutableStateOf<String?>(null) }
 
     var showQuickNeondraSheet by remember { mutableStateOf(false) }
     var aiInitialTabIndex by remember { mutableIntStateOf(0) }
@@ -408,12 +410,24 @@ fun OccasionDiaryAppShell() {
                                 editingActivity = act
                                 prefilledFamily = null
                                 prefilledDateMillis = null
+                                prefilledEventName = null
+                                prefilledEventType = null
+                                navController.navigate(ROUTE_EDITOR)
+                            },
+                            onAddToEventList = { eventName, eventDateMillis, eventType ->
+                                editingActivity = null
+                                prefilledFamily = null
+                                prefilledDateMillis = eventDateMillis
+                                prefilledEventName = eventName
+                                prefilledEventType = eventType
                                 navController.navigate(ROUTE_EDITOR)
                             },
                             onAddClick = {
                                 editingActivity = null
                                 prefilledFamily = null
                                 prefilledDateMillis = null
+                                prefilledEventName = null
+                                prefilledEventType = null
                                 navController.navigate(ROUTE_EDITOR)
                             }
                         )
@@ -428,6 +442,8 @@ fun OccasionDiaryAppShell() {
                                 editingActivity = null
                                 prefilledFamily = fam
                                 prefilledDateMillis = null
+                                prefilledEventName = null
+                                prefilledEventType = null
                                 navController.navigate(ROUTE_EDITOR)
                             },
                             onCompareWithAiClick = {
@@ -502,7 +518,14 @@ fun OccasionDiaryAppShell() {
                                 exportBackupLauncher.launch(LocalBackupManager.DEFAULT_BACKUP_FILE_NAME)
                             },
                             onImportBackupClick = {
-                                importBackupLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
+                                importBackupLauncher.launch(
+                                    arrayOf(
+                                        LocalBackupManager.XLSX_MIME_TYPE,
+                                        "application/vnd.ms-excel",
+                                        "application/json",
+                                        "*/*"
+                                    )
+                                )
                             },
                             onManageCategoriesClick = {
                                 navController.navigate(ROUTE_CATEGORIES)
@@ -561,6 +584,8 @@ fun OccasionDiaryAppShell() {
                                     editingActivity = selectedRecord
                                     prefilledFamily = null
                                     prefilledDateMillis = null
+                                    prefilledEventName = null
+                                    prefilledEventType = null
                                     navController.navigate(ROUTE_EDITOR)
                                 },
                                 onDelete = {
@@ -583,6 +608,8 @@ fun OccasionDiaryAppShell() {
                             initialRecord = editingActivity,
                             prefilledFamily = prefilledFamily,
                             prefilledDateMillis = prefilledDateMillis,
+                            prefilledEventName = prefilledEventName,
+                            prefilledEventType = prefilledEventType,
                             catalog = catalog,
                             isSaving = isSaving,
                             onBack = { navController.popBackStack() },

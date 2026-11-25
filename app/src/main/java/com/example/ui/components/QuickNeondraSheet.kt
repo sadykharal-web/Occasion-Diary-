@@ -345,8 +345,8 @@ fun QuickNeondraContent(
                 eventDetail = it.take(200)
                 if (validationError != null) validationError = null
             },
-            label = { Text("Event Detail") },
-            placeholder = { Text("e.g. Son شادی, نکاح ceremony...") },
+            label = { Text("Event Name") },
+            placeholder = { Text("e.g. Ali Raza Wedding") },
             leadingIcon = { Icon(Icons.Rounded.Description, contentDescription = null) },
             minLines = 1,
             maxLines = 2,
