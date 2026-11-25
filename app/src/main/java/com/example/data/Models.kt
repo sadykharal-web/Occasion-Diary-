@@ -225,7 +225,7 @@ data class EventEntry(
     val title: String = "",
     val description: String = "",
     val eventDateMillis: Long = System.currentTimeMillis(),
-    val category: String = "Shadi",
+    val category: String = "شادی",
     val location: String = "",
     val familyDocId: String? = null,
     val familyName: String = "",
@@ -271,13 +271,17 @@ object CategoryStyleCatalog {
     )
 
     val DEFAULT_SEEDS = listOf(
-        DefaultCategorySeed("Aqiqah", "#00897B", "favorite"),
-        DefaultCategorySeed("Birthday", "#6A4C93", "celebration"),
-        DefaultCategorySeed("Shadi", "#D81B60", "celebration"),
-        DefaultCategorySeed("Nikah", "#0F5C4D", "mosque")
+        DefaultCategorySeed("شادی", "#D81B60", "celebration"),
+        DefaultCategorySeed("نکاح", "#0F5C4D", "mosque"),
+        DefaultCategorySeed("عقیقہ", "#00897B", "favorite"),
+        DefaultCategorySeed("سالگرہ", "#6A4C93", "celebration")
     )
 
     private val LEGACY_SEEDS = listOf(
+        DefaultCategorySeed("Aqiqah", "#00897B", "favorite"),
+        DefaultCategorySeed("Birthday", "#6A4C93", "celebration"),
+        DefaultCategorySeed("Shadi", "#D81B60", "celebration"),
+        DefaultCategorySeed("Nikah", "#0F5C4D", "mosque"),
         DefaultCategorySeed("Wedding", "#D81B60", "celebration"),
         DefaultCategorySeed("Walima", "#0F5C4D", "restaurant"),
         DefaultCategorySeed("Neondra", "#0F5C4D", "payments"),
@@ -285,13 +289,10 @@ object CategoryStyleCatalog {
         DefaultCategorySeed("Condolence", "#455A64", "mosque"),
         DefaultCategorySeed("Meeting", "#1976D2", "work"),
         DefaultCategorySeed("Personal", "#5D4037", "home"),
-        DefaultCategorySeed("شادی", "#D81B60", "celebration"),
         DefaultCategorySeed("ولیمہ", "#0F5C4D", "restaurant"),
         DefaultCategorySeed("نیوندرا", "#0F5C4D", "payments"),
-        DefaultCategorySeed("عقیقہ", "#00897B", "favorite"),
         DefaultCategorySeed("دعوت / تقریب", "#B87314", "sparkles"),
         DefaultCategorySeed("تعزیت / فوتگی", "#455A64", "mosque"),
-        DefaultCategorySeed("سالگرہ", "#6A4C93", "celebration"),
         DefaultCategorySeed("میٹنگ", "#1976D2", "work"),
         DefaultCategorySeed("ذاتی", "#5D4037", "home")
     )

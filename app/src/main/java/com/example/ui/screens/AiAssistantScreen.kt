@@ -114,9 +114,9 @@ import kotlin.math.max
 
 private val AI_SEARCH_PROMPTS = listOf(
     "Who has the highest In balance?",
-    "Shadi entries and Neondra details",
+    "شادی entries and Neondra details",
     "Families with negative balance",
-    "Recent cash gifts & Neondra"
+    "Recent نقد gifts & Neondra"
 )
 
 private val FOLLOW_UP_CHAT_SUGGESTIONS = listOf(
@@ -198,19 +198,19 @@ fun AiAssistantScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.AutoAwesome,
+                            imageVector = Icons.Rounded.Search,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(30.dp)
                         )
                         Column {
                             Text(
-                                text = "Life Line AI Search & Compare",
+                                text = "Life Line Search & Compare",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Search offline records with online Gemini AI or compare In vs Out balances. All AI answers & follow-up chat reply in Urdu (اردو).",
+                                text = "Search families, events, and ledger entries 100% offline on your device, or compare In vs Out balances.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -234,7 +234,7 @@ fun AiAssistantScreen(
                         },
                         modifier = Modifier.testTag("ai_mode_search")
                     ) {
-                        Text("AI Search")
+                        Text("Offline Search")
                     }
                     SegmentedButton(
                         selected = selectedTab == 1,
@@ -260,9 +260,9 @@ fun AiAssistantScreen(
                         OutlinedTextField(
                             value = searchPrompt,
                             onValueChange = { searchPrompt = it },
-                            label = { Text("Ask AI about your offline ledger (AI replies in Urdu)...") },
-                            placeholder = { Text("e.g. Show all wedding gifts or families with positive balance") },
-                            leadingIcon = { Icon(Icons.Rounded.AutoAwesome, contentDescription = null) },
+                            label = { Text("Search offline families, events, FN, or entries...") },
+                            placeholder = { Text("e.g. FN 1, شادی, نقد, or highest In balance") },
+                            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
                             trailingIcon = {
                                 if (searchPrompt.isNotEmpty()) {
                                     IconButton(
@@ -292,7 +292,7 @@ fun AiAssistantScreen(
                                 AssistChip(
                                     onClick = {
                                         searchPrompt = preset
-                                        onRunAiSearch(preset, true)
+                                        onRunAiSearch(preset, false)
                                     },
                                     label = { Text(preset) }
                                 )
@@ -300,13 +300,13 @@ fun AiAssistantScreen(
                         }
 
                         Button(
-                            onClick = { onRunAiSearch(searchPrompt, true) },
+                            onClick = { onRunAiSearch(searchPrompt, false) },
                             enabled = searchPrompt.isNotBlank() && aiSearchState !is UiState.Loading,
                             shape = RoundedCornerShape(14.dp),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(50.dp)
-                                .testTag("ai_search_submit_button")
+                                .testTag("ai_search_offline_button")
                         ) {
                             if (aiSearchState is UiState.Loading) {
                                 CircularProgressIndicator(
@@ -315,26 +315,12 @@ fun AiAssistantScreen(
                                     strokeWidth = 2.dp
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Searching offline records with Online AI...")
+                                Text("Searching offline records...")
                             } else {
-                                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Rounded.Search, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Search Online with AI (Urdu Reply)", fontWeight = FontWeight.SemiBold)
+                                Text("Offline Search", fontWeight = FontWeight.SemiBold)
                             }
-                        }
-
-                        OutlinedButton(
-                            onClick = { onRunAiSearch(searchPrompt, false) },
-                            enabled = searchPrompt.isNotBlank() && aiSearchState !is UiState.Loading,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                                .testTag("ai_search_offline_button")
-                        ) {
-                            Icon(Icons.Rounded.OfflineBolt, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Offline Quick Filter", fontWeight = FontWeight.Medium)
                         }
                     }
                 }
@@ -343,15 +329,15 @@ fun AiAssistantScreen(
                     null -> {
                         item {
                             AiEmptyPromptCard(
-                                title = "Search Offline Data with Gemini AI",
-                                body = "Ask in English or Urdu. Online AI analyzes your ${families.size} families and ${activities.size} ledger entries saved offline and responds in clear Urdu."
+                                title = "Offline Search",
+                                body = "Search your ${families.size} families and ${activities.size} ledger entries offline in English or Urdu."
                             )
                         }
                     }
 
                     is UiState.Loading -> {
                         item {
-                            AiLoadingCard("AI is analyzing your offline families and ledger entries...")
+                            AiLoadingCard("Searching your offline families and ledger entries...")
                         }
                     }
 
@@ -360,9 +346,6 @@ fun AiAssistantScreen(
                             AiErrorCard(
                                 message = aiSearchState.message,
                                 onRetry = {
-                                    if (searchPrompt.isNotBlank()) onRunAiSearch(searchPrompt, true)
-                                },
-                                onOfflineFallback = {
                                     if (searchPrompt.isNotBlank()) onRunAiSearch(searchPrompt, false)
                                 }
                             )
@@ -391,17 +374,17 @@ fun AiAssistantScreen(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Rounded.AutoAwesome,
+                                                imageVector = Icons.Rounded.Search,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.primary
                                             )
                                             Text(
-                                                text = "AI Response (Urdu)",
+                                                text = "Offline Search Results",
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold
                                             )
                                         }
-                                        SourceModePill(isOnlineAi = result.isOnlineAi)
+                                        SourceModePill(isOnlineAi = false)
                                     }
                                     Text(
                                         text = result.answerSummary,
@@ -1936,7 +1919,7 @@ private fun AiEmptyPromptCard(title: String, body: String) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(
-                imageVector = Icons.Rounded.AutoAwesome,
+                imageVector = Icons.Rounded.Search,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(36.dp)
@@ -2023,7 +2006,7 @@ private fun AiErrorCard(
 
             if (isAppCheckError && debugToken != null) {
                 Text(
-                    text = "Sideloaded debug APKs on a physical phone do not receive AI Studio's launch debug token automatically. Test Online AI in AI Studio's Streaming Emulator, paste an authorized debug token below, or use Offline Quick Filter and Offline Comparison.",
+                    text = "Sideloaded debug APKs on a physical phone do not receive AI Studio's launch debug token automatically. Test Online AI in AI Studio's Streaming Emulator, paste an authorized debug token below, or use Offline Search and Offline Comparison.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
@@ -2120,7 +2103,7 @@ private fun AiErrorCard(
                     ) {
                         Icon(Icons.Rounded.OfflineBolt, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("Use Offline Filter")
+                        Text("Use Offline Mode")
                     }
                 }
                 OutlinedButton(

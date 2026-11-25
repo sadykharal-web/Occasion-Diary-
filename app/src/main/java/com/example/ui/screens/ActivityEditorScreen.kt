@@ -93,6 +93,7 @@ import com.example.ui.components.DropdownOptionItem
 import com.example.ui.components.formatDisplayDate
 import com.example.ui.components.formatNeondraAmount
 import com.example.ui.components.formatReminderOffsetLabel
+import com.example.ui.theme.NotoArabicFamily
 import java.util.Calendar
 
 private val SUIT_COUNT_OPTIONS = (1..20).toList()
@@ -107,12 +108,12 @@ fun appendHomeGiftItem(existing: String, newItem: String): String {
 
 fun formatCashGiftItem(amountText: String): String {
     val amount = amountText.filter { it.isDigit() }.toLongOrNull() ?: 0L
-    return if (amount > 0L) "Cash ${formatNeondraAmount(amount)}" else "Cash"
+    return if (amount > 0L) "نقد ${formatNeondraAmount(amount)}" else "نقد"
 }
 
 fun formatSuitGiftItem(label: String, count: Int): String {
     val safeCount = count.coerceAtLeast(1)
-    return if (safeCount == 1) "1 $label" else "$safeCount ${label}s"
+    return "$safeCount $label"
 }
 
 fun formatKgGiftItem(label: String, kg: Int): String {
@@ -156,7 +157,7 @@ fun ActivityEditorScreen(
         mutableStateOf(initialRecord?.address ?: prefilledFamily?.address ?: "")
     }
     var eventType by remember {
-        mutableStateOf(initialRecord?.eventType ?: catalog.eventTypes.firstOrNull() ?: "Shadi")
+        mutableStateOf(initialRecord?.eventType ?: catalog.eventTypes.firstOrNull() ?: "شادی")
     }
     var eventDetail by remember {
         mutableStateOf(initialRecord?.eventDetail ?: "")
@@ -531,7 +532,7 @@ fun ActivityEditorScreen(
                             value = eventType,
                             onValueChange = { eventType = it },
                             label = "Event Type *",
-                            placeholder = "e.g. Aqiqah, Birthday, Shadi, Nikah",
+                            placeholder = "e.g. شادی، نکاح، عقیقہ، سالگرہ",
                             options = eventOptions,
                             onOptionSelected = { opt -> eventType = opt.primaryValue },
                             leadingIcon = {
@@ -667,7 +668,7 @@ fun ActivityEditorScreen(
                             value = homeItems,
                             onValueChange = { homeItems = it },
                             label = { Text("Home Gift / Items") },
-                            placeholder = { Text("e.g. Cash 5,000, 2 Lady Suits, 1 Gents Suit, 3 KG Fruits...") },
+                            placeholder = { Text("e.g. نقد 5,000, 2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 KG پھل...") },
                             leadingIcon = { Icon(Icons.Rounded.Home, contentDescription = null) },
                             minLines = 2,
                             maxLines = 5,
@@ -693,17 +694,18 @@ fun ActivityEditorScreen(
                                     fontWeight = FontWeight.Bold
                                 )
 
-                                // Cash
+                                // نقد (Cash)
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "Cash",
+                                        text = "نقد",
                                         style = MaterialTheme.typography.bodyMedium,
+                                        fontFamily = NotoArabicFamily,
                                         fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.width(84.dp)
+                                        modifier = Modifier.width(96.dp)
                                     )
                                     OutlinedTextField(
                                         value = cashGiftAmountText,
@@ -737,9 +739,9 @@ fun ActivityEditorScreen(
                                     }
                                 }
 
-                                // Lady Suit + No. dropdown
+                                // زنانہ سوٹ (Lady Suit) + No. dropdown
                                 GiftCategoryQuantityRow(
-                                    label = "Lady Suit",
+                                    label = "زنانہ سوٹ",
                                     options = SUIT_COUNT_OPTIONS,
                                     selectedValue = selectedLadySuitCount,
                                     unitSuffix = "",
@@ -747,16 +749,16 @@ fun ActivityEditorScreen(
                                     onAddClick = {
                                         homeItems = appendHomeGiftItem(
                                             homeItems,
-                                            formatSuitGiftItem("Lady Suit", selectedLadySuitCount)
+                                            formatSuitGiftItem("زنانہ سوٹ", selectedLadySuitCount)
                                         )
                                     },
                                     dropdownTag = "home_gift_lady_suit_dropdown",
                                     addButtonTag = "home_gift_lady_suit_add_button"
                                 )
 
-                                // Gents Suit + No. dropdown
+                                // مردانہ سوٹ (Gents Suit) + No. dropdown
                                 GiftCategoryQuantityRow(
-                                    label = "Gents Suit",
+                                    label = "مردانہ سوٹ",
                                     options = SUIT_COUNT_OPTIONS,
                                     selectedValue = selectedGentsSuitCount,
                                     unitSuffix = "",
@@ -764,16 +766,16 @@ fun ActivityEditorScreen(
                                     onAddClick = {
                                         homeItems = appendHomeGiftItem(
                                             homeItems,
-                                            formatSuitGiftItem("Gents Suit", selectedGentsSuitCount)
+                                            formatSuitGiftItem("مردانہ سوٹ", selectedGentsSuitCount)
                                         )
                                     },
                                     dropdownTag = "home_gift_gents_suit_dropdown",
                                     addButtonTag = "home_gift_gents_suit_add_button"
                                 )
 
-                                // Fruits + No. KG dropdown
+                                // پھل (Fruits) + No. KG dropdown
                                 GiftCategoryQuantityRow(
-                                    label = "Fruits",
+                                    label = "پھل",
                                     options = KG_COUNT_OPTIONS,
                                     selectedValue = selectedFruitsKg,
                                     unitSuffix = " KG",
@@ -781,16 +783,16 @@ fun ActivityEditorScreen(
                                     onAddClick = {
                                         homeItems = appendHomeGiftItem(
                                             homeItems,
-                                            formatKgGiftItem("Fruits", selectedFruitsKg)
+                                            formatKgGiftItem("پھل", selectedFruitsKg)
                                         )
                                     },
                                     dropdownTag = "home_gift_fruits_dropdown",
                                     addButtonTag = "home_gift_fruits_add_button"
                                 )
 
-                                // Sweets + No. KG dropdown
+                                // مٹھائی (Sweets) + No. KG dropdown
                                 GiftCategoryQuantityRow(
-                                    label = "Sweets",
+                                    label = "مٹھائی",
                                     options = KG_COUNT_OPTIONS,
                                     selectedValue = selectedSweetsKg,
                                     unitSuffix = " KG",
@@ -798,7 +800,7 @@ fun ActivityEditorScreen(
                                     onAddClick = {
                                         homeItems = appendHomeGiftItem(
                                             homeItems,
-                                            formatKgGiftItem("Sweets", selectedSweetsKg)
+                                            formatKgGiftItem("مٹھائی", selectedSweetsKg)
                                         )
                                     },
                                     dropdownTag = "home_gift_sweets_dropdown",
@@ -1024,6 +1026,7 @@ private fun GiftCategoryQuantityRow(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
+            fontFamily = NotoArabicFamily,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f)
         )

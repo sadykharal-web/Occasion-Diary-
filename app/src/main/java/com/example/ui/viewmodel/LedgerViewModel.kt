@@ -307,9 +307,9 @@ class LedgerViewModel(
         }
     }
 
-    // --- Online AI Search (over Offline Room Data) & Offline Quick Filter ---
+    // --- Offline Search (over Offline Room Data) ---
 
-    fun runAiSearch(query: String, useOnlineAi: Boolean = true) {
+    fun runAiSearch(query: String, @Suppress("UNUSED_PARAMETER") useOnlineAi: Boolean = false) {
         val data = (dashboardState.value as? UiState.Success)?.data
         if (data == null) {
             _aiSearchState.value = UiState.Error("Your offline ledger data is still loading. Please try again.")
@@ -318,21 +318,12 @@ class LedgerViewModel(
         aiSearchJob?.cancel()
         aiSearchJob = viewModelScope.launch {
             _aiSearchState.value = UiState.Loading
-            val result = if (useOnlineAi) {
-                aiRepository.searchFamiliesAndEventsOnline(
-                    query = query,
-                    families = data.families,
-                    activities = data.activities,
-                    events = data.events
-                )
-            } else {
-                aiRepository.searchFamiliesAndEvents(
-                    query = query,
-                    families = data.families,
-                    activities = data.activities,
-                    events = data.events
-                )
-            }
+            val result = aiRepository.searchFamiliesAndEvents(
+                query = query,
+                families = data.families,
+                activities = data.activities,
+                events = data.events
+            )
             _aiSearchState.value = result.fold(
                 onSuccess = { UiState.Success(it) },
                 onFailure = { UiState.Error(it.localizedMessage ?: "Search failed.") }
@@ -780,7 +771,7 @@ class LedgerViewModel(
             name = name.trim(),
             fatherName = fatherName.trim(),
             address = address.trim(),
-            eventType = eventType.trim().ifEmpty { "Shadi" },
+            eventType = eventType.trim().ifEmpty { "شادی" },
             eventDetail = eventDetail.trim(),
             eventDateMillis = System.currentTimeMillis(),
             direction = direction.wireValue,

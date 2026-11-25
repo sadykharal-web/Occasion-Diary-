@@ -16,17 +16,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
-import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -102,7 +102,7 @@ private enum class TopTab(
 ) {
     LEDGER(ROUTE_LEDGER, R.string.nav_ledger, Icons.Rounded.Book, Icons.Outlined.Book),
     FAMILIES(ROUTE_FAMILIES, R.string.nav_families, Icons.Rounded.Groups, Icons.Outlined.Groups),
-    AI(ROUTE_AI, R.string.nav_ai, Icons.Rounded.AutoAwesome, Icons.Outlined.AutoAwesome),
+    AI(ROUTE_AI, R.string.nav_ai, Icons.Rounded.Search, Icons.Outlined.Search),
     REMINDERS(ROUTE_REMINDERS, R.string.nav_reminders, Icons.Rounded.Notifications, Icons.Outlined.Notifications)
 }
 
@@ -465,8 +465,8 @@ fun OccasionDiaryAppShell() {
                             multiFamilyChatLoading = multiFamilyChatLoading,
                             multiFamilyChatError = multiFamilyChatError,
                             initialTabIndex = aiInitialTabIndex,
-                            onRunAiSearch = { query, useOnline ->
-                                viewModel.runAiSearch(query, useOnlineAi = useOnline)
+                            onRunAiSearch = { query, _ ->
+                                viewModel.runAiSearch(query, useOnlineAi = false)
                             },
                             onClearAiSearch = viewModel::clearAiSearch,
                             onSelectSingleFamily = viewModel::selectSingleFamilyForCompare,

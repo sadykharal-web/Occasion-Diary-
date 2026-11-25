@@ -493,10 +493,40 @@ class AiAssistantRepository {
             "find", "all", "for", "from", "are", "their", "list", "entries", "records",
             "اور", "کے", "کی", "کا", "کو", "میں", "سے", "پر", "ہیں", "ہے", "سب", "دکھائیں", "کون", "سا", "والے", "والی"
         )
-        val tokens = lowerQuery
+        val baseTokens = lowerQuery
             .split(Regex("[^\\p{L}\\p{N}]+"))
             .map { it.trim() }
-            .filter { it.length >= 2 && it !in stopWords }
+            .filter { (it.length >= 2 || it.all { ch -> ch.isDigit() }) && it !in stopWords }
+
+        val bilingualSynonyms = mapOf(
+            "shadi" to listOf("شادی", "wedding"),
+            "wedding" to listOf("شادی", "shadi"),
+            "شادی" to listOf("shadi", "wedding"),
+            "nikah" to listOf("نکاح"),
+            "نکاح" to listOf("nikah"),
+            "aqiqah" to listOf("عقیقہ"),
+            "عقیقہ" to listOf("aqiqah"),
+            "birthday" to listOf("سالگرہ"),
+            "سالگرہ" to listOf("birthday"),
+            "cash" to listOf("نقد"),
+            "نقد" to listOf("cash"),
+            "lady" to listOf("زنانہ"),
+            "ladies" to listOf("زنانہ"),
+            "زنانہ" to listOf("lady", "ladies"),
+            "gents" to listOf("مردانہ"),
+            "مردانہ" to listOf("gents"),
+            "suit" to listOf("سوٹ"),
+            "suits" to listOf("سوٹ"),
+            "سوٹ" to listOf("suit", "suits"),
+            "fruit" to listOf("پھل"),
+            "fruits" to listOf("پھل"),
+            "پھل" to listOf("fruits", "fruit"),
+            "sweet" to listOf("مٹھائی"),
+            "sweets" to listOf("مٹھائی"),
+            "mithai" to listOf("مٹھائی"),
+            "مٹھائی" to listOf("sweets", "sweet")
+        )
+        val tokens = (baseTokens + baseTokens.flatMap { bilingualSynonyms[it].orEmpty() }).distinct()
 
         val fmt = NumberFormat.getNumberInstance(Locale.US)
         val dateFmt = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
@@ -536,7 +566,7 @@ class AiAssistantRepository {
                 .map { it.first }
 
             else -> families.filter { fam ->
-                val haystack = "${fam.familyId} ${fam.name} ${fam.fatherName} ${fam.address}".lowercase(Locale.ENGLISH)
+                val haystack = "${fam.familyId} fn${fam.familyId} ${fam.name} ${fam.fatherName} ${fam.address}".lowercase(Locale.ENGLISH)
                 tokens.any { it in haystack } || lowerQuery in haystack
             }
         }
@@ -557,10 +587,10 @@ class AiAssistantRepository {
         }
 
         val wantsIn = "in" in tokens || "received" in tokens || "آمدن" in cleanQuery || "وصول" in cleanQuery
-        val wantsOut = "out" in tokens || "given" in tokens || "gifts" in tokens || "cash" in tokens ||
-            "خرچ" in cleanQuery || "دیے" in cleanQuery || "دیا" in cleanQuery || "تحفے" in cleanQuery || "نقد" in cleanQuery
+        val wantsOut = "out" in tokens || "given" in tokens || "gifts" in tokens ||
+            "خرچ" in cleanQuery || "دیے" in cleanQuery || "دیا" in cleanQuery || "تحفے" in cleanQuery
         val matchedActivities = activities.filter { act ->
-            val haystack = "${act.name} fn${act.familyId} ${act.fatherName} ${act.address} ${act.eventType} ${act.eventDetail} ${act.homeItems} ${act.direction}".lowercase(Locale.ENGLISH)
+            val haystack = "${act.name} ${act.familyId} fn${act.familyId} ${act.fatherName} ${act.address} ${act.eventType} ${act.eventDetail} ${act.homeItems} ${act.direction}".lowercase(Locale.ENGLISH)
             val textHit = tokens.any { it in haystack } || lowerQuery in haystack
             val dirHit = (wantsIn && act.parsedDirection == ActivityDirection.IN) ||
                 (wantsOut && act.parsedDirection == ActivityDirection.OUT)

@@ -97,7 +97,8 @@ class LedgerRepository(
 
     suspend fun seedDefaultCategoriesIfEmpty(existingCategories: List<ActivityCategory>): Result<Unit> {
         val legacySeedNames = setOf(
-            "Wedding", "Walima", "Neondra", "Gathering", "Condolence", "Meeting", "Personal"
+            "Wedding", "Walima", "Neondra", "Gathering", "Condolence", "Meeting", "Personal",
+            "Aqiqah", "Birthday", "Shadi", "Nikah"
         )
         val hasLegacyDefaultSeeds = existingCategories.any {
             it.id.startsWith("default_") && it.name in legacySeedNames
@@ -402,7 +403,7 @@ class LedgerRepository(
                         name = act.name.trim().take(100),
                         fatherName = act.fatherName.trim().take(100),
                         address = act.address.trim().take(200),
-                        eventType = act.eventType.trim().take(80).ifEmpty { "Shadi" },
+                        eventType = act.eventType.trim().take(80).ifEmpty { "شادی" },
                         eventDetail = act.eventDetail.trim().take(250),
                         eventDateMillis = act.eventDateMillis.coerceAtLeast(0L),
                         direction = ActivityDirection.fromWire(act.direction).wireValue,
@@ -428,7 +429,7 @@ class LedgerRepository(
                         title = evt.title.trim().take(120),
                         description = evt.description.trim().take(1000),
                         eventDateMillis = evt.eventDateMillis.coerceAtLeast(0L),
-                        category = evt.category.trim().take(80).ifEmpty { "Shadi" },
+                        category = evt.category.trim().take(80).ifEmpty { "شادی" },
                         location = evt.location.trim().take(200),
                         familyDocId = evt.familyDocId?.takeIf { it.isNotBlank() },
                         familyName = evt.familyName.trim().take(100),

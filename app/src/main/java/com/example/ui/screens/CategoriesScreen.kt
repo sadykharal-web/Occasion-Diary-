@@ -222,7 +222,7 @@ fun CategoriesScreen(
                                     textAlign = TextAlign.Center
                                 )
                                 OutlinedButton(onClick = onSeedDefaults) {
-                                    Text("Load Default Event Types (Aqiqah, Birthday, Shadi, Nikah)")
+                                    Text("Load Default Event Types (شادی، نکاح، عقیقہ، سالگرہ)")
                                 }
                             }
                         }
@@ -371,7 +371,7 @@ fun CategoryEditorDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Event Type Name *") },
-                    placeholder = { Text("e.g. Aqiqah, Birthday, Shadi, Nikah") },
+                    placeholder = { Text("e.g. شادی، نکاح، عقیقہ، سالگرہ") },
                     singleLine = true,
                     shape = RoundedCornerShape(12.dp),
                     modifier = Modifier

@@ -218,7 +218,7 @@ fun RemindersScreen(
                                     )
                                 }
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Save Backup File")
+                                Text("Backup")
                             }
 
                             OutlinedButton(
@@ -236,7 +236,7 @@ fun RemindersScreen(
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("Restore File")
+                                Text("Restore")
                             }
                         }
                     }

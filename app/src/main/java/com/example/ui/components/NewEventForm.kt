@@ -115,7 +115,7 @@ fun NewEventFormContent(
         mutableStateOf(
             initialEvent?.category?.takeIf { it.isNotBlank() }
                 ?: catalog.eventTypes.firstOrNull()
-                ?: "Shadi"
+                ?: "شادی"
         )
     }
     var location by remember(initialEvent) { mutableStateOf(initialEvent?.location ?: "") }

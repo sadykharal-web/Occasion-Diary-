@@ -55,7 +55,7 @@ import com.example.data.ActivityDirection
 import com.example.data.DropdownCatalog
 import com.example.data.FamilyIdentityMatcher
 
-private val QUICK_NEONDRA_EVENT_TYPES = listOf("Aqiqah", "Birthday", "Shadi", "Nikah")
+private val QUICK_NEONDRA_EVENT_TYPES = listOf("شادی", "نکاح", "عقیقہ", "سالگرہ")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -346,7 +346,7 @@ fun QuickNeondraContent(
                 if (validationError != null) validationError = null
             },
             label = { Text("Event Detail") },
-            placeholder = { Text("e.g. Son Shadi, Nikah ceremony...") },
+            placeholder = { Text("e.g. Son شادی, نکاح ceremony...") },
             leadingIcon = { Icon(Icons.Rounded.Description, contentDescription = null) },
             minLines = 1,
             maxLines = 2,

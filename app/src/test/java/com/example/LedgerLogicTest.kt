@@ -312,15 +312,15 @@ class LedgerLogicTest {
     }
 
     @Test
-    fun `default event types contain only the 4 Neondra events`() {
+    fun `default event types contain only the 4 Urdu Neondra events`() {
         assertEquals(
-            listOf("Aqiqah", "Birthday", "Shadi", "Nikah"),
+            listOf("شادی", "نکاح", "عقیقہ", "سالگرہ"),
             com.example.data.DropdownCatalog.DEFAULT_EVENT_TYPES
         )
     }
 
     @Test
-    fun `home gift item formatters and append helper build clean comma-separated text`() {
+    fun `home gift item formatters and append helper build clean Urdu subcategory text`() {
         var items = ""
         items = com.example.ui.screens.appendHomeGiftItem(
             items,
@@ -328,21 +328,44 @@ class LedgerLogicTest {
         )
         items = com.example.ui.screens.appendHomeGiftItem(
             items,
-            com.example.ui.screens.formatSuitGiftItem("Lady Suit", 2)
+            com.example.ui.screens.formatSuitGiftItem("زنانہ سوٹ", 2)
         )
         items = com.example.ui.screens.appendHomeGiftItem(
             items,
-            com.example.ui.screens.formatSuitGiftItem("Gents Suit", 1)
+            com.example.ui.screens.formatSuitGiftItem("مردانہ سوٹ", 1)
         )
         items = com.example.ui.screens.appendHomeGiftItem(
             items,
-            com.example.ui.screens.formatKgGiftItem("Fruits", 3)
+            com.example.ui.screens.formatKgGiftItem("پھل", 3)
         )
         items = com.example.ui.screens.appendHomeGiftItem(
             items,
-            com.example.ui.screens.formatKgGiftItem("Sweets", 5)
+            com.example.ui.screens.formatKgGiftItem("مٹھائی", 5)
         )
-        assertEquals("Cash 5,000, 2 Lady Suits, 1 Gents Suit, 3 KG Fruits, 5 KG Sweets", items)
-        assertEquals("Cash", com.example.ui.screens.formatCashGiftItem(""))
+        assertEquals("نقد 5,000, 2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 KG پھل, 5 KG مٹھائی", items)
+        assertEquals("نقد", com.example.ui.screens.formatCashGiftItem(""))
+    }
+
+    @Test
+    fun `offline search matches Urdu event types and Urdu gift subcategories across English and Urdu queries`() {
+        val repo = AiAssistantRepository()
+        val families = listOf(FamilyProfile(id = "f1", familyId = "1", name = "Asif Ali"))
+        val activities = listOf(
+            ActivityRecord(
+                id = "a1",
+                familyDocId = "f1",
+                familyId = "1",
+                name = "Asif Ali",
+                eventType = "شادی",
+                homeItems = "نقد 5,000, 2 زنانہ سوٹ, 3 KG پھل",
+                direction = "OUT",
+                neondraAmount = 5000L
+            )
+        )
+        val urduEventHit = repo.searchFamiliesAndEvents("شادی", families, activities, emptyList()).getOrThrow()
+        assertEquals(listOf("a1"), urduEventHit.matchedActivityIds)
+
+        val englishGiftHit = repo.searchFamiliesAndEvents("cash", families, activities, emptyList()).getOrThrow()
+        assertEquals(listOf("a1"), englishGiftHit.matchedActivityIds)
     }
 }
