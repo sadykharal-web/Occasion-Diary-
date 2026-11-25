@@ -4,7 +4,6 @@
 
     <!-- Navigation -->
     <string name="nav_ledger">Ledger</string>
-    <string name="nav_calendar">Events</string>
     <string name="nav_families">Families</string>
     <string name="nav_ai">Search &amp; AI</string>
     <string name="nav_reminders">Settings</string>

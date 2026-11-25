@@ -129,7 +129,7 @@ fun RemindersScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Saved locally • $eventsCount events, ${activities.size} entries, $familiesCount families",
+                                text = "Saved locally • ${activities.size} entries, $familiesCount families",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )

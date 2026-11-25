@@ -281,8 +281,8 @@ fun HeroLedgerSummaryCard(
                     modifier = Modifier.weight(1f)
                 )
                 SummaryStatColumn(
-                    label = "Events",
-                    value = "${summary.totalEventsCount}",
+                    label = "Families",
+                    value = "${summary.totalFamiliesCount}",
                     modifier = Modifier.weight(0.7f)
                 )
                 SummaryStatColumn(

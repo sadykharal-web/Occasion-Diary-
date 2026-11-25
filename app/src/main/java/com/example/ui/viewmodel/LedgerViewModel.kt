@@ -728,6 +728,7 @@ class LedgerViewModel(
         name: String,
         fatherName: String,
         address: String,
+        eventDetail: String,
         amount: Long,
         direction: ActivityDirection,
         onSaved: (ActivityRecord) -> Unit = {}
@@ -747,7 +748,7 @@ class LedgerViewModel(
             fatherName = fatherName.trim(),
             address = address.trim(),
             eventType = "Neondra",
-            eventDetail = "",
+            eventDetail = eventDetail.trim(),
             eventDateMillis = System.currentTimeMillis(),
             direction = direction.wireValue,
             neondraAmount = amount

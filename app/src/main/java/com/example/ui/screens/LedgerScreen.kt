@@ -284,14 +284,11 @@ fun LedgerScreen(
     onClearDateRange: () -> Unit = {},
     onManageCategoriesClick: () -> Unit,
     onQuickNeondraClick: () -> Unit = {},
-    onNewEventClick: () -> Unit,
-    onEventClick: (EventEntry) -> Unit,
     onActivityClick: (ActivityRecord) -> Unit,
     onEditActivityClick: (ActivityRecord) -> Unit = onActivityClick,
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showAllSavedEvents by remember { mutableStateOf(false) }
     var showDateRangeDialog by remember { mutableStateOf(false) }
 
     if (showDateRangeDialog) {
@@ -356,25 +353,6 @@ fun LedgerScreen(
 
                 is UiState.Success -> {
                     val data = state.data
-                    val nowMillis = remember(data.events, data.activities) { System.currentTimeMillis() }
-
-                    val upcomingOccasions = remember(
-                        data.events,
-                        data.activities,
-                        showAllSavedEvents,
-                        searchQuery,
-                        selectedCategoryFilter,
-                        nowMillis
-                    ) {
-                        buildUpcomingOccasionItems(
-                            events = data.events,
-                            activities = data.activities,
-                            showAllSavedEvents = showAllSavedEvents,
-                            searchQuery = searchQuery,
-                            selectedCategoryFilter = selectedCategoryFilter,
-                            nowMillis = nowMillis
-                        )
-                    }
 
                     val filteredList = remember(
                         data.activities,
@@ -451,20 +429,20 @@ fun LedgerScreen(
                                 }
 
                                 OutlinedButton(
-                                    onClick = onNewEventClick,
+                                    onClick = onAddClick,
                                     shape = RoundedCornerShape(14.dp),
                                     modifier = Modifier
                                         .weight(1f)
                                         .height(48.dp)
-                                        .testTag("ledger_quick_new_event_button")
+                                        .testTag("ledger_new_entry_button")
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Rounded.Event,
+                                        imageVector = Icons.Rounded.Add,
                                         contentDescription = null,
                                         modifier = Modifier.size(18.dp)
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
-                                    Text("New Event", fontWeight = FontWeight.SemiBold)
+                                    Text("Full Entry", fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -473,7 +451,7 @@ fun LedgerScreen(
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = onSearchQueryChange,
-                                placeholder = { Text("Search event, name, FN, father, address or category...") },
+                                placeholder = { Text("Search name, FN, father, address, event detail or category...") },
                                 leadingIcon = {
                                     Icon(Icons.Rounded.Search, contentDescription = null)
                                 },
@@ -490,123 +468,6 @@ fun LedgerScreen(
                                     .fillMaxWidth()
                                     .testTag("ledger_search_input")
                             )
-                        }
-
-                        item(key = "upcoming_occasions_header") {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier.weight(1f)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.EventAvailable,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                        Column {
-                                            Text(
-                                                text = "Upcoming Occasions (${upcomingOccasions.size})",
-                                                style = MaterialTheme.typography.titleMedium,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                            Text(
-                                                text = "Tap or swipe any card to edit",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                    AssistChip(
-                                        onClick = onNewEventClick,
-                                        leadingIcon = {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Event,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        },
-                                        label = { Text("New Event") },
-                                        modifier = Modifier.testTag("ledger_new_event_chip")
-                                    )
-                                }
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    FilterChip(
-                                        selected = !showAllSavedEvents,
-                                        onClick = { showAllSavedEvents = false },
-                                        label = { Text("Upcoming") },
-                                        modifier = Modifier.testTag("filter_upcoming_only_chip")
-                                    )
-                                    FilterChip(
-                                        selected = showAllSavedEvents,
-                                        onClick = { showAllSavedEvents = true },
-                                        label = { Text("All Saved (${data.events.size})") },
-                                        modifier = Modifier.testTag("filter_all_saved_events_chip")
-                                    )
-                                }
-                            }
-                        }
-
-                        if (upcomingOccasions.isEmpty()) {
-                            item(key = "upcoming_occasions_empty") {
-                                EmptyUpcomingOccasionsCard(
-                                    hasSavedEvents = data.events.isNotEmpty(),
-                                    onNewEventClick = onNewEventClick,
-                                    onShowAllSaved = { showAllSavedEvents = true }
-                                )
-                            }
-                        } else {
-                            items(
-                                items = upcomingOccasions,
-                                key = { "upcoming_${it.uniqueKey}" }
-                            ) { item ->
-                                val badgeLabel = formatRelativeDayBadge(item.eventDateMillis, nowMillis)
-                                when (item) {
-                                    is UpcomingOccasionItem.Event -> {
-                                        val (evtColor, evtIcon) = data.catalog.resolveCategoryVisual(item.entry.category)
-                                        SwipeToEditContainer(
-                                            editLabel = "Edit Event",
-                                            onEdit = { onEventClick(item.entry) }
-                                        ) {
-                                            UpcomingEventOccasionCard(
-                                                event = item.entry,
-                                                categoryColor = evtColor,
-                                                categoryIcon = evtIcon,
-                                                relativeBadge = badgeLabel,
-                                                onClick = { onEventClick(item.entry) },
-                                                onEditClick = { onEventClick(item.entry) }
-                                            )
-                                        }
-                                    }
-
-                                    is UpcomingOccasionItem.Activity -> {
-                                        val (actColor, actIcon) = data.catalog.resolveCategoryVisual(item.record.eventType)
-                                        SwipeToEditContainer(
-                                            editLabel = "Edit Entry",
-                                            onEdit = { onEditActivityClick(item.record) }
-                                        ) {
-                                            UpcomingActivityOccasionCard(
-                                                record = item.record,
-                                                categoryColor = actColor,
-                                                categoryIcon = actIcon,
-                                                relativeBadge = badgeLabel,
-                                                onClick = { onActivityClick(item.record) },
-                                                onEditClick = { onEditActivityClick(item.record) }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
                         }
 
                         item(key = "ledger_filters_header") {

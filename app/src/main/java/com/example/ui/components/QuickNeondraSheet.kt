@@ -17,9 +17,12 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
+import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.Button
@@ -58,6 +61,7 @@ fun QuickNeondraSheet(
         name: String,
         fatherName: String,
         address: String,
+        eventDetail: String,
         amount: Long,
         direction: ActivityDirection
     ) -> Unit
@@ -91,6 +95,7 @@ fun QuickNeondraContent(
         name: String,
         fatherName: String,
         address: String,
+        eventDetail: String,
         amount: Long,
         direction: ActivityDirection
     ) -> Unit,
@@ -99,6 +104,7 @@ fun QuickNeondraContent(
     var name by remember { mutableStateOf("") }
     var fatherName by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
+    var eventDetail by remember { mutableStateOf("") }
     var amountText by remember { mutableStateOf("") }
     var direction by remember { mutableStateOf(ActivityDirection.OUT) }
     var validationError by remember { mutableStateOf<String?>(null) }
@@ -285,6 +291,90 @@ fun QuickNeondraContent(
         }
 
         OutlinedTextField(
+            value = eventDetail,
+            onValueChange = {
+                eventDetail = it.take(200)
+                if (validationError != null) validationError = null
+            },
+            label = { Text("Event Detail") },
+            placeholder = { Text("e.g. Son Wedding, Walima, Family Gathering...") },
+            leadingIcon = { Icon(Icons.Rounded.Description, contentDescription = null) },
+            minLines = 1,
+            maxLines = 2,
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("quick_neondra_event_detail_input")
+        )
+
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "Transaction Type (In / Out) *",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                ActivityDirection.entries.forEach { dir ->
+                    val selected = direction == dir
+                    val dirIcon = if (dir == ActivityDirection.IN) {
+                        Icons.Rounded.ArrowDownward
+                    } else {
+                        Icons.Rounded.ArrowUpward
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = if (selected) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        },
+                        border = if (selected) {
+                            BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
+                        } else null,
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { direction = dir }
+                            .testTag(
+                                if (dir == ActivityDirection.IN) "quick_neondra_dir_in"
+                                else "quick_neondra_dir_out"
+                            )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = if (selected) Icons.Rounded.Check else dirIcon,
+                                contentDescription = null,
+                                tint = if (selected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = dir.displayLabel,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        OutlinedTextField(
             value = amountText,
             onValueChange = { input ->
                 amountText = input.filter { it.isDigit() }.take(9)
@@ -300,58 +390,6 @@ fun QuickNeondraContent(
                 .fillMaxWidth()
                 .testTag("quick_neondra_amount_input")
         )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            ActivityDirection.entries.forEach { dir ->
-                val selected = direction == dir
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (selected) {
-                        MaterialTheme.colorScheme.primaryContainer
-                    } else {
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    },
-                    border = if (selected) {
-                        BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary)
-                    } else null,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clickable { direction = dir }
-                        .testTag(
-                            if (dir == ActivityDirection.IN) "quick_neondra_dir_in"
-                            else "quick_neondra_dir_out"
-                        )
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center
-                    ) {
-                        if (selected) {
-                            Icon(
-                                imageVector = Icons.Rounded.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                        }
-                        Text(
-                            text = dir.displayLabel,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = if (selected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
-                        )
-                    }
-                }
-            }
-        }
 
         if (validationError != null) {
             Surface(
@@ -375,6 +413,7 @@ fun QuickNeondraContent(
                 val cleanName = name.trim()
                 val cleanFather = fatherName.trim()
                 val cleanAddress = address.trim()
+                val cleanDetail = eventDetail.trim()
                 val amount = amountText.toLongOrNull() ?: 0L
 
                 when {
@@ -384,7 +423,14 @@ fun QuickNeondraContent(
                     amount <= 0L -> validationError = "Please enter a valid Neondra amount."
                     else -> {
                         validationError = null
-                        onSaveNeondra(cleanName, cleanFather, cleanAddress, amount, direction)
+                        onSaveNeondra(
+                            cleanName,
+                            cleanFather,
+                            cleanAddress,
+                            cleanDetail,
+                            amount,
+                            direction
+                        )
                     }
                 }
             },

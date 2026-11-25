@@ -114,7 +114,7 @@ import kotlin.math.max
 
 private val AI_SEARCH_PROMPTS = listOf(
     "Who has the highest In balance?",
-    "Upcoming occasions and weddings",
+    "Wedding entries and Neondra details",
     "Families with negative balance",
     "Recent cash gifts & Neondra"
 )
@@ -344,14 +344,14 @@ fun AiAssistantScreen(
                         item {
                             AiEmptyPromptCard(
                                 title = "Search Offline Data with Gemini AI",
-                                body = "Ask in English or Urdu. Online AI analyzes your ${families.size} families, ${events.size} events, and ${activities.size} ledger entries saved offline and responds in clear Urdu."
+                                body = "Ask in English or Urdu. Online AI analyzes your ${families.size} families and ${activities.size} ledger entries saved offline and responds in clear Urdu."
                             )
                         }
                     }
 
                     is UiState.Loading -> {
                         item {
-                            AiLoadingCard("AI is analyzing your offline families, events, and ledger entries...")
+                            AiLoadingCard("AI is analyzing your offline families and ledger entries...")
                         }
                     }
 

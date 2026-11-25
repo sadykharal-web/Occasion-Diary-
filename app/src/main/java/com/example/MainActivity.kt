@@ -18,16 +18,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Book
-import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Book
-import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Download
-import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material3.CircularProgressIndicator
@@ -71,7 +68,6 @@ import androidx.navigation.compose.rememberNavController
 import com.example.ai.configureAppCheck
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
-import com.example.data.EventEntry
 import com.example.data.FamilyIdentityMatcher
 import com.example.data.FamilyProfile
 import com.example.data.LedgerRepository
@@ -79,12 +75,10 @@ import com.example.data.UiState
 import com.example.data.local.OccasionDiaryDatabase
 import com.example.drive.LocalBackupManager
 import com.example.reminders.ReminderReceiver
-import com.example.ui.components.NewEventFormSheet
 import com.example.ui.components.QuickNeondraSheet
 import com.example.ui.screens.ActivityDetailScreen
 import com.example.ui.screens.ActivityEditorScreen
 import com.example.ui.screens.AiAssistantScreen
-import com.example.ui.screens.CalendarScreen
 import com.example.ui.screens.CategoriesScreen
 import com.example.ui.screens.FamiliesScreen
 import com.example.ui.screens.LedgerScreen
@@ -93,7 +87,6 @@ import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.viewmodel.LedgerViewModel
 
 const val ROUTE_LEDGER = "ledger"
-const val ROUTE_CALENDAR = "calendar"
 const val ROUTE_FAMILIES = "families"
 const val ROUTE_AI = "ai"
 const val ROUTE_REMINDERS = "reminders"
@@ -108,7 +101,6 @@ private enum class TopTab(
     val unselectedIcon: ImageVector
 ) {
     LEDGER(ROUTE_LEDGER, R.string.nav_ledger, Icons.Rounded.Book, Icons.Outlined.Book),
-    CALENDAR(ROUTE_CALENDAR, R.string.nav_calendar, Icons.Rounded.CalendarMonth, Icons.Outlined.CalendarMonth),
     FAMILIES(ROUTE_FAMILIES, R.string.nav_families, Icons.Rounded.Groups, Icons.Outlined.Groups),
     AI(ROUTE_AI, R.string.nav_ai, Icons.Rounded.AutoAwesome, Icons.Outlined.AutoAwesome),
     REMINDERS(ROUTE_REMINDERS, R.string.nav_reminders, Icons.Rounded.Notifications, Icons.Outlined.Notifications)
@@ -225,10 +217,7 @@ fun OccasionDiaryAppShell() {
     var prefilledFamily by remember { mutableStateOf<FamilyProfile?>(null) }
     var prefilledDateMillis by remember { mutableStateOf<Long?>(null) }
 
-    var showNewEventSheet by remember { mutableStateOf(false) }
     var showQuickNeondraSheet by remember { mutableStateOf(false) }
-    var editingEvent by remember { mutableStateOf<EventEntry?>(null) }
-    var newEventPrefilledDate by remember { mutableStateOf<Long?>(null) }
     var aiInitialTabIndex by remember { mutableIntStateOf(0) }
 
     val allActivities = (dashboardState as? UiState.Success)?.data?.activities ?: emptyList()
@@ -239,44 +228,18 @@ fun OccasionDiaryAppShell() {
             catalog = catalog,
             isSaving = isSaving,
             onDismiss = { showQuickNeondraSheet = false },
-            onSaveNeondra = { name, fatherName, address, amount, direction ->
+            onSaveNeondra = { name, fatherName, address, eventDetail, amount, direction ->
                 viewModel.saveQuickNeondra(
                     context = context,
                     name = name,
                     fatherName = fatherName,
                     address = address,
+                    eventDetail = eventDetail,
                     amount = amount,
                     direction = direction
                 ) {
                     showQuickNeondraSheet = false
                 }
-            }
-        )
-    }
-
-    if (showNewEventSheet) {
-        NewEventFormSheet(
-            initialEvent = editingEvent,
-            initialDateMillis = newEventPrefilledDate,
-            catalog = catalog,
-            isSaving = isSaving,
-            onDismiss = {
-                showNewEventSheet = false
-                editingEvent = null
-                newEventPrefilledDate = null
-            },
-            onSaveEvent = { entry ->
-                viewModel.saveEvent(context, entry) {
-                    showNewEventSheet = false
-                    editingEvent = null
-                    newEventPrefilledDate = null
-                }
-            },
-            onDeleteEvent = { eventId ->
-                viewModel.deleteEvent(context, eventId)
-                showNewEventSheet = false
-                editingEvent = null
-                newEventPrefilledDate = null
             }
         )
     }
@@ -306,19 +269,6 @@ fun OccasionDiaryAppShell() {
                                 Icon(
                                     imageVector = Icons.Rounded.AccountBalanceWallet,
                                     contentDescription = stringResource(R.string.action_quick_neondra)
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    editingEvent = null
-                                    newEventPrefilledDate = null
-                                    showNewEventSheet = true
-                                },
-                                modifier = Modifier.testTag("topbar_new_event_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Event,
-                                    contentDescription = stringResource(R.string.action_new_event)
                                 )
                             }
                             IconButton(
@@ -451,16 +401,6 @@ fun OccasionDiaryAppShell() {
                             onQuickNeondraClick = {
                                 showQuickNeondraSheet = true
                             },
-                            onNewEventClick = {
-                                editingEvent = null
-                                newEventPrefilledDate = null
-                                showNewEventSheet = true
-                            },
-                            onEventClick = { evt ->
-                                editingEvent = evt
-                                newEventPrefilledDate = null
-                                showNewEventSheet = true
-                            },
                             onActivityClick = { act ->
                                 selectedActivityId = act.id
                                 navController.navigate(ROUTE_DETAIL)
@@ -476,38 +416,6 @@ fun OccasionDiaryAppShell() {
                                 prefilledFamily = null
                                 prefilledDateMillis = null
                                 navController.navigate(ROUTE_EDITOR)
-                            }
-                        )
-                    }
-
-                    composable(ROUTE_CALENDAR) {
-                        CalendarScreen(
-                            state = dashboardState,
-                            onActivityClick = { act ->
-                                selectedActivityId = act.id
-                                navController.navigate(ROUTE_DETAIL)
-                            },
-                            onAddOnDate = { dateMillis ->
-                                editingActivity = null
-                                prefilledFamily = null
-                                prefilledDateMillis = dateMillis
-                                navController.navigate(ROUTE_EDITOR)
-                            },
-                            onNewEventOnDate = { dateMillis ->
-                                editingEvent = null
-                                newEventPrefilledDate = dateMillis
-                                showNewEventSheet = true
-                            },
-                            onEditEvent = { evt ->
-                                editingEvent = evt
-                                newEventPrefilledDate = null
-                                showNewEventSheet = true
-                            },
-                            onDeleteEvent = { eventId ->
-                                viewModel.deleteEvent(context, eventId)
-                            },
-                            onCalendarSynced = { actId ->
-                                viewModel.markCalendarSynced(context, actId)
                             }
                         )
                     }
