@@ -5,8 +5,11 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
+import android.os.Build
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -15,6 +18,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,6 +75,10 @@ fun WorldScreen(
 ) {
     val context = LocalContext.current
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    var webViewGeneration by remember { mutableIntStateOf(0) }
+    var useSoftwareLayer by remember { mutableStateOf(false) }
+    var rendererCrashed by remember { mutableStateOf(false) }
+    var pendingLoadUrl by remember { mutableStateOf(WORLD_WEBSITE_URL) }
     var progress by remember { mutableIntStateOf(0) }
     var canGoBack by remember { mutableStateOf(false) }
     var canGoForward by remember { mutableStateOf(false) }
@@ -78,15 +87,18 @@ fun WorldScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var triedHttpFallback by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = canGoBack) {
+    BackHandler(enabled = canGoBack && !rendererCrashed) {
         webViewRef?.goBack()
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(webViewGeneration) {
         onDispose {
-            webViewRef?.apply {
-                stopLoading()
-                destroy()
+            webViewRef?.let { wv ->
+                wv.stopLoading()
+                wv.onPause()
+                (wv.parent as? ViewGroup)?.removeView(wv)
+                wv.removeAllViews()
+                wv.destroy()
             }
             webViewRef = null
         }
@@ -144,7 +156,7 @@ fun WorldScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
                         onClick = { webViewRef?.goBack() },
-                        enabled = canGoBack,
+                        enabled = canGoBack && !rendererCrashed,
                         modifier = Modifier.testTag("world_back_button")
                     ) {
                         Icon(
@@ -154,7 +166,7 @@ fun WorldScreen(
                     }
                     IconButton(
                         onClick = { webViewRef?.goForward() },
-                        enabled = canGoForward,
+                        enabled = canGoForward && !rendererCrashed,
                         modifier = Modifier.testTag("world_forward_button")
                     ) {
                         Icon(
@@ -166,7 +178,14 @@ fun WorldScreen(
                         onClick = {
                             hasError = false
                             errorMessage = null
-                            webViewRef?.reload()
+                            if (rendererCrashed || webViewRef == null) {
+                                rendererCrashed = false
+                                triedHttpFallback = false
+                                pendingLoadUrl = currentUrl.ifBlank { WORLD_WEBSITE_URL }
+                                webViewGeneration++
+                            } else {
+                                webViewRef?.reload()
+                            }
                         },
                         modifier = Modifier.testTag("world_refresh_button")
                     ) {
@@ -194,7 +213,7 @@ fun WorldScreen(
             }
         }
 
-        if (progress in 1..99) {
+        if (progress in 1..99 && !rendererCrashed) {
             LinearProgressIndicator(
                 progress = { progress / 100f },
                 modifier = Modifier
@@ -209,112 +228,157 @@ fun WorldScreen(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            AndroidView(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .testTag("world_webview"),
-                factory = { ctx ->
-                    WebView(ctx).apply {
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                        settings.apply {
-                            javaScriptEnabled = true
-                            domStorageEnabled = true
-                            databaseEnabled = true
-                            loadWithOverviewMode = true
-                            useWideViewPort = true
-                            builtInZoomControls = true
-                            displayZoomControls = false
-                            setSupportZoom(true)
-                            mediaPlaybackRequiresUserGesture = false
-                            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-                            cacheMode = WebSettings.LOAD_DEFAULT
-                            allowFileAccess = false
-                            allowContentAccess = true
-                        }
-                        CookieManager.getInstance().setAcceptCookie(true)
-                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                        webChromeClient = object : WebChromeClient() {
-                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                progress = newProgress
-                            }
-                        }
-                        webViewClient = object : WebViewClient() {
-                            override fun onPageStarted(
-                                view: WebView?,
-                                url: String?,
-                                favicon: Bitmap?
-                            ) {
-                                hasError = false
-                                errorMessage = null
-                                if (!url.isNullOrBlank()) currentUrl = url
-                                canGoBack = view?.canGoBack() == true
-                                canGoForward = view?.canGoForward() == true
-                            }
-
-                            override fun onPageFinished(view: WebView?, url: String?) {
-                                progress = 100
-                                if (!url.isNullOrBlank()) currentUrl = url
-                                canGoBack = view?.canGoBack() == true
-                                canGoForward = view?.canGoForward() == true
-                            }
-
-                            override fun shouldOverrideUrlLoading(
-                                view: WebView?,
-                                request: WebResourceRequest?
-                            ): Boolean {
-                                val target = request?.url?.toString().orEmpty()
-                                if (target.startsWith("http://") || target.startsWith("https://")) {
-                                    return false
+            if (!rendererCrashed) {
+                key(webViewGeneration) {
+                    AndroidView(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .testTag("world_webview"),
+                        factory = { ctx ->
+                            WebView(ctx).apply {
+                                layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                                if (useSoftwareLayer) {
+                                    setLayerType(View.LAYER_TYPE_SOFTWARE, null)
                                 }
-                                runCatching {
-                                    ctx.startActivity(Intent(Intent.ACTION_VIEW, request?.url))
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    setRendererPriorityPolicy(
+                                        WebView.RENDERER_PRIORITY_IMPORTANT,
+                                        false
+                                    )
                                 }
-                                return true
-                            }
-
-                            override fun onReceivedError(
-                                view: WebView?,
-                                request: WebResourceRequest?,
-                                error: WebResourceError?
-                            ) {
-                                if (request?.isForMainFrame == true) {
-                                    val failingUrl = request.url?.toString().orEmpty()
-                                    if (!triedHttpFallback && failingUrl.startsWith("https://")) {
-                                        triedHttpFallback = true
-                                        view?.loadUrl(failingUrl.replaceFirst("https://", "http://"))
-                                        return
+                                settings.apply {
+                                    javaScriptEnabled = true
+                                    domStorageEnabled = true
+                                    databaseEnabled = true
+                                    loadWithOverviewMode = true
+                                    useWideViewPort = true
+                                    builtInZoomControls = true
+                                    displayZoomControls = false
+                                    setSupportZoom(true)
+                                    mediaPlaybackRequiresUserGesture = false
+                                    mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                                    cacheMode = WebSettings.LOAD_DEFAULT
+                                    allowFileAccess = false
+                                    allowContentAccess = true
+                                }
+                                CookieManager.getInstance().setAcceptCookie(true)
+                                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                                webChromeClient = object : WebChromeClient() {
+                                    override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                        progress = newProgress
                                     }
-                                    hasError = true
-                                    errorMessage = error?.description?.toString()
-                                        ?.takeIf { it.isNotBlank() }
-                                        ?: "Unable to load raizan.gamer.free"
                                 }
-                            }
+                                webViewClient = object : WebViewClient() {
+                                    override fun onPageStarted(
+                                        view: WebView?,
+                                        url: String?,
+                                        favicon: Bitmap?
+                                    ) {
+                                        hasError = false
+                                        errorMessage = null
+                                        if (!url.isNullOrBlank()) currentUrl = url
+                                        canGoBack = view?.canGoBack() == true
+                                        canGoForward = view?.canGoForward() == true
+                                    }
 
-                            override fun onReceivedSslError(
-                                view: WebView?,
-                                handler: SslErrorHandler?,
-                                error: SslError?
-                            ) {
-                                handler?.cancel()
-                                val failingUrl = error?.url.orEmpty()
-                                if (!triedHttpFallback && failingUrl.startsWith("https://")) {
-                                    triedHttpFallback = true
-                                    view?.loadUrl(failingUrl.replaceFirst("https://", "http://"))
-                                    return
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        progress = 100
+                                        if (!url.isNullOrBlank()) currentUrl = url
+                                        canGoBack = view?.canGoBack() == true
+                                        canGoForward = view?.canGoForward() == true
+                                    }
+
+                                    override fun shouldOverrideUrlLoading(
+                                        view: WebView?,
+                                        request: WebResourceRequest?
+                                    ): Boolean {
+                                        val target = request?.url?.toString().orEmpty()
+                                        if (target.startsWith("http://") || target.startsWith("https://")) {
+                                            return false
+                                        }
+                                        runCatching {
+                                            ctx.startActivity(Intent(Intent.ACTION_VIEW, request?.url))
+                                        }
+                                        return true
+                                    }
+
+                                    override fun onReceivedError(
+                                        view: WebView?,
+                                        request: WebResourceRequest?,
+                                        error: WebResourceError?
+                                    ) {
+                                        if (request?.isForMainFrame == true) {
+                                            val failingUrl = request.url?.toString().orEmpty()
+                                            if (!triedHttpFallback && failingUrl.startsWith("https://")) {
+                                                triedHttpFallback = true
+                                                view?.loadUrl(failingUrl.replaceFirst("https://", "http://"))
+                                                return
+                                            }
+                                            hasError = true
+                                            errorMessage = error?.description?.toString()
+                                                ?.takeIf { it.isNotBlank() }
+                                                ?: "Unable to load raizan.gamer.free"
+                                        }
+                                    }
+
+                                    override fun onReceivedSslError(
+                                        view: WebView?,
+                                        handler: SslErrorHandler?,
+                                        error: SslError?
+                                    ) {
+                                        handler?.cancel()
+                                        val failingUrl = error?.url.orEmpty()
+                                        if (!triedHttpFallback && failingUrl.startsWith("https://")) {
+                                            triedHttpFallback = true
+                                            view?.loadUrl(failingUrl.replaceFirst("https://", "http://"))
+                                            return
+                                        }
+                                        hasError = true
+                                        errorMessage = "Unable to connect securely to raizan.gamer.free"
+                                    }
+
+                                    @RequiresApi(Build.VERSION_CODES.O)
+                                    override fun onRenderProcessGone(
+                                        view: WebView?,
+                                        detail: RenderProcessGoneDetail?
+                                    ): Boolean {
+                                        if (webViewRef === view) {
+                                            webViewRef = null
+                                        }
+                                        view?.let { deadView ->
+                                            runCatching {
+                                                (deadView.parent as? ViewGroup)?.removeView(deadView)
+                                                deadView.removeAllViews()
+                                                deadView.destroy()
+                                            }
+                                        }
+                                        progress = 100
+                                        canGoBack = false
+                                        canGoForward = false
+                                        if (!useSoftwareLayer) {
+                                            useSoftwareLayer = true
+                                            hasError = false
+                                            errorMessage = null
+                                            pendingLoadUrl = currentUrl.ifBlank { WORLD_WEBSITE_URL }
+                                            webViewGeneration++
+                                        } else {
+                                            rendererCrashed = true
+                                            hasError = true
+                                            errorMessage = "The webpage renderer stopped responding on this device. You can retry or open raizan.gamer.free in your browser."
+                                        }
+                                        return true
+                                    }
                                 }
-                                hasError = true
-                                errorMessage = "Unable to connect securely to raizan.gamer.free"
+                                webViewRef = this
+                                loadUrl(pendingLoadUrl)
                             }
                         }
-                        webViewRef = this
-                        loadUrl(WORLD_WEBSITE_URL)
-                    }
+                    )
                 }
-            )
+            }
 
             if (hasError) {
                 Box(
@@ -363,10 +427,18 @@ fun WorldScreen(
                                         hasError = false
                                         errorMessage = null
                                         triedHttpFallback = false
-                                        webViewRef?.loadUrl(WORLD_WEBSITE_URL)
+                                        if (rendererCrashed || webViewRef == null) {
+                                            rendererCrashed = false
+                                            pendingLoadUrl = WORLD_WEBSITE_URL
+                                            webViewGeneration++
+                                        } else {
+                                            webViewRef?.loadUrl(WORLD_WEBSITE_URL)
+                                        }
                                     },
                                     shape = RoundedCornerShape(14.dp),
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .testTag("world_retry_button")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.Refresh,
