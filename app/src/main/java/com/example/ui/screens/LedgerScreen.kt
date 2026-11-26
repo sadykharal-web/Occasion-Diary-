@@ -154,6 +154,11 @@ fun buildSameDateEventLists(
         .map { (key, groupEntries) ->
             val sortedEntries = when (sortOrder) {
                 LedgerSortOrder.FN -> groupEntries.sortedWith(::compareByFnRecord)
+                LedgerSortOrder.NAME_AZ -> groupEntries.sortedWith(
+                    compareBy<ActivityRecord> { it.name.trim().isEmpty() }
+                        .thenBy { it.name.trim().lowercase(Locale.ENGLISH) }
+                        .thenComparator(::compareByFnRecord)
+                )
                 LedgerSortOrder.EVENT_NAME -> groupEntries.sortedWith(
                     compareBy<ActivityRecord> { it.eventDetail.trim().lowercase(Locale.ENGLISH) }
                         .thenComparator(::compareByFnRecord)
@@ -186,6 +191,13 @@ fun buildSameDateEventLists(
             }
                 .thenBy { grp -> grp.entries.none { it.familyId.isNotBlank() } }
                 .thenBy { grp -> grp.entries.firstOrNull { it.familyId.isNotBlank() }?.familyId?.trim().orEmpty() }
+                .thenByDescending { it.eventDayStartMillis }
+        )
+        LedgerSortOrder.NAME_AZ -> groups.sortedWith(
+            compareBy<SameDateEventGroup> { grp ->
+                grp.entries.firstOrNull { it.name.isNotBlank() }?.name?.trim()?.lowercase(Locale.ENGLISH).orEmpty()
+            }
+                .thenBy { it.eventName.lowercase(Locale.ENGLISH) }
                 .thenByDescending { it.eventDayStartMillis }
         )
         LedgerSortOrder.EVENT_NAME -> groups.sortedWith(
@@ -317,6 +329,11 @@ fun filterLedgerActivities(
 
     return when (sortOrder) {
         LedgerSortOrder.FN -> filtered.sortedWith(::compareByFnRecord)
+        LedgerSortOrder.NAME_AZ -> filtered.sortedWith(
+            compareBy<ActivityRecord> { it.name.trim().isEmpty() }
+                .thenBy { it.name.trim().lowercase(Locale.ENGLISH) }
+                .thenComparator(::compareByFnRecord)
+        )
         LedgerSortOrder.EVENT_NAME -> filtered.sortedWith(
             compareBy<ActivityRecord> { it.eventDetail.trim().isEmpty() }
                 .thenBy { it.eventDetail.trim().lowercase(Locale.ENGLISH) }
@@ -421,31 +438,6 @@ fun LedgerScreen(
     var showDateRangeDialog by remember { mutableStateOf(false) }
     var showEventListsMode by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
-    var eventGroupPendingAddChoice by remember { mutableStateOf<SameDateEventGroup?>(null) }
-
-    eventGroupPendingAddChoice?.let { targetGroup ->
-        AddToEventChoiceDialog(
-            eventName = targetGroup.eventName,
-            eventDateMillis = targetGroup.eventDayStartMillis,
-            onDismiss = { eventGroupPendingAddChoice = null },
-            onAddNeondra = {
-                eventGroupPendingAddChoice = null
-                onAddNeondraToEventList(
-                    targetGroup.eventName,
-                    targetGroup.eventDayStartMillis,
-                    targetGroup.eventTypes.firstOrNull().orEmpty()
-                )
-            },
-            onFullEntry = {
-                eventGroupPendingAddChoice = null
-                onAddToEventList(
-                    targetGroup.eventName,
-                    targetGroup.eventDayStartMillis,
-                    targetGroup.eventTypes.firstOrNull().orEmpty()
-                )
-            }
-        )
-    }
 
     if (showDateRangeDialog) {
         LedgerDateRangePickerDialog(
@@ -897,8 +889,19 @@ fun LedgerScreen(
                                         group = group,
                                         catalog = data.catalog,
                                         onEntryClick = onActivityClick,
-                                        onAddToEventClick = {
-                                            eventGroupPendingAddChoice = group
+                                        onAddNeondraClick = {
+                                            onAddNeondraToEventList(
+                                                group.eventName,
+                                                group.eventDayStartMillis,
+                                                group.eventTypes.firstOrNull().orEmpty()
+                                            )
+                                        },
+                                        onAddFullEntryClick = {
+                                            onAddToEventList(
+                                                group.eventName,
+                                                group.eventDayStartMillis,
+                                                group.eventTypes.firstOrNull().orEmpty()
+                                            )
                                         }
                                     )
                                 }
@@ -1388,7 +1391,7 @@ private fun ActivitySummaryCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         val meta = buildList {
-                            if (record.fatherName.isNotBlank()) add("Father: ${record.fatherName}")
+                            if (record.fatherName.isNotBlank()) add("ولد: ${record.fatherName}")
                             if (record.address.isNotBlank()) add(record.address)
                         }.joinToString(" • ")
                         if (meta.isNotEmpty()) {
@@ -1434,8 +1437,9 @@ private fun ActivitySummaryCard(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        text = record.homeItems,
+                        text = "تحائف: ${record.homeItems}",
                         style = MaterialTheme.typography.bodySmall,
+                        fontFamily = NotoArabicFamily,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -1530,72 +1534,12 @@ private fun MoneyTagChip(label: String, amount: Long, tone: Int = 0) {
 }
 
 @Composable
-private fun AddToEventChoiceDialog(
-    eventName: String,
-    eventDateMillis: Long,
-    onDismiss: () -> Unit,
-    onAddNeondra: () -> Unit,
-    onFullEntry: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Add Entry", fontWeight = FontWeight.Bold)
-                Text(
-                    text = "$eventName • ${formatDisplayDate(eventDateMillis)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = onAddNeondra,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("event_add_option_neondra")
-                ) {
-                    Icon(Icons.Rounded.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Add نیوندرا",
-                        fontFamily = NotoArabicFamily,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-                OutlinedButton(
-                    onClick = onFullEntry,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(50.dp)
-                        .testTag("event_add_option_full")
-                ) {
-                    Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Full Entry", fontWeight = FontWeight.SemiBold)
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
-            }
-        }
-    )
-}
-
-@Composable
 private fun SameDateEventGroupCard(
     group: SameDateEventGroup,
     catalog: com.example.data.DropdownCatalog,
     onEntryClick: (ActivityRecord) -> Unit,
-    onAddToEventClick: () -> Unit
+    onAddNeondraClick: () -> Unit,
+    onAddFullEntryClick: () -> Unit
 ) {
     var expanded by remember(group.groupKey) { mutableStateOf(true) }
     val isDark = LocalAppDarkTheme.current
@@ -1667,6 +1611,40 @@ private fun SameDateEventGroupCard(
                         imageVector = if (expanded) Icons.Rounded.ExpandLess else Icons.Rounded.ExpandMore,
                         contentDescription = if (expanded) "Collapse event list" else "Expand event list"
                     )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilledTonalButton(
+                    onClick = onAddNeondraClick,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("event_add_neondra_${group.groupKey}")
+                ) {
+                    Icon(Icons.Rounded.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "نیوندرا",
+                        fontFamily = NotoArabicFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                OutlinedButton(
+                    onClick = onAddFullEntryClick,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .testTag("event_add_full_${group.groupKey}")
+                ) {
+                    Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Full Entry", fontWeight = FontWeight.SemiBold)
                 }
             }
 
@@ -1768,7 +1746,7 @@ private fun SameDateEventGroupCard(
                                             overflow = TextOverflow.Ellipsis
                                         )
                                         val sub = buildList {
-                                            if (entry.fatherName.isNotBlank()) add("Father: ${entry.fatherName}")
+                                            if (entry.fatherName.isNotBlank()) add("ولد: ${entry.fatherName}")
                                             if (entry.address.isNotBlank()) add(entry.address)
                                         }.joinToString(" • ")
                                         if (sub.isNotEmpty()) {
@@ -1805,7 +1783,7 @@ private fun SameDateEventGroupCard(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
-                                        text = "Home Gift / Items: ${entry.homeItems}",
+                                        text = "تحائف: ${entry.homeItems}",
                                         style = MaterialTheme.typography.bodySmall,
                                         fontFamily = NotoArabicFamily,
                                         color = MaterialTheme.colorScheme.onSurface,
@@ -1860,19 +1838,6 @@ private fun SameDateEventGroupCard(
                     }
                 }
             }
-
-            FilledTonalButton(
-                onClick = onAddToEventClick,
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .testTag("add_to_event_list_${group.groupKey}")
-            ) {
-                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Add Entry", fontWeight = FontWeight.SemiBold)
-            }
         }
     }
 }
@@ -1919,7 +1884,7 @@ private fun EmptyEventListsCard(
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Add نیوندرا", fontFamily = NotoArabicFamily, fontWeight = FontWeight.Bold)
+                    Text("نیوندرا", fontFamily = NotoArabicFamily, fontWeight = FontWeight.Bold)
                 }
                 OutlinedButton(
                     onClick = onAddClick,

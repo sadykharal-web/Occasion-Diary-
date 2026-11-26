@@ -44,6 +44,7 @@ enum class LedgerFilter(val label: String) {
 
 enum class LedgerSortOrder(val label: String, val shortLabel: String) {
     FN("Sort by: FN", "FN"),
+    NAME_AZ("Sort by: Name (A-Z)", "Name (A-Z)"),
     EVENT_NAME("Sort by: Event Name", "Event Name"),
     EVENT_TYPE("Sort by: Event Type", "Event Type")
 }

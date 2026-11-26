@@ -691,10 +691,20 @@ class LedgerLogicTest {
             sortOrder = com.example.ui.viewmodel.LedgerSortOrder.EVENT_TYPE
         )
         assertEquals(listOf("r1", "r3", "r2"), byEventType.map { it.id })
+
+        val byNameAz = com.example.ui.screens.filterLedgerActivities(
+            activities = all,
+            searchQuery = "",
+            selectedFilter = com.example.ui.viewmodel.LedgerFilter.ALL,
+            selectedAddress = null,
+            dateRangeFilter = com.example.ui.viewmodel.DateRangeFilter(),
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.NAME_AZ
+        )
+        assertEquals(listOf("r3", "r2", "r1"), byNameAz.map { it.id })
     }
 
     @Test
-    fun `buildSameDateEventLists respects FN EventName and EventType sort orders`() {
+    fun `buildSameDateEventLists respects FN NameAZ EventName and EventType sort orders`() {
         val cal = java.util.Calendar.getInstance().apply {
             set(2026, java.util.Calendar.NOVEMBER, 12, 10, 0, 0)
             set(java.util.Calendar.MILLISECOND, 0)
@@ -715,6 +725,13 @@ class LedgerLogicTest {
         )
         assertEquals(listOf("Walima", "Aqeeqah"), byFn.map { it.eventName })
         assertEquals(listOf("a2", "a1"), byFn.first().entries.map { it.id })
+
+        val byNameAz = com.example.ui.screens.buildSameDateEventLists(
+            activities = activities,
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.NAME_AZ
+        )
+        assertEquals(listOf("Walima", "Aqeeqah"), byNameAz.map { it.eventName })
+        assertEquals(listOf("a2", "a1"), byNameAz.first().entries.map { it.id })
 
         val byEventName = com.example.ui.screens.buildSameDateEventLists(
             activities = activities,

@@ -408,7 +408,7 @@ private fun FamilyDirectoryCard(
                         )
                         if (family.fatherName.isNotBlank()) {
                             Text(
-                                text = "Father: ${family.fatherName}",
+                                text = "ولد: ${family.fatherName}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -684,7 +684,7 @@ private fun FamilyEntriesBottomSheet(
                             fontWeight = FontWeight.Bold
                         )
                         val meta = buildList {
-                            if (family.fatherName.isNotBlank()) add("Father: ${family.fatherName}")
+                            if (family.fatherName.isNotBlank()) add("ولد: ${family.fatherName}")
                             if (family.address.isNotBlank()) add(family.address)
                         }.joinToString(" • ")
                         if (meta.isNotEmpty()) {
@@ -835,7 +835,7 @@ private fun FamilyEntriesBottomSheet(
                                             modifier = Modifier.size(16.dp)
                                         )
                                         Text(
-                                            text = "Home Gift: ${record.homeItems}",
+                                            text = "تحائف: ${record.homeItems}",
                                             style = MaterialTheme.typography.bodySmall,
                                             fontFamily = NotoArabicFamily,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant

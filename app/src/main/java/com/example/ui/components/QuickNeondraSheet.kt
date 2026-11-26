@@ -143,7 +143,7 @@ fun QuickNeondraContent(
                 primaryValue = fam.name,
                 subtitle = buildList {
                     if (fam.familyId.isNotBlank()) add("FN ${fam.familyId}")
-                    if (fam.fatherName.isNotBlank()) add("Father: ${fam.fatherName}")
+                    if (fam.fatherName.isNotBlank()) add("ولد: ${fam.fatherName}")
                     if (fam.address.isNotBlank()) add(fam.address)
                 }.joinToString(" • "),
                 payloadTag = fam.id

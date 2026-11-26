@@ -241,7 +241,7 @@ fun ActivityDetailScreen(
                         }
 
                         DetailFieldRow(
-                            label = "Home Gift / Items",
+                            label = "تحائف",
                             value = record.homeItems.ifBlank { "No items listed" }
                         )
 

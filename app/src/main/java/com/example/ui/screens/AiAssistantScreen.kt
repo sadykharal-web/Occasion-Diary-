@@ -620,7 +620,7 @@ private fun SingleFamilySummaryCard(comp: SingleFamilyInOutComparison) {
                     fontWeight = FontWeight.Bold
                 )
                 val famMeta = buildList {
-                    if (comp.family.fatherName.isNotBlank()) add("Father: ${comp.family.fatherName}")
+                    if (comp.family.fatherName.isNotBlank()) add("ولد: ${comp.family.fatherName}")
                     if (comp.family.address.isNotBlank()) add(comp.family.address)
                 }.joinToString(" • ")
                 if (famMeta.isNotEmpty()) {
@@ -894,7 +894,7 @@ private fun MatchedFamilyCard(
                             fontWeight = FontWeight.Bold
                         )
                         val meta = buildList {
-                            if (family.fatherName.isNotBlank()) add("Father: ${family.fatherName}")
+                            if (family.fatherName.isNotBlank()) add("ولد: ${family.fatherName}")
                             if (family.address.isNotBlank()) add(family.address)
                         }.joinToString(" • ")
                         if (meta.isNotEmpty()) {
@@ -1051,7 +1051,7 @@ private fun SingleFamilySearchHeaderCard(
                         )
                         if (family.fatherName.isNotBlank()) {
                             Text(
-                                text = "Father: ${family.fatherName}",
+                                text = "ولد: ${family.fatherName}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -1185,7 +1185,7 @@ private fun SingleFamilyEntryCard(
 
             if (record.homeItems.isNotBlank()) {
                 Text(
-                    text = "Home Gift / Items: ${record.homeItems}",
+                    text = "تحائف: ${record.homeItems}",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = NotoArabicFamily,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1273,7 +1273,7 @@ private fun MatchedActivityCard(
             }
             if (record.homeItems.isNotBlank()) {
                 Text(
-                    text = "Home Gift / Items: ${record.homeItems}",
+                    text = "تحائف: ${record.homeItems}",
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = NotoArabicFamily,
                     color = MaterialTheme.colorScheme.onSurfaceVariant

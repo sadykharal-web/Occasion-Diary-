@@ -246,7 +246,7 @@ fun ActivityEditorScreen(
                 primaryValue = fam.name,
                 subtitle = buildList {
                     if (fam.familyId.isNotBlank()) add("FN: ${fam.familyId}")
-                    if (fam.fatherName.isNotBlank()) add("Father: ${fam.fatherName}")
+                    if (fam.fatherName.isNotBlank()) add("ولد: ${fam.fatherName}")
                     if (fam.address.isNotBlank()) add(fam.address)
                 }.joinToString(" • "),
                 payloadTag = fam.id
@@ -264,7 +264,7 @@ fun ActivityEditorScreen(
                 primaryValue = fam.familyId,
                 subtitle = buildList {
                     add(fam.name)
-                    if (fam.fatherName.isNotBlank()) add("Father: ${fam.fatherName}")
+                    if (fam.fatherName.isNotBlank()) add("ولد: ${fam.fatherName}")
                     if (fam.address.isNotBlank()) add(fam.address)
                 }.joinToString(" • "),
                 payloadTag = fam.id
@@ -674,7 +674,7 @@ fun ActivityEditorScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "Home Gift / Items & Amounts",
+                            text = "تحائف & Amounts",
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.Bold
@@ -683,7 +683,7 @@ fun ActivityEditorScreen(
                         OutlinedTextField(
                             value = homeItems,
                             onValueChange = { homeItems = it },
-                            label = { Text("Home Gift / Items") },
+                            label = { Text("تحائف") },
                             placeholder = { Text("e.g. 2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 کلوگرام پھل, 2 کلوگرام مٹھائی...") },
                             leadingIcon = { Icon(Icons.Rounded.Home, contentDescription = null) },
                             minLines = 2,
@@ -704,7 +704,7 @@ fun ActivityEditorScreen(
                                 verticalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 Text(
-                                    text = "Gift / Item Categories",
+                                    text = "تحائف Categories",
                                     style = MaterialTheme.typography.labelLarge,
                                     color = MaterialTheme.colorScheme.primary,
                                     fontWeight = FontWeight.Bold
