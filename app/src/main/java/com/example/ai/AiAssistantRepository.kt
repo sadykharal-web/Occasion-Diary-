@@ -517,7 +517,7 @@ class AiAssistantRepository {
         val tokens = (baseTokens + baseTokens.flatMap { bilingualSynonyms[it].orEmpty() }).distinct()
 
         val fmt = NumberFormat.getNumberInstance(Locale.US)
-        val dateFmt = SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH)
+        val dateFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
         val todayStart = localDayStartMillis(System.currentTimeMillis())
 
         val familyStats = families.map { fam ->
@@ -942,7 +942,7 @@ class AiAssistantRepository {
     }
 
     fun buildSingleFamilyChatContext(comp: SingleFamilyInOutComparison): String {
-        val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val dateFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
         val obj = JSONObject().apply {
             put("familyDocId", comp.family.id)
             put("fn", comp.family.familyId)
@@ -1007,7 +1007,7 @@ class AiAssistantRepository {
         comp: AiBalanceComparisonResult,
         activities: List<ActivityRecord>
     ): String {
-        val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val dateFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
         val familiesArr = JSONArray().apply {
             comp.familyBreakdowns.forEach { item ->
                 val recent = activities.filter { act ->
@@ -1065,7 +1065,7 @@ class AiAssistantRepository {
         activities: List<ActivityRecord>,
         events: List<EventEntry>
     ): String {
-        val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val dateFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
         val familiesArr = JSONArray().apply {
             families.take(60).forEach { fam ->
                 val famActs = activitiesForFamily(fam, activities)
@@ -1140,7 +1140,7 @@ class AiAssistantRepository {
     }
 
     private fun buildSingleFamilyPrompt(base: SingleFamilyInOutComparison): String {
-        val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val dateFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
         val catArr = JSONArray().apply {
             base.categoryBreakdowns.forEach { cat ->
                 put(
@@ -1198,7 +1198,7 @@ class AiAssistantRepository {
         base: AiBalanceComparisonResult,
         activities: List<ActivityRecord>
     ): String {
-        val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val dateFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
         val famArr = JSONArray().apply {
             base.familyBreakdowns.forEach { fam ->
                 val famActs = activities.filter { act ->

@@ -488,6 +488,25 @@ class LedgerLogicTest {
         assertEquals(0x50.toByte(), xlsxBytes[0])
         assertEquals(0x4B.toByte(), xlsxBytes[1])
 
+        // Verify ID, FamilyDocId, ExportedAtMillis columns are removed and EventDate uses dd-MM-yyyy
+        val expectedDateStr = com.example.ui.components.formatDisplayDate(now)
+        assertTrue(expectedDateStr.matches(Regex("\\d{2}-\\d{2}-\\d{4}")))
+        val sheetTexts = mutableMapOf<String, String>()
+        java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(xlsxBytes)).use { zis ->
+            while (true) {
+                val entry = zis.nextEntry ?: break
+                if (entry.name.startsWith("xl/worksheets/")) {
+                    sheetTexts[entry.name] = zis.readBytes().toString(Charsets.UTF_8)
+                }
+                zis.closeEntry()
+            }
+        }
+        val allSheetsXml = sheetTexts.values.joinToString("\n")
+        assertFalse(allSheetsXml.contains(">ID<"))
+        assertFalse(allSheetsXml.contains(">FamilyDocId<"))
+        assertFalse(allSheetsXml.contains(">ExportedAtMillis<"))
+        assertTrue(allSheetsXml.contains(">$expectedDateStr<"))
+
         val restored = com.example.drive.LocalBackupManager.parseBackupAuto(xlsxBytes)
         assertEquals(1, restored.categories.size)
         assertEquals("شادی", restored.categories.first().name)
@@ -507,6 +526,70 @@ class LedgerLogicTest {
         assertTrue(restoredAct.calendarSynced)
         assertEquals(1, restored.events.size)
         assertEquals("عقیقہ", restored.events.first().category)
+    }
+
+    @Test
+    fun `formatDisplayDate uses dd-MM-yyyy and Excel restore parses manual dd-MM-yyyy rows without EventDateMillis`() {
+        val cal = java.util.Calendar.getInstance().apply {
+            set(2026, java.util.Calendar.NOVEMBER, 5, 14, 30, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        assertEquals("05-11-2026", com.example.ui.components.formatDisplayDate(cal.timeInMillis))
+
+        // Build a minimal manual Excel sheet without ID, FamilyDocId, ExportedAtMillis, or EventDateMillis
+        val sheet1Xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>
+            <row r="1">
+                <c r="A1" t="inlineStr"><is><t>FN</t></is></c>
+                <c r="B1" t="inlineStr"><is><t>Name</t></is></c>
+                <c r="C1" t="inlineStr"><is><t>FatherName</t></is></c>
+                <c r="D1" t="inlineStr"><is><t>Address</t></is></c>
+                <c r="E1" t="inlineStr"><is><t>EventType</t></is></c>
+                <c r="F1" t="inlineStr"><is><t>Event Name</t></is></c>
+                <c r="G1" t="inlineStr"><is><t>EventDate</t></is></c>
+                <c r="H1" t="inlineStr"><is><t>Direction</t></is></c>
+                <c r="I1" t="inlineStr"><is><t>NeondraAmount</t></is></c>
+            </row>
+            <row r="2">
+                <c r="A2" t="inlineStr"><is><t>15</t></is></c>
+                <c r="B2" t="inlineStr"><is><t>Imran</t></is></c>
+                <c r="C2" t="inlineStr"><is><t>Aslam</t></is></c>
+                <c r="D2" t="inlineStr"><is><t>Lahore</t></is></c>
+                <c r="E2" t="inlineStr"><is><t>شادی</t></is></c>
+                <c r="F2" t="inlineStr"><is><t>Imran Wedding</t></is></c>
+                <c r="G2" t="inlineStr"><is><t>05-11-2026</t></is></c>
+                <c r="H2" t="inlineStr"><is><t>IN</t></is></c>
+                <c r="I2" t="n"><v>7500</v></c>
+            </row>
+            </sheetData></worksheet>""".trimIndent()
+        val workbookXml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+            <sheets><sheet name="Ledger_Entries" sheetId="1" r:id="rId1"/></sheets></workbook>""".trimIndent()
+        val relsXml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>""".trimIndent()
+
+        val baos = java.io.ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(baos).use { zip ->
+            listOf(
+                "xl/workbook.xml" to workbookXml,
+                "xl/_rels/workbook.xml.rels" to relsXml,
+                "xl/worksheets/sheet1.xml" to sheet1Xml
+            ).forEach { (name, content) ->
+                zip.putNextEntry(java.util.zip.ZipEntry(name))
+                zip.write(content.toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+        }
+
+        val parsed = com.example.drive.LocalBackupManager.parseBackupAuto(baos.toByteArray())
+        assertEquals(1, parsed.activities.size)
+        val act = parsed.activities.first()
+        assertEquals("15", act.familyId)
+        assertEquals("Imran", act.name)
+        assertEquals("05-11-2026", com.example.ui.components.formatDisplayDate(act.eventDateMillis))
+        assertEquals(7500L, act.neondraAmount)
+        assertEquals("IN", act.direction)
     }
 
     @Test

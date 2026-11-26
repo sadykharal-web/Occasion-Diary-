@@ -126,11 +126,9 @@ object LocalBackupManager {
         activities: List<ActivityRecord>,
         events: List<EventEntry>
     ): ByteArray {
-        val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
+        val dateFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
 
         val ledgerHeaders = listOf(
-            "ID",
-            "FamilyDocId",
             "FN",
             "Name",
             "FatherName",
@@ -149,13 +147,10 @@ object LocalBackupManager {
             "ReminderEnabled",
             "ReminderAtMillis",
             "ReminderMinutesBefore",
-            "CalendarSynced",
-            "ExportedAtMillis"
+            "CalendarSynced"
         )
         val ledgerRows = activities.map { act ->
             listOf(
-                CellValue.Text(act.id),
-                CellValue.Text(act.familyDocId.orEmpty()),
                 CellValue.Text(act.familyId),
                 CellValue.Text(act.name),
                 CellValue.Text(act.fatherName),
@@ -174,15 +169,13 @@ object LocalBackupManager {
                 CellValue.Bool(act.reminderEnabled),
                 CellValue.Number(act.reminderAtMillis),
                 CellValue.Number(act.reminderMinutesBefore),
-                CellValue.Bool(act.calendarSynced),
-                CellValue.Number(exportedAtMillis)
+                CellValue.Bool(act.calendarSynced)
             )
         }
 
-        val familyHeaders = listOf("ID", "FN", "Name", "FatherName", "Address", "Phone")
+        val familyHeaders = listOf("FN", "Name", "FatherName", "Address", "Phone")
         val familyRows = families.map { fam ->
             listOf(
-                CellValue.Text(fam.id),
                 CellValue.Text(fam.familyId),
                 CellValue.Text(fam.name),
                 CellValue.Text(fam.fatherName),
@@ -191,10 +184,9 @@ object LocalBackupManager {
             )
         }
 
-        val categoryHeaders = listOf("ID", "Name", "ColorHex", "IconKey")
+        val categoryHeaders = listOf("Name", "ColorHex", "IconKey")
         val categoryRows = categories.map { cat ->
             listOf(
-                CellValue.Text(cat.id),
                 CellValue.Text(cat.name),
                 CellValue.Text(cat.colorHex),
                 CellValue.Text(cat.iconKey)
@@ -202,26 +194,22 @@ object LocalBackupManager {
         }
 
         val eventHeaders = listOf(
-            "ID",
             "Title",
             "Description",
             "EventDate",
             "EventDateMillis",
             "EventType",
             "Location",
-            "FamilyDocId",
             "FamilyName"
         )
         val eventRows = events.map { evt ->
             listOf(
-                CellValue.Text(evt.id),
                 CellValue.Text(evt.title),
                 CellValue.Text(evt.description),
                 CellValue.Text(dateFmt.format(Date(evt.eventDateMillis))),
                 CellValue.Number(evt.eventDateMillis),
                 CellValue.Text(evt.category),
                 CellValue.Text(evt.location),
-                CellValue.Text(evt.familyDocId.orEmpty()),
                 CellValue.Text(evt.familyName)
             )
         }
@@ -273,24 +261,23 @@ object LocalBackupManager {
             error("No valid Life Line sheets found inside this Excel (.xlsx) file.")
         }
 
-        val dateFmt = SimpleDateFormat("yyyy-MM-dd", Locale.ENGLISH)
-        var exportedAtMillis = System.currentTimeMillis()
+        val dateFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
+        val nowMillis = System.currentTimeMillis()
 
         val activities = rowsToMaps(ledgerTable).mapNotNull { row ->
             val name = row.cell("name")
             if (name.isBlank()) return@mapNotNull null
 
-            val expMillis = row.cellLong("exportedatmillis", 0L)
-            if (expMillis > 0L) exportedAtMillis = expMillis
-
-            val eventMillis = row.cellLong("eventdatemillis", -1L).let { ms ->
-                if (ms >= 0L) ms
-                else parseDateOrNow(row.cell("eventdate"), dateFmt)
-            }
+            val eventMillis = resolveRowEventDateMillis(
+                rawDate = row.cell("eventdate"),
+                rawMillis = row.cellLong("eventdatemillis", -1L),
+                displayFmt = dateFmt,
+                fallbackMillis = nowMillis
+            )
 
             ActivityRecord(
-                id = row.cell("id"),
-                familyDocId = row.cell("familydocid").takeIf { it.isNotBlank() },
+                id = "",
+                familyDocId = null,
                 familyId = row.cell("fn", "familyid"),
                 name = name,
                 fatherName = row.cell("fathername", "father"),
@@ -315,7 +302,7 @@ object LocalBackupManager {
             val name = row.cell("name")
             if (name.isBlank()) return@mapNotNull null
             FamilyProfile(
-                id = row.cell("id"),
+                id = "",
                 familyId = row.cell("fn", "familyid"),
                 name = name,
                 fatherName = row.cell("fathername", "father"),
@@ -328,7 +315,7 @@ object LocalBackupManager {
             val name = row.cell("name")
             if (name.isBlank()) return@mapNotNull null
             ActivityCategory(
-                id = row.cell("id"),
+                id = "",
                 name = name,
                 colorHex = row.cell("colorhex").ifBlank { "#0F5C4D" },
                 iconKey = row.cell("iconkey").ifBlank { "event" }
@@ -338,18 +325,20 @@ object LocalBackupManager {
         val events = rowsToMaps(eventsTable).mapNotNull { row ->
             val title = row.cell("title")
             if (title.isBlank()) return@mapNotNull null
-            val eventMillis = row.cellLong("eventdatemillis", -1L).let { ms ->
-                if (ms >= 0L) ms
-                else parseDateOrNow(row.cell("eventdate"), dateFmt)
-            }
+            val eventMillis = resolveRowEventDateMillis(
+                rawDate = row.cell("eventdate"),
+                rawMillis = row.cellLong("eventdatemillis", -1L),
+                displayFmt = dateFmt,
+                fallbackMillis = nowMillis
+            )
             EventEntry(
-                id = row.cell("id"),
+                id = "",
                 title = title,
                 description = row.cell("description"),
                 eventDateMillis = eventMillis,
                 category = row.cell("eventtype", "category").ifBlank { "شادی" },
                 location = row.cell("location"),
-                familyDocId = row.cell("familydocid").takeIf { it.isNotBlank() },
+                familyDocId = null,
                 familyName = row.cell("familyname")
             )
         }
@@ -359,7 +348,7 @@ object LocalBackupManager {
             families = families,
             activities = activities,
             events = events,
-            exportedAtMillis = exportedAtMillis
+            exportedAtMillis = nowMillis
         )
     }
 
@@ -998,9 +987,65 @@ object LocalBackupManager {
         }
     }
 
-    private fun parseDateOrNow(rawDate: String, fmt: SimpleDateFormat): Long {
+    private fun resolveRowEventDateMillis(
+        rawDate: String,
+        rawMillis: Long,
+        displayFmt: SimpleDateFormat,
+        fallbackMillis: Long
+    ): Long {
+        val parsedDateMillis = parseDateOrNull(rawDate)
+        return when {
+            rawMillis >= 0L && parsedDateMillis != null -> {
+                val msDay = displayFmt.format(Date(rawMillis))
+                val parsedDay = displayFmt.format(Date(parsedDateMillis))
+                if (msDay == parsedDay) rawMillis else parsedDateMillis
+            }
+            rawMillis >= 0L -> rawMillis
+            parsedDateMillis != null -> parsedDateMillis
+            else -> fallbackMillis
+        }
+    }
+
+    private fun parseDateOrNull(rawDate: String): Long? {
         val clean = rawDate.trim()
-        if (clean.isEmpty()) return System.currentTimeMillis()
-        return runCatching { fmt.parse(clean)?.time }.getOrNull() ?: System.currentTimeMillis()
+        if (clean.isEmpty()) return null
+
+        // Handle Excel serial date numbers (e.g. 46352) when edited directly in Excel
+        val asDouble = clean.toDoubleOrNull()
+        if (asDouble != null && asDouble in 20_000.0..100_000.0) {
+            val wholeDays = asDouble.toLong()
+            val cal = java.util.Calendar.getInstance().apply {
+                set(1899, java.util.Calendar.DECEMBER, 30, 12, 0, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+                add(java.util.Calendar.DAY_OF_YEAR, wholeDays.toInt())
+            }
+            return cal.timeInMillis
+        }
+
+        val patterns = listOf(
+            "dd-MM-yyyy",
+            "d-M-yyyy",
+            "dd/MM/yyyy",
+            "d/M/yyyy",
+            "yyyy-MM-dd",
+            "dd MMM yyyy"
+        )
+        for (pattern in patterns) {
+            val fmt = SimpleDateFormat(pattern, Locale.ENGLISH).apply {
+                isLenient = false
+            }
+            val parsed = runCatching { fmt.parse(clean)?.time }.getOrNull()
+            if (parsed != null) {
+                val cal = java.util.Calendar.getInstance().apply {
+                    timeInMillis = parsed
+                    set(java.util.Calendar.HOUR_OF_DAY, 12)
+                    set(java.util.Calendar.MINUTE, 0)
+                    set(java.util.Calendar.SECOND, 0)
+                    set(java.util.Calendar.MILLISECOND, 0)
+                }
+                return cal.timeInMillis
+            }
+        }
+        return null
     }
 }

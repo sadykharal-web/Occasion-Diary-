@@ -80,7 +80,7 @@ fun formatNeondraAmount(amount: Long): String {
 }
 
 fun formatDisplayDate(millis: Long): String {
-    return SimpleDateFormat("dd MMM yyyy", Locale.ENGLISH).format(Date(millis))
+    return SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH).format(Date(millis))
 }
 
 fun formatDisplayTime(millis: Long): String {

@@ -10,6 +10,9 @@ import com.example.drive.LocalBackupPayload
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -361,12 +364,23 @@ class LedgerRepository(
     ): Result<Int> {
         return try {
             val now = System.currentTimeMillis()
+            val dayFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
             var importedCount = 0
 
             val existingCatIds = existingCategories.map { it.id }.toSet()
+            val existingCatNames = existingCategories
+                .map { FamilyIdentityMatcher.normalizeField(it.name) }
+                .filter { it.isNotEmpty() }
+                .toMutableSet()
             val newCats = payload.categories
-                .filter { it.name.isNotBlank() && (it.id.isBlank() || it.id !in existingCatIds) }
+                .filter { cat ->
+                    val normName = FamilyIdentityMatcher.normalizeField(cat.name)
+                    normName.isNotEmpty() &&
+                        (cat.id.isBlank() || cat.id !in existingCatIds) &&
+                        normName !in existingCatNames
+                }
                 .map { cat ->
+                    existingCatNames.add(FamilyIdentityMatcher.normalizeField(cat.name))
                     importedCount++
                     CategoryEntity(
                         id = cat.id.ifBlank { UUID.randomUUID().toString() },
@@ -379,59 +393,198 @@ class LedgerRepository(
                 }
             if (newCats.isNotEmpty()) dao.upsertCategories(newCats)
 
-            val existingFamIds = existingFamilies.map { it.id }.toSet()
-            val newFams = payload.families
-                .filter { it.name.isNotBlank() && (it.id.isBlank() || it.id !in existingFamIds) }
-                .map { fam ->
-                    importedCount++
-                    FamilyEntity(
+            val workingFamilies = existingFamilies.toMutableList()
+            val workingActivities = existingActivities.toMutableList()
+            val newFamEntities = mutableListOf<FamilyEntity>()
+
+            payload.families.forEach { fam ->
+                val cleanName = fam.name.trim().take(100)
+                if (cleanName.isEmpty()) return@forEach
+                val cleanFather = fam.fatherName.trim().take(100)
+                val cleanAddress = fam.address.trim().take(200)
+                val cleanFn = fam.familyId.trim().take(40)
+
+                val existingMatch = workingFamilies.firstOrNull { existing ->
+                    (fam.id.isNotBlank() && existing.id == fam.id) ||
+                        FamilyIdentityMatcher.matchesThreeFields(existing, cleanName, cleanFather, cleanAddress) ||
+                        (cleanFn.isNotEmpty() &&
+                            existing.familyId.trim().equals(cleanFn, ignoreCase = true) &&
+                            FamilyIdentityMatcher.normalizeField(existing.name) == FamilyIdentityMatcher.normalizeField(cleanName))
+                }
+                if (existingMatch == null) {
+                    val assignedFn = if (cleanFn.isNotEmpty() &&
+                        !FamilyIdentityMatcher.isFnUsedByDifferentFamily(cleanFn, null, workingFamilies)
+                    ) {
+                        cleanFn
+                    } else {
+                        FamilyIdentityMatcher.nextUniqueFamilyNumber(workingFamilies, workingActivities)
+                    }
+                    val entity = FamilyEntity(
                         id = fam.id.ifBlank { UUID.randomUUID().toString() },
-                        familyId = fam.familyId.trim().take(40).ifEmpty { "1" },
-                        name = fam.name.trim().take(100),
-                        fatherName = fam.fatherName.trim().take(100),
-                        address = fam.address.trim().take(200),
+                        familyId = assignedFn,
+                        name = cleanName,
+                        fatherName = cleanFather,
+                        address = cleanAddress,
                         phone = fam.phone?.trim()?.take(30)?.ifEmpty { null },
                         createdAtMillis = now,
                         updatedAtMillis = now
                     )
+                    newFamEntities.add(entity)
+                    workingFamilies.add(entity.toDomain())
+                    importedCount++
                 }
-            if (newFams.isNotEmpty()) dao.upsertFamilies(newFams)
+            }
+
+            fun activitySignature(act: ActivityRecord): String {
+                return listOf(
+                    FamilyIdentityMatcher.normalizeField(act.name),
+                    FamilyIdentityMatcher.normalizeField(act.fatherName),
+                    FamilyIdentityMatcher.normalizeField(act.address),
+                    dayFmt.format(Date(act.eventDateMillis.coerceAtLeast(0L))),
+                    FamilyIdentityMatcher.normalizeField(act.eventType.ifBlank { "شادی" }),
+                    FamilyIdentityMatcher.normalizeField(act.eventDetail),
+                    ActivityDirection.fromWire(act.direction).wireValue,
+                    act.cashAmount.coerceIn(0L, 1_000_000_000L).toString(),
+                    act.haarAmount.coerceIn(0L, 1_000_000_000L).toString(),
+                    act.salamiAmount.coerceIn(0L, 1_000_000_000L).toString(),
+                    act.neondraAmount.coerceIn(0L, 1_000_000_000L).toString(),
+                    FamilyIdentityMatcher.normalizeField(act.homeItems)
+                ).joinToString("|")
+            }
 
             val existingActIds = existingActivities.map { it.id }.toSet()
-            val newActs = payload.activities
-                .filter { it.name.isNotBlank() && (it.id.isBlank() || it.id !in existingActIds) }
-                .map { act ->
-                    importedCount++
-                    ActivityEntity(
-                        id = act.id.ifBlank { UUID.randomUUID().toString() },
-                        familyDocId = act.familyDocId?.takeIf { it.isNotBlank() },
-                        familyId = act.familyId.trim().take(40),
-                        name = act.name.trim().take(100),
-                        fatherName = act.fatherName.trim().take(100),
-                        address = act.address.trim().take(200),
-                        eventType = act.eventType.trim().take(80).ifEmpty { "شادی" },
-                        eventDetail = act.eventDetail.trim().take(250),
-                        eventDateMillis = act.eventDateMillis.coerceAtLeast(0L),
-                        direction = ActivityDirection.fromWire(act.direction).wireValue,
-                        homeItems = act.homeItems.trim().take(1000),
-                        cashAmount = act.cashAmount.coerceIn(0L, 1_000_000_000L),
-                        haarAmount = act.haarAmount.coerceIn(0L, 1_000_000_000L),
-                        salamiAmount = act.salamiAmount.coerceIn(0L, 1_000_000_000L),
-                        neondraAmount = act.neondraAmount.coerceIn(0L, 1_000_000_000L),
-                        reminderEnabled = act.reminderEnabled,
-                        reminderAtMillis = if (act.reminderEnabled) act.reminderAtMillis.coerceAtLeast(0L) else 0L,
-                        reminderMinutesBefore = act.reminderMinutesBefore.coerceIn(0L, 10080L),
-                        calendarSynced = act.calendarSynced,
-                        createdAtMillis = now,
-                        updatedAtMillis = now
-                    )
+            val existingActSigCounts = mutableMapOf<String, Int>()
+            existingActivities.forEach { existing ->
+                val sig = activitySignature(existing)
+                existingActSigCounts[sig] = (existingActSigCounts[sig] ?: 0) + 1
+            }
+
+            val newActEntities = mutableListOf<ActivityEntity>()
+            payload.activities.forEach { act ->
+                val cleanName = act.name.trim().take(100)
+                if (cleanName.isEmpty()) return@forEach
+                if (act.id.isNotBlank() && act.id in existingActIds) return@forEach
+
+                val sig = activitySignature(act)
+                val remainingExisting = existingActSigCounts[sig] ?: 0
+                if (remainingExisting > 0) {
+                    existingActSigCounts[sig] = remainingExisting - 1
+                    return@forEach
                 }
-            if (newActs.isNotEmpty()) dao.upsertActivities(newActs)
+
+                val cleanFather = act.fatherName.trim().take(100)
+                val cleanAddress = act.address.trim().take(200)
+                val cleanFn = act.familyId.trim().take(40)
+
+                val explicitFamily = act.familyDocId?.takeIf { it.isNotBlank() }?.let { docId ->
+                    workingFamilies.firstOrNull { it.id == docId }
+                } ?: if (cleanFn.isNotEmpty()) {
+                    workingFamilies.firstOrNull { fam ->
+                        fam.familyId.trim().equals(cleanFn, ignoreCase = true) &&
+                            FamilyIdentityMatcher.normalizeField(fam.name) == FamilyIdentityMatcher.normalizeField(cleanName) &&
+                            (cleanFather.isEmpty() || fam.fatherName.isBlank() ||
+                                FamilyIdentityMatcher.normalizeField(fam.fatherName) == FamilyIdentityMatcher.normalizeField(cleanFather))
+                    }
+                } else {
+                    null
+                }
+
+                val resolvedFamily = explicitFamily ?: run {
+                    val resolution = FamilyIdentityMatcher.resolveForActivity(
+                        name = cleanName,
+                        fatherName = cleanFather,
+                        address = cleanAddress,
+                        requestedFn = cleanFn,
+                        existingFamilies = workingFamilies,
+                        existingActivities = workingActivities,
+                        nowMillis = now
+                    )
+                    if (!resolution.matchedExisting) {
+                        val famProfile = resolution.familyProfile
+                        val famEntity = FamilyEntity(
+                            id = famProfile.id,
+                            familyId = famProfile.familyId,
+                            name = famProfile.name,
+                            fatherName = famProfile.fatherName,
+                            address = famProfile.address,
+                            phone = famProfile.phone,
+                            createdAtMillis = now,
+                            updatedAtMillis = now
+                        )
+                        newFamEntities.add(famEntity)
+                        workingFamilies.add(famProfile)
+                    }
+                    resolution.familyProfile
+                }
+
+                val entity = ActivityEntity(
+                    id = act.id.ifBlank { UUID.randomUUID().toString() },
+                    familyDocId = resolvedFamily.id,
+                    familyId = resolvedFamily.familyId,
+                    name = cleanName,
+                    fatherName = cleanFather.ifEmpty { resolvedFamily.fatherName },
+                    address = cleanAddress.ifEmpty { resolvedFamily.address },
+                    eventType = act.eventType.trim().take(80).ifEmpty { "شادی" },
+                    eventDetail = act.eventDetail.trim().take(250),
+                    eventDateMillis = act.eventDateMillis.coerceAtLeast(0L),
+                    direction = ActivityDirection.fromWire(act.direction).wireValue,
+                    homeItems = act.homeItems.trim().take(1000),
+                    cashAmount = act.cashAmount.coerceIn(0L, 1_000_000_000L),
+                    haarAmount = act.haarAmount.coerceIn(0L, 1_000_000_000L),
+                    salamiAmount = act.salamiAmount.coerceIn(0L, 1_000_000_000L),
+                    neondraAmount = act.neondraAmount.coerceIn(0L, 1_000_000_000L),
+                    reminderEnabled = act.reminderEnabled,
+                    reminderAtMillis = if (act.reminderEnabled) act.reminderAtMillis.coerceAtLeast(0L) else 0L,
+                    reminderMinutesBefore = act.reminderMinutesBefore.coerceIn(0L, 10080L),
+                    calendarSynced = act.calendarSynced,
+                    createdAtMillis = now,
+                    updatedAtMillis = now
+                )
+                newActEntities.add(entity)
+                workingActivities.add(entity.toDomain())
+                importedCount++
+            }
+
+            if (newFamEntities.isNotEmpty()) dao.upsertFamilies(newFamEntities)
+            if (newActEntities.isNotEmpty()) dao.upsertActivities(newActEntities)
+
+            fun eventSignature(evt: EventEntry): String {
+                return listOf(
+                    FamilyIdentityMatcher.normalizeField(evt.title),
+                    dayFmt.format(Date(evt.eventDateMillis.coerceAtLeast(0L))),
+                    FamilyIdentityMatcher.normalizeField(evt.category.ifBlank { "شادی" }),
+                    FamilyIdentityMatcher.normalizeField(evt.location)
+                ).joinToString("|")
+            }
 
             val existingEvtIds = existingEvents.map { it.id }.toSet()
+            val existingEvtSigCounts = mutableMapOf<String, Int>()
+            existingEvents.forEach { evt ->
+                val sig = eventSignature(evt)
+                existingEvtSigCounts[sig] = (existingEvtSigCounts[sig] ?: 0) + 1
+            }
+
             val newEvts = payload.events
-                .filter { it.title.isNotBlank() && (it.id.isBlank() || it.id !in existingEvtIds) }
+                .filter { evt ->
+                    val cleanTitle = evt.title.trim()
+                    if (cleanTitle.isEmpty()) return@filter false
+                    if (evt.id.isNotBlank() && evt.id in existingEvtIds) return@filter false
+                    val sig = eventSignature(evt)
+                    val remaining = existingEvtSigCounts[sig] ?: 0
+                    if (remaining > 0) {
+                        existingEvtSigCounts[sig] = remaining - 1
+                        false
+                    } else {
+                        true
+                    }
+                }
                 .map { evt ->
+                    val resolvedFamDocId = evt.familyDocId?.takeIf { it.isNotBlank() }
+                        ?: evt.familyName.trim().takeIf { it.isNotEmpty() }?.let { fName ->
+                            workingFamilies.firstOrNull {
+                                FamilyIdentityMatcher.normalizeField(it.name) == FamilyIdentityMatcher.normalizeField(fName)
+                            }?.id
+                        }
                     importedCount++
                     EventEntity(
                         id = evt.id.ifBlank { UUID.randomUUID().toString() },
@@ -440,7 +593,7 @@ class LedgerRepository(
                         eventDateMillis = evt.eventDateMillis.coerceAtLeast(0L),
                         category = evt.category.trim().take(80).ifEmpty { "شادی" },
                         location = evt.location.trim().take(200),
-                        familyDocId = evt.familyDocId?.takeIf { it.isNotBlank() },
+                        familyDocId = resolvedFamDocId,
                         familyName = evt.familyName.trim().take(100),
                         createdAtMillis = now,
                         updatedAtMillis = now
