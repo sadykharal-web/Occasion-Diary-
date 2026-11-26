@@ -120,11 +120,11 @@ object LocalBackupManager {
     }
 
     fun serializeBackupXlsxToBytes(
-        exportedAtMillis: Long,
-        categories: List<ActivityCategory>,
-        families: List<FamilyProfile>,
+        @Suppress("UNUSED_PARAMETER") exportedAtMillis: Long,
+        @Suppress("UNUSED_PARAMETER") categories: List<ActivityCategory>,
+        @Suppress("UNUSED_PARAMETER") families: List<FamilyProfile>,
         activities: List<ActivityRecord>,
-        events: List<EventEntry>
+        @Suppress("UNUSED_PARAMETER") events: List<EventEntry>
     ): ByteArray {
         val dateFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)
 
@@ -136,18 +136,13 @@ object LocalBackupManager {
             "EventType",
             "Event Name",
             "EventDate",
-            "EventDateMillis",
             "Direction",
             "HomeItems",
             "CashAmount",
             "HaarAmount",
             "SalamiAmount",
             "NeondraAmount",
-            "TotalAmount",
-            "ReminderEnabled",
-            "ReminderAtMillis",
-            "ReminderMinutesBefore",
-            "CalendarSynced"
+            "TotalAmount"
         )
         val ledgerRows = activities.map { act ->
             listOf(
@@ -158,67 +153,18 @@ object LocalBackupManager {
                 CellValue.Text(act.eventType),
                 CellValue.Text(act.eventDetail),
                 CellValue.Text(dateFmt.format(Date(act.eventDateMillis))),
-                CellValue.Number(act.eventDateMillis),
                 CellValue.Text(act.direction),
                 CellValue.Text(act.homeItems),
                 CellValue.Number(act.cashAmount),
                 CellValue.Number(act.haarAmount),
                 CellValue.Number(act.salamiAmount),
                 CellValue.Number(act.neondraAmount),
-                CellValue.Number(act.totalAmount),
-                CellValue.Bool(act.reminderEnabled),
-                CellValue.Number(act.reminderAtMillis),
-                CellValue.Number(act.reminderMinutesBefore),
-                CellValue.Bool(act.calendarSynced)
-            )
-        }
-
-        val familyHeaders = listOf("FN", "Name", "FatherName", "Address", "Phone")
-        val familyRows = families.map { fam ->
-            listOf(
-                CellValue.Text(fam.familyId),
-                CellValue.Text(fam.name),
-                CellValue.Text(fam.fatherName),
-                CellValue.Text(fam.address),
-                CellValue.Text(fam.phone.orEmpty())
-            )
-        }
-
-        val categoryHeaders = listOf("Name", "ColorHex", "IconKey")
-        val categoryRows = categories.map { cat ->
-            listOf(
-                CellValue.Text(cat.name),
-                CellValue.Text(cat.colorHex),
-                CellValue.Text(cat.iconKey)
-            )
-        }
-
-        val eventHeaders = listOf(
-            "Title",
-            "Description",
-            "EventDate",
-            "EventDateMillis",
-            "EventType",
-            "Location",
-            "FamilyName"
-        )
-        val eventRows = events.map { evt ->
-            listOf(
-                CellValue.Text(evt.title),
-                CellValue.Text(evt.description),
-                CellValue.Text(dateFmt.format(Date(evt.eventDateMillis))),
-                CellValue.Number(evt.eventDateMillis),
-                CellValue.Text(evt.category),
-                CellValue.Text(evt.location),
-                CellValue.Text(evt.familyName)
+                CellValue.Number(act.totalAmount)
             )
         }
 
         val sheets = listOf(
-            SheetSpec("Ledger_Entries", ledgerHeaders, ledgerRows),
-            SheetSpec("Families", familyHeaders, familyRows),
-            SheetSpec("Event_Types", categoryHeaders, categoryRows),
-            SheetSpec("Events", eventHeaders, eventRows)
+            SheetSpec("Ledger_Entries", ledgerHeaders, ledgerRows)
         )
 
         val baos = ByteArrayOutputStream()
@@ -244,16 +190,21 @@ object LocalBackupManager {
         val sharedStrings = entries["xl/sharedstrings.xml"]?.let(::parseSharedStrings) ?: emptyList()
         val sheetPathsByName = resolveSheetPaths(entries)
 
-        val ledgerTable = resolveSheetBytes(entries, sheetPathsByName, listOf("ledger_entries", "activities", "ledger"), 1)
+        val ledgerTable = (resolveSheetBytes(
+            entries,
+            sheetPathsByName,
+            listOf("ledger_entries", "lifeline", "activities", "ledger", "sheet1"),
+            1
+        ) ?: sheetPathsByName.values.firstOrNull()?.let { entries[it] })
             ?.let { parseWorksheetRows(it, sharedStrings) }
             ?: emptyList()
-        val familiesTable = resolveSheetBytes(entries, sheetPathsByName, listOf("families"), 2)
+        val familiesTable = resolveSheetBytes(entries, sheetPathsByName, listOf("families"), null)
             ?.let { parseWorksheetRows(it, sharedStrings) }
             ?: emptyList()
-        val categoriesTable = resolveSheetBytes(entries, sheetPathsByName, listOf("event_types", "categories"), 3)
+        val categoriesTable = resolveSheetBytes(entries, sheetPathsByName, listOf("event_types", "categories"), null)
             ?.let { parseWorksheetRows(it, sharedStrings) }
             ?: emptyList()
-        val eventsTable = resolveSheetBytes(entries, sheetPathsByName, listOf("events"), 4)
+        val eventsTable = resolveSheetBytes(entries, sheetPathsByName, listOf("events"), null)
             ?.let { parseWorksheetRows(it, sharedStrings) }
             ?: emptyList()
 
@@ -269,28 +220,46 @@ object LocalBackupManager {
             if (name.isBlank()) return@mapNotNull null
 
             val eventMillis = resolveRowEventDateMillis(
-                rawDate = row.cell("eventdate"),
+                rawDate = row.cell("eventdate", "date"),
                 rawMillis = row.cellLong("eventdatemillis", -1L),
                 displayFmt = dateFmt,
                 fallbackMillis = nowMillis
             )
 
+            val rawDirection = row.cell("direction")
+            val resolvedDirection = when (rawDirection.lowercase(Locale.ENGLISH)) {
+                "in", "received", "آمدن" -> ActivityDirection.IN.wireValue
+                "out", "given", "خرچ" -> ActivityDirection.OUT.wireValue
+                else -> ActivityDirection.fromWire(rawDirection.ifBlank { "OUT" }).wireValue
+            }
+
+            val cashAmt = row.cellLongAny(listOf("cashamount", "cash"), 0L).coerceAtLeast(0L)
+            val haarAmt = row.cellLongAny(listOf("haaramount", "haar"), 0L).coerceAtLeast(0L)
+            val salamiAmt = row.cellLongAny(listOf("salamiamount", "salami"), 0L).coerceAtLeast(0L)
+            val rawNeondra = row.cellLongAny(listOf("neondraamount", "neondra"), 0L).coerceAtLeast(0L)
+            val totalAmt = row.cellLongAny(listOf("totalamount", "total"), 0L).coerceAtLeast(0L)
+            val neondraAmt = if (cashAmt == 0L && haarAmt == 0L && salamiAmt == 0L && rawNeondra == 0L && totalAmt > 0L) {
+                totalAmt
+            } else {
+                rawNeondra
+            }
+
             ActivityRecord(
                 id = "",
                 familyDocId = null,
-                familyId = row.cell("fn", "familyid"),
+                familyId = row.cell("fn", "familyid", "familyno", "familynumber"),
                 name = name,
                 fatherName = row.cell("fathername", "father"),
                 address = row.cell("address"),
                 eventType = row.cell("eventtype", "occasion").ifBlank { "شادی" },
                 eventDetail = row.cell("eventname", "eventdetail", "eventdetails"),
                 eventDateMillis = eventMillis,
-                direction = ActivityDirection.fromWire(row.cell("direction").ifBlank { "OUT" }).wireValue,
+                direction = resolvedDirection,
                 homeItems = row.cell("homeitems", "homegiftitems"),
-                cashAmount = row.cellLong("cashamount", 0L),
-                haarAmount = row.cellLong("haaramount", 0L),
-                salamiAmount = row.cellLong("salamiamount", 0L),
-                neondraAmount = row.cellLong("neondraamount", 0L),
+                cashAmount = cashAmt,
+                haarAmount = haarAmt,
+                salamiAmount = salamiAmt,
+                neondraAmount = neondraAmt,
                 reminderEnabled = row.cellBool("reminderenabled", false),
                 reminderAtMillis = row.cellLong("reminderatmillis", 0L),
                 reminderMinutesBefore = row.cellLong("reminderminutesbefore", 0L),
@@ -326,7 +295,7 @@ object LocalBackupManager {
             val title = row.cell("title")
             if (title.isBlank()) return@mapNotNull null
             val eventMillis = resolveRowEventDateMillis(
-                rawDate = row.cell("eventdate"),
+                rawDate = row.cell("eventdate", "date"),
                 rawMillis = row.cellLong("eventdatemillis", -1L),
                 displayFmt = dateFmt,
                 fallbackMillis = nowMillis
@@ -840,13 +809,13 @@ object LocalBackupManager {
         entries: Map<String, ByteArray>,
         sheetPathsByName: Map<String, String>,
         candidateNames: List<String>,
-        fallbackSheetNumber: Int
+        fallbackSheetNumber: Int?
     ): ByteArray? {
         for (cand in candidateNames) {
             val path = sheetPathsByName[cand]
             if (path != null && entries[path] != null) return entries[path]
         }
-        return entries["xl/worksheets/sheet$fallbackSheetNumber.xml"]
+        return fallbackSheetNumber?.let { entries["xl/worksheets/sheet$it.xml"] }
     }
 
     private fun parseWorksheetRows(
@@ -970,11 +939,22 @@ object LocalBackupManager {
     }
 
     private fun Map<String, String>.cellLong(key: String, default: Long): Long {
-        val raw = this[key]?.trim().orEmpty()
+        val raw = this[key]?.trim()?.replace(",", "").orEmpty()
         if (raw.isEmpty()) return default
         return raw.toLongOrNull()
             ?: raw.toDoubleOrNull()?.toLong()
             ?: default
+    }
+
+    private fun Map<String, String>.cellLongAny(keys: List<String>, default: Long): Long {
+        for (k in keys) {
+            val raw = this[k]?.trim()?.replace(",", "").orEmpty()
+            if (raw.isNotEmpty()) {
+                val parsed = raw.toLongOrNull() ?: raw.toDoubleOrNull()?.toLong()
+                if (parsed != null) return parsed
+            }
+        }
+        return default
     }
 
     private fun Map<String, String>.cellBool(key: String, default: Boolean): Boolean {

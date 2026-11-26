@@ -391,6 +391,26 @@ class LedgerRepository(
                         updatedAtMillis = now
                     )
                 }
+                .toMutableList()
+
+            payload.activities.forEach { act ->
+                val cleanEvent = act.eventType.trim().take(80)
+                val normEvent = FamilyIdentityMatcher.normalizeField(cleanEvent)
+                if (normEvent.isNotEmpty() && normEvent !in existingCatNames) {
+                    existingCatNames.add(normEvent)
+                    val seed = CategoryStyleCatalog.fallbackSeedFor(cleanEvent)
+                    newCats.add(
+                        CategoryEntity(
+                            id = UUID.randomUUID().toString(),
+                            name = cleanEvent,
+                            colorHex = seed?.colorHex ?: "#0F5C4D",
+                            iconKey = seed?.iconKey ?: "celebration",
+                            createdAtMillis = now,
+                            updatedAtMillis = now
+                        )
+                    )
+                }
+            }
             if (newCats.isNotEmpty()) dao.upsertCategories(newCats)
 
             val workingFamilies = existingFamilies.toMutableList()

@@ -488,7 +488,7 @@ class LedgerLogicTest {
         assertEquals(0x50.toByte(), xlsxBytes[0])
         assertEquals(0x4B.toByte(), xlsxBytes[1])
 
-        // Verify ID, FamilyDocId, ExportedAtMillis columns are removed and EventDate uses dd-MM-yyyy
+        // Verify single-sheet export, no extra/internal columns, and dd-MM-yyyy EventDate
         val expectedDateStr = com.example.ui.components.formatDisplayDate(now)
         assertTrue(expectedDateStr.matches(Regex("\\d{2}-\\d{2}-\\d{4}")))
         val sheetTexts = mutableMapOf<String, String>()
@@ -501,20 +501,27 @@ class LedgerLogicTest {
                 zis.closeEntry()
             }
         }
-        val allSheetsXml = sheetTexts.values.joinToString("\n")
-        assertFalse(allSheetsXml.contains(">ID<"))
-        assertFalse(allSheetsXml.contains(">FamilyDocId<"))
-        assertFalse(allSheetsXml.contains(">ExportedAtMillis<"))
-        assertTrue(allSheetsXml.contains(">$expectedDateStr<"))
+        assertEquals(1, sheetTexts.size)
+        val sheetXml = sheetTexts.values.first()
+        listOf(
+            "ID",
+            "FamilyDocId",
+            "ExportedAtMillis",
+            "EventDateMillis",
+            "ReminderEnabled",
+            "ReminderAtMillis",
+            "ReminderMinutesBefore",
+            "CalendarSynced"
+        ).forEach { forbiddenHeader ->
+            assertFalse("Unexpected extra column: $forbiddenHeader", sheetXml.contains(">$forbiddenHeader<"))
+        }
+        assertTrue(sheetXml.contains(">$expectedDateStr<"))
 
         val restored = com.example.drive.LocalBackupManager.parseBackupAuto(xlsxBytes)
-        assertEquals(1, restored.categories.size)
-        assertEquals("شادی", restored.categories.first().name)
-        assertEquals(1, restored.families.size)
-        assertEquals("7", restored.families.first().familyId)
-        assertEquals("Rajab Ali", restored.families.first().name)
         assertEquals(1, restored.activities.size)
         val restoredAct = restored.activities.first()
+        assertEquals("7", restoredAct.familyId)
+        assertEquals("Rajab Ali", restoredAct.name)
         assertEquals("Asif & Bilal Wedding", restoredAct.eventDetail)
         assertEquals(5000L, restoredAct.cashAmount)
         assertEquals(1500L, restoredAct.haarAmount)
@@ -522,10 +529,6 @@ class LedgerLogicTest {
         assertEquals(3000L, restoredAct.neondraAmount)
         assertEquals(10500L, restoredAct.totalAmount)
         assertEquals("2 زنانہ سوٹ, 3 KG مٹھائی", restoredAct.homeItems)
-        assertTrue(restoredAct.reminderEnabled)
-        assertTrue(restoredAct.calendarSynced)
-        assertEquals(1, restored.events.size)
-        assertEquals("عقیقہ", restored.events.first().category)
     }
 
     @Test
