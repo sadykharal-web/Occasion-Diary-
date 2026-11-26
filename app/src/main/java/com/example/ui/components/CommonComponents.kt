@@ -1,7 +1,7 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +41,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -48,11 +50,18 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.ActivityDirection
 import com.example.data.LedgerSummary
+import com.example.ui.theme.HeroDarkEnd
+import com.example.ui.theme.HeroDarkMid
+import com.example.ui.theme.HeroDarkStart
+import com.example.ui.theme.HeroLightEnd
+import com.example.ui.theme.HeroLightMid
+import com.example.ui.theme.HeroLightStart
 import com.example.ui.theme.InBadgeBgDark
 import com.example.ui.theme.InBadgeBgLight
 import com.example.ui.theme.InBadgeFgDark
 import com.example.ui.theme.InBadgeFgLight
 import com.example.ui.theme.JakartaSansFamily
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.OutBadgeBgDark
 import com.example.ui.theme.OutBadgeBgLight
 import com.example.ui.theme.OutBadgeFgDark
@@ -89,6 +98,15 @@ fun formatReminderOffsetLabel(minutesBefore: Long): String {
     }
 }
 
+fun adaptiveCategoryColor(baseColor: Color, isDark: Boolean): Color {
+    if (!isDark) return baseColor
+    return if (baseColor.luminance() < 0.45f) {
+        lerp(baseColor, Color.White, 0.48f)
+    } else {
+        baseColor
+    }
+}
+
 @Composable
 fun CategoryBadge(
     label: String,
@@ -96,8 +114,11 @@ fun CategoryBadge(
     icon: ImageVector,
     modifier: Modifier = Modifier
 ) {
+    val isDark = LocalAppDarkTheme.current
+    val resolvedColor = adaptiveCategoryColor(color, isDark)
     Surface(
-        color = color.copy(alpha = 0.14f),
+        color = resolvedColor.copy(alpha = if (isDark) 0.22f else 0.14f),
+        border = if (isDark) BorderStroke(1.dp, resolvedColor.copy(alpha = 0.42f)) else null,
         shape = RoundedCornerShape(10.dp),
         modifier = modifier
     ) {
@@ -109,13 +130,13 @@ fun CategoryBadge(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = color,
+                tint = resolvedColor,
                 modifier = Modifier.size(14.dp)
             )
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelMedium,
-                color = color,
+                color = resolvedColor,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -129,7 +150,7 @@ fun DirectionPill(
     direction: ActivityDirection,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalAppDarkTheme.current
     val bgColor = when (direction) {
         ActivityDirection.IN -> if (isDark) InBadgeBgDark else InBadgeBgLight
         ActivityDirection.OUT -> if (isDark) OutBadgeBgDark else OutBadgeBgLight
@@ -145,6 +166,7 @@ fun DirectionPill(
 
     Surface(
         color = bgColor,
+        border = if (isDark) BorderStroke(1.dp, fgColor.copy(alpha = 0.35f)) else null,
         shape = RoundedCornerShape(50),
         modifier = modifier
     ) {
@@ -174,11 +196,12 @@ fun ReminderStatusBadge(
     label: String = "Reminder On",
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalAppDarkTheme.current
     val bg = if (isDark) ReminderAmberBgDark else ReminderAmberBgLight
     val fg = if (isDark) ReminderAmberFgDark else ReminderAmberFgLight
     Surface(
         color = bg,
+        border = if (isDark) BorderStroke(1.dp, fg.copy(alpha = 0.35f)) else null,
         shape = RoundedCornerShape(50),
         modifier = modifier
     ) {
@@ -207,13 +230,19 @@ fun HeroLedgerSummaryCard(
     summary: LedgerSummary,
     modifier: Modifier = Modifier
 ) {
+    val isDark = LocalAppDarkTheme.current
     val gradient = Brush.linearGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.primary,
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.85f),
-            MaterialTheme.colorScheme.tertiary
-        )
+        colors = if (isDark) {
+            listOf(HeroDarkStart, HeroDarkMid, HeroDarkEnd)
+        } else {
+            listOf(HeroLightStart, HeroLightMid, HeroLightEnd)
+        }
     )
+    val inValueColor = if (isDark) InBadgeFgDark else Color.White
+    val outValueColor = if (isDark) OutBadgeFgDark else Color.White
+    val familyValueColor = if (isDark) Color(0xFFFFD166) else Color.White
+    val reminderValueColor = if (isDark) Color(0xFFFF9ECE) else Color.White
+
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -231,7 +260,7 @@ fun HeroLedgerSummaryCard(
                     Text(
                         text = "Net Balance (In - Out)",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.84f)
+                        color = Color.White.copy(alpha = 0.88f)
                     )
                     val prefix = if (summary.netBalance >= 0) "+" else ""
                     Text(
@@ -242,7 +271,8 @@ fun HeroLedgerSummaryCard(
                     )
                 }
                 Surface(
-                    color = Color.White.copy(alpha = 0.16f),
+                    color = Color.White.copy(alpha = if (isDark) 0.14f else 0.18f),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.25f)),
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Column(
@@ -258,13 +288,13 @@ fun HeroLedgerSummaryCard(
                         Text(
                             text = "Entries",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White.copy(alpha = 0.85f)
+                            color = Color.White.copy(alpha = 0.88f)
                         )
                     }
                 }
             }
 
-            HorizontalDivider(color = Color.White.copy(alpha = 0.2f))
+            HorizontalDivider(color = Color.White.copy(alpha = 0.24f))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -273,21 +303,25 @@ fun HeroLedgerSummaryCard(
                 SummaryStatColumn(
                     label = "Total In",
                     value = formatNeondraAmount(summary.totalIn),
+                    valueColor = inValueColor,
                     modifier = Modifier.weight(1f)
                 )
                 SummaryStatColumn(
                     label = "Total Out",
                     value = formatNeondraAmount(summary.totalOut),
+                    valueColor = outValueColor,
                     modifier = Modifier.weight(1f)
                 )
                 SummaryStatColumn(
                     label = "Families",
                     value = "${summary.totalFamiliesCount}",
+                    valueColor = familyValueColor,
                     modifier = Modifier.weight(0.7f)
                 )
                 SummaryStatColumn(
                     label = "Reminders",
                     value = "${summary.activeRemindersCount}",
+                    valueColor = reminderValueColor,
                     modifier = Modifier.weight(0.75f)
                 )
             }
@@ -299,13 +333,14 @@ fun HeroLedgerSummaryCard(
 private fun SummaryStatColumn(
     label: String,
     value: String,
+    valueColor: Color = Color.White,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = Color.White.copy(alpha = 0.78f),
+            color = Color.White.copy(alpha = 0.82f),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -313,7 +348,7 @@ private fun SummaryStatColumn(
         Text(
             text = value,
             style = MaterialTheme.typography.titleMedium,
-            color = Color.White,
+            color = valueColor,
             fontWeight = FontWeight.Bold
         )
     }

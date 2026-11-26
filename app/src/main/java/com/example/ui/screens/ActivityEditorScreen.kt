@@ -90,9 +90,11 @@ import com.example.data.FamilyProfile
 import com.example.reminders.CalendarIntentHelper
 import com.example.ui.components.AutoCompleteDropdownField
 import com.example.ui.components.DropdownOptionItem
+import com.example.ui.components.adaptiveCategoryColor
 import com.example.ui.components.formatDisplayDate
 import com.example.ui.components.formatNeondraAmount
 import com.example.ui.components.formatReminderOffsetLabel
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NotoArabicFamily
 import java.util.Calendar
 
@@ -136,6 +138,7 @@ fun ActivityEditorScreen(
     BackHandler(onBack = onBack)
 
     val context = LocalContext.current
+    val isDark = LocalAppDarkTheme.current
     val isEditing = initialRecord != null && initialRecord.id.isNotBlank()
 
     var selectedFamilyDocId by remember {
@@ -546,8 +549,8 @@ fun ActivityEditorScreen(
                             options = eventOptions,
                             onOptionSelected = { opt -> eventType = opt.primaryValue },
                             leadingIcon = {
-                                val (catColor, catIcon) = catalog.resolveCategoryVisual(eventType)
-                                Icon(catIcon, contentDescription = null, tint = catColor)
+                                val (rawCatColor, catIcon) = catalog.resolveCategoryVisual(eventType)
+                                Icon(catIcon, contentDescription = null, tint = adaptiveCategoryColor(rawCatColor, isDark))
                             },
                             modifier = Modifier.testTag("editor_event_type_input")
                         )
@@ -559,7 +562,8 @@ fun ActivityEditorScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             catalog.eventTypes.take(12).forEach { ev ->
-                                val (catColor, catIcon) = catalog.resolveCategoryVisual(ev)
+                                val (rawCatColor, catIcon) = catalog.resolveCategoryVisual(ev)
+                                val catColor = adaptiveCategoryColor(rawCatColor, isDark)
                                 FilterChip(
                                     selected = eventType == ev,
                                     onClick = { eventType = ev },
@@ -571,9 +575,9 @@ fun ActivityEditorScreen(
                                             modifier = Modifier.size(16.dp)
                                         )
                                     },
-                                    label = { Text(ev) },
+                                    label = { Text(ev, fontFamily = NotoArabicFamily) },
                                     colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = catColor.copy(alpha = 0.16f),
+                                        selectedContainerColor = catColor.copy(alpha = if (isDark) 0.24f else 0.16f),
                                         selectedLabelColor = catColor
                                     )
                                 )
@@ -1113,7 +1117,7 @@ private fun GiftCategoryQuantityRow(
             expanded = expanded,
             onExpandedChange = { expanded = !expanded },
             modifier = Modifier
-                .width(if (unitSuffix.isNotEmpty()) 142.dp else 96.dp)
+                .width(116.dp)
                 .testTag(dropdownTag)
         ) {
             OutlinedTextField(
@@ -1121,7 +1125,7 @@ private fun GiftCategoryQuantityRow(
                 onValueChange = {},
                 readOnly = true,
                 singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = NotoArabicFamily),
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = NotoArabicFamily),
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier

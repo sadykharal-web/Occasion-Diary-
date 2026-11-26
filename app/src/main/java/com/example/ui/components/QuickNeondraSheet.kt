@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ArrowUpward
 import androidx.compose.material.icons.rounded.Badge
+import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Description
@@ -54,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.ActivityDirection
 import com.example.data.DropdownCatalog
 import com.example.data.FamilyIdentityMatcher
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NotoArabicFamily
 
 private val QUICK_NEONDRA_EVENT_TYPES = listOf("شادی", "نکاح", "عقیقہ", "سالگرہ")
@@ -63,6 +65,9 @@ private val QUICK_NEONDRA_EVENT_TYPES = listOf("شادی", "نکاح", "عقیق
 fun QuickNeondraSheet(
     catalog: DropdownCatalog,
     isSaving: Boolean,
+    prefilledEventDateMillis: Long? = null,
+    prefilledEventName: String? = null,
+    prefilledEventType: String? = null,
     onDismiss: () -> Unit,
     onSaveNeondra: (
         name: String,
@@ -84,6 +89,9 @@ fun QuickNeondraSheet(
         QuickNeondraContent(
             catalog = catalog,
             isSaving = isSaving,
+            prefilledEventDateMillis = prefilledEventDateMillis,
+            prefilledEventName = prefilledEventName,
+            prefilledEventType = prefilledEventType,
             onDismiss = onDismiss,
             onSaveNeondra = onSaveNeondra,
             modifier = Modifier
@@ -99,6 +107,9 @@ fun QuickNeondraSheet(
 fun QuickNeondraContent(
     catalog: DropdownCatalog,
     isSaving: Boolean,
+    prefilledEventDateMillis: Long? = null,
+    prefilledEventName: String? = null,
+    prefilledEventType: String? = null,
     onDismiss: () -> Unit,
     onSaveNeondra: (
         name: String,
@@ -111,11 +122,17 @@ fun QuickNeondraContent(
     ) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isDark = LocalAppDarkTheme.current
     var name by remember { mutableStateOf("") }
     var fatherName by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
-    var eventType by remember { mutableStateOf(QUICK_NEONDRA_EVENT_TYPES.first()) }
-    var eventDetail by remember { mutableStateOf("") }
+    var eventType by remember(prefilledEventType) {
+        mutableStateOf(
+            prefilledEventType?.takeIf { it in QUICK_NEONDRA_EVENT_TYPES }
+                ?: QUICK_NEONDRA_EVENT_TYPES.first()
+        )
+    }
+    var eventDetail by remember(prefilledEventName) { mutableStateOf(prefilledEventName.orEmpty()) }
     var amountText by remember { mutableStateOf("") }
     var direction by remember { mutableStateOf(ActivityDirection.OUT) }
     var validationError by remember { mutableStateOf<String?>(null) }
@@ -197,6 +214,33 @@ fun QuickNeondraContent(
                 modifier = Modifier.testTag("close_quick_neondra_button")
             ) {
                 Icon(Icons.Rounded.Close, contentDescription = "Close نیوندرا")
+            }
+        }
+
+        if (prefilledEventDateMillis != null) {
+            Surface(
+                color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.CalendarMonth,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Event Date: ${formatDisplayDate(prefilledEventDateMillis)}",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer
+                    )
+                }
             }
         }
 
@@ -313,7 +357,8 @@ fun QuickNeondraContent(
             ) {
                 QUICK_NEONDRA_EVENT_TYPES.forEach { typeName ->
                     val isSelected = eventType == typeName
-                    val (catColor, catIcon) = catalog.resolveCategoryVisual(typeName)
+                    val (rawCatColor, catIcon) = catalog.resolveCategoryVisual(typeName)
+                    val catColor = adaptiveCategoryColor(rawCatColor, isDark)
                     FilterChip(
                         selected = isSelected,
                         onClick = { eventType = typeName },
@@ -328,11 +373,12 @@ fun QuickNeondraContent(
                         label = {
                             Text(
                                 text = typeName,
+                                fontFamily = NotoArabicFamily,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
                         },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = catColor.copy(alpha = 0.16f),
+                            selectedContainerColor = catColor.copy(alpha = if (isDark) 0.24f else 0.16f),
                             selectedLabelColor = catColor
                         ),
                         modifier = Modifier.testTag("quick_neondra_event_type_${typeName.lowercase()}")

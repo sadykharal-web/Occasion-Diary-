@@ -1,9 +1,9 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -96,11 +97,13 @@ import com.example.ui.components.CategoryBadge
 import com.example.ui.components.DirectionPill
 import com.example.ui.components.HeroLedgerSummaryCard
 import com.example.ui.components.ReminderStatusBadge
+import com.example.ui.components.adaptiveCategoryColor
 import com.example.ui.components.formatDisplayDate
 import com.example.ui.components.formatNeondraAmount
 import com.example.ui.theme.InBadgeFgDark
 import com.example.ui.theme.InBadgeFgLight
 import com.example.ui.theme.JakartaSansFamily
+import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NotoArabicFamily
 import com.example.ui.theme.OutBadgeFgDark
 import com.example.ui.theme.OutBadgeFgLight
@@ -125,9 +128,21 @@ data class SameDateEventGroup(
     val netBalance: Long get() = totalIn - totalOut
 }
 
+private fun compareByFnRecord(a: ActivityRecord, b: ActivityRecord): Int {
+    val aBlank = a.familyId.trim().isEmpty()
+    val bBlank = b.familyId.trim().isEmpty()
+    if (aBlank != bBlank) return if (aBlank) 1 else -1
+    val aNum = a.familyId.trim().toIntOrNull() ?: Int.MAX_VALUE
+    val bNum = b.familyId.trim().toIntOrNull() ?: Int.MAX_VALUE
+    if (aNum != bNum) return aNum.compareTo(bNum)
+    val strCmp = a.familyId.trim().lowercase(Locale.ENGLISH).compareTo(b.familyId.trim().lowercase(Locale.ENGLISH))
+    if (strCmp != 0) return strCmp
+    return b.eventDateMillis.compareTo(a.eventDateMillis)
+}
+
 fun buildSameDateEventLists(
     activities: List<ActivityRecord>,
-    sortOrder: LedgerSortOrder = LedgerSortOrder.DATE_NEWEST
+    sortOrder: LedgerSortOrder = LedgerSortOrder.FN
 ): List<SameDateEventGroup> {
     val groups = activities
         .filter { it.eventDetail.trim().isNotEmpty() }
@@ -138,12 +153,15 @@ fun buildSameDateEventLists(
         }
         .map { (key, groupEntries) ->
             val sortedEntries = when (sortOrder) {
-                LedgerSortOrder.DATE_OLDEST -> groupEntries.sortedBy { it.eventDateMillis }
-                LedgerSortOrder.AMOUNT_HIGHEST -> groupEntries.sortedByDescending { it.totalAmount }
-                LedgerSortOrder.AMOUNT_LOWEST -> groupEntries.sortedBy { it.totalAmount }
-                LedgerSortOrder.EVENT_TYPE -> groupEntries.sortedBy { it.eventType.lowercase(Locale.ENGLISH) }
-                LedgerSortOrder.NAME_AZ -> groupEntries.sortedBy { it.name.lowercase(Locale.ENGLISH) }
-                LedgerSortOrder.DATE_NEWEST -> groupEntries.sortedByDescending { it.eventDateMillis }
+                LedgerSortOrder.FN -> groupEntries.sortedWith(::compareByFnRecord)
+                LedgerSortOrder.EVENT_NAME -> groupEntries.sortedWith(
+                    compareBy<ActivityRecord> { it.eventDetail.trim().lowercase(Locale.ENGLISH) }
+                        .thenComparator(::compareByFnRecord)
+                )
+                LedgerSortOrder.EVENT_TYPE -> groupEntries.sortedWith(
+                    compareBy<ActivityRecord> { it.eventType.trim().lowercase(Locale.ENGLISH) }
+                        .thenComparator(::compareByFnRecord)
+                )
             }
             val displayName = sortedEntries.first().eventDetail.trim().replace(Regex("\\s+"), " ")
             val dayStart = localDayStartMillis(sortedEntries.first().eventDateMillis)
@@ -162,31 +180,22 @@ fun buildSameDateEventLists(
         }
 
     return when (sortOrder) {
-        LedgerSortOrder.DATE_OLDEST -> groups.sortedWith(
-            compareBy<SameDateEventGroup> { it.eventDayStartMillis }
-                .thenByDescending { it.entries.size }
-                .thenBy { it.eventName }
-        )
-        LedgerSortOrder.AMOUNT_HIGHEST -> groups.sortedWith(
-            compareByDescending<SameDateEventGroup> { it.totalIn + it.totalOut }
+        LedgerSortOrder.FN -> groups.sortedWith(
+            compareBy<SameDateEventGroup> { grp ->
+                grp.entries.mapNotNull { it.familyId.trim().toIntOrNull() }.minOrNull() ?: Int.MAX_VALUE
+            }
+                .thenBy { grp -> grp.entries.none { it.familyId.isNotBlank() } }
+                .thenBy { grp -> grp.entries.firstOrNull { it.familyId.isNotBlank() }?.familyId?.trim().orEmpty() }
                 .thenByDescending { it.eventDayStartMillis }
         )
-        LedgerSortOrder.AMOUNT_LOWEST -> groups.sortedWith(
-            compareBy<SameDateEventGroup> { it.totalIn + it.totalOut }
+        LedgerSortOrder.EVENT_NAME -> groups.sortedWith(
+            compareBy<SameDateEventGroup> { it.eventName.lowercase(Locale.ENGLISH) }
                 .thenByDescending { it.eventDayStartMillis }
         )
         LedgerSortOrder.EVENT_TYPE -> groups.sortedWith(
             compareBy<SameDateEventGroup> { it.eventTypes.firstOrNull().orEmpty().lowercase(Locale.ENGLISH) }
+                .thenBy { it.eventName.lowercase(Locale.ENGLISH) }
                 .thenByDescending { it.eventDayStartMillis }
-        )
-        LedgerSortOrder.NAME_AZ -> groups.sortedWith(
-            compareBy<SameDateEventGroup> { it.eventName.lowercase(Locale.ENGLISH) }
-                .thenByDescending { it.eventDayStartMillis }
-        )
-        LedgerSortOrder.DATE_NEWEST -> groups.sortedWith(
-            compareByDescending<SameDateEventGroup> { it.eventDayStartMillis }
-                .thenByDescending { it.entries.size }
-                .thenBy { it.eventName }
         )
     }
 }
@@ -270,7 +279,7 @@ fun filterLedgerActivities(
     selectedCategoryFilter: String? = null,
     dateRangeFilter: DateRangeFilter,
     selectedEventTypes: Set<String> = emptySet(),
-    sortOrder: LedgerSortOrder = LedgerSortOrder.DATE_NEWEST
+    sortOrder: LedgerSortOrder = LedgerSortOrder.FN
 ): List<ActivityRecord> {
     val q = searchQuery.trim()
     val rangeStart = dateRangeFilter.startDateMillis?.let(::localDayStartMillis)
@@ -307,22 +316,15 @@ fun filterLedgerActivities(
     }
 
     return when (sortOrder) {
-        LedgerSortOrder.DATE_NEWEST -> filtered.sortedByDescending { it.eventDateMillis }
-        LedgerSortOrder.DATE_OLDEST -> filtered.sortedBy { it.eventDateMillis }
-        LedgerSortOrder.AMOUNT_HIGHEST -> filtered.sortedWith(
-            compareByDescending<ActivityRecord> { it.totalAmount }
-                .thenByDescending { it.eventDateMillis }
-        )
-        LedgerSortOrder.AMOUNT_LOWEST -> filtered.sortedWith(
-            compareBy<ActivityRecord> { it.totalAmount }
+        LedgerSortOrder.FN -> filtered.sortedWith(::compareByFnRecord)
+        LedgerSortOrder.EVENT_NAME -> filtered.sortedWith(
+            compareBy<ActivityRecord> { it.eventDetail.trim().isEmpty() }
+                .thenBy { it.eventDetail.trim().lowercase(Locale.ENGLISH) }
                 .thenByDescending { it.eventDateMillis }
         )
         LedgerSortOrder.EVENT_TYPE -> filtered.sortedWith(
-            compareBy<ActivityRecord> { it.eventType.trim().lowercase(Locale.ENGLISH) }
-                .thenByDescending { it.eventDateMillis }
-        )
-        LedgerSortOrder.NAME_AZ -> filtered.sortedWith(
-            compareBy<ActivityRecord> { it.name.trim().lowercase(Locale.ENGLISH) }
+            compareBy<ActivityRecord> { it.eventType.trim().isEmpty() }
+                .thenBy { it.eventType.trim().lowercase(Locale.ENGLISH) }
                 .thenByDescending { it.eventDateMillis }
         )
     }
@@ -400,7 +402,7 @@ fun LedgerScreen(
     selectedEventTypes: Set<String> = emptySet(),
     onToggleEventTypeFilter: (String) -> Unit = {},
     onClearEventTypeFilters: () -> Unit = {},
-    sortOrder: LedgerSortOrder = LedgerSortOrder.DATE_NEWEST,
+    sortOrder: LedgerSortOrder = LedgerSortOrder.FN,
     onSortOrderChange: (LedgerSortOrder) -> Unit = {},
     dateRangeFilter: DateRangeFilter = DateRangeFilter(),
     onDateRangeChange: (startMillis: Long?, endMillis: Long?, presetLabel: String?) -> Unit = { _, _, _ -> },
@@ -410,13 +412,40 @@ fun LedgerScreen(
     onQuickNeondraClick: () -> Unit = {},
     onActivityClick: (ActivityRecord) -> Unit,
     onEditActivityClick: (ActivityRecord) -> Unit = onActivityClick,
+    onAddNeondraToEventList: (eventName: String, eventDateMillis: Long, eventType: String) -> Unit = { _, _, _ -> },
     onAddToEventList: (eventName: String, eventDateMillis: Long, eventType: String) -> Unit = { _, _, _ -> },
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val isDark = LocalAppDarkTheme.current
     var showDateRangeDialog by remember { mutableStateOf(false) }
     var showEventListsMode by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var eventGroupPendingAddChoice by remember { mutableStateOf<SameDateEventGroup?>(null) }
+
+    eventGroupPendingAddChoice?.let { targetGroup ->
+        AddToEventChoiceDialog(
+            eventName = targetGroup.eventName,
+            eventDateMillis = targetGroup.eventDayStartMillis,
+            onDismiss = { eventGroupPendingAddChoice = null },
+            onAddNeondra = {
+                eventGroupPendingAddChoice = null
+                onAddNeondraToEventList(
+                    targetGroup.eventName,
+                    targetGroup.eventDayStartMillis,
+                    targetGroup.eventTypes.firstOrNull().orEmpty()
+                )
+            },
+            onFullEntry = {
+                eventGroupPendingAddChoice = null
+                onAddToEventList(
+                    targetGroup.eventName,
+                    targetGroup.eventDayStartMillis,
+                    targetGroup.eventTypes.firstOrNull().orEmpty()
+                )
+            }
+        )
+    }
 
     if (showDateRangeDialog) {
         LedgerDateRangePickerDialog(
@@ -535,7 +564,7 @@ fun LedgerScreen(
                         selectedEventTypes.isNotEmpty() ||
                         dateRangeFilter.isActive ||
                         searchQuery.isNotBlank() ||
-                        sortOrder != LedgerSortOrder.DATE_NEWEST
+                        sortOrder != LedgerSortOrder.FN
 
                     LazyColumn(
                         modifier = Modifier
@@ -603,7 +632,7 @@ fun LedgerScreen(
                             OutlinedTextField(
                                 value = searchQuery,
                                 onValueChange = onSearchQueryChange,
-                                placeholder = { Text("Search name, FN, father, address, event name or event type...") },
+                                placeholder = { Text("Search...") },
                                 leadingIcon = {
                                     Icon(Icons.Rounded.Search, contentDescription = null)
                                 },
@@ -789,7 +818,8 @@ fun LedgerScreen(
                                     )
                                     availableEventTypes.forEach { catName ->
                                         val isSelected = selectedEventTypes.any { it.equals(catName, ignoreCase = true) }
-                                        val (catColor, catIcon) = data.catalog.resolveCategoryVisual(catName)
+                                        val (rawCatColor, catIcon) = data.catalog.resolveCategoryVisual(catName)
+                                        val catColor = adaptiveCategoryColor(rawCatColor, isDark)
                                         FilterChip(
                                             selected = isSelected,
                                             onClick = { onToggleEventTypeFilter(catName) },
@@ -809,7 +839,7 @@ fun LedgerScreen(
                                                 )
                                             },
                                             colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = catColor.copy(alpha = 0.16f),
+                                                selectedContainerColor = catColor.copy(alpha = if (isDark) 0.24f else 0.16f),
                                                 selectedLabelColor = catColor
                                             ),
                                             modifier = Modifier.testTag("event_type_filter_$catName")
@@ -853,7 +883,10 @@ fun LedgerScreen(
                         if (showEventListsMode) {
                             if (sameDateEventLists.isEmpty()) {
                                 item(key = "event_lists_empty") {
-                                    EmptyEventListsCard(onAddClick = onAddClick)
+                                    EmptyEventListsCard(
+                                        onQuickNeondraClick = onQuickNeondraClick,
+                                        onAddClick = onAddClick
+                                    )
                                 }
                             } else {
                                 items(
@@ -865,11 +898,7 @@ fun LedgerScreen(
                                         catalog = data.catalog,
                                         onEntryClick = onActivityClick,
                                         onAddToEventClick = {
-                                            onAddToEventList(
-                                                group.eventName,
-                                                group.eventDayStartMillis,
-                                                group.eventTypes.firstOrNull().orEmpty()
-                                            )
+                                            eventGroupPendingAddChoice = group
                                         }
                                     )
                                 }
@@ -1424,16 +1453,16 @@ private fun ActivitySummaryCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (record.cashAmount > 0L) {
-                        MoneyTagChip(label = "نقد", amount = record.cashAmount)
+                        MoneyTagChip(label = "نقد", amount = record.cashAmount, tone = 0)
                     }
                     if (record.haarAmount > 0L) {
-                        MoneyTagChip(label = "ہار", amount = record.haarAmount)
+                        MoneyTagChip(label = "ہار", amount = record.haarAmount, tone = 1)
                     }
                     if (record.salamiAmount > 0L) {
-                        MoneyTagChip(label = "سلامی", amount = record.salamiAmount)
+                        MoneyTagChip(label = "سلامی", amount = record.salamiAmount, tone = 2)
                     }
                     if (record.neondraAmount > 0L) {
-                        MoneyTagChip(label = "نیوندرا", amount = record.neondraAmount)
+                        MoneyTagChip(label = "نیوندرا", amount = record.neondraAmount, tone = 3)
                     }
                 }
             }
@@ -1476,20 +1505,89 @@ private fun ActivitySummaryCard(
 }
 
 @Composable
-private fun MoneyTagChip(label: String, amount: Long) {
+private fun MoneyTagChip(label: String, amount: Long, tone: Int = 0) {
+    val isDark = LocalAppDarkTheme.current
+    val (bg, fg) = when (tone % 4) {
+        1 -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = if (isDark) 0.72f else 0.75f) to MaterialTheme.colorScheme.onSecondaryContainer
+        2 -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = if (isDark) 0.72f else 0.75f) to MaterialTheme.colorScheme.onTertiaryContainer
+        3 -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (isDark) 0.75f else 0.65f) to MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (isDark) 0.55f else 0.45f) to MaterialTheme.colorScheme.onPrimaryContainer
+    }
     Surface(
         shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        color = bg,
+        border = if (isDark) BorderStroke(0.75.dp, fg.copy(alpha = 0.3f)) else null
     ) {
         Text(
             text = "$label ${formatNeondraAmount(amount)}",
             style = MaterialTheme.typography.labelSmall,
             fontFamily = NotoArabicFamily,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            color = fg,
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
+}
+
+@Composable
+private fun AddToEventChoiceDialog(
+    eventName: String,
+    eventDateMillis: Long,
+    onDismiss: () -> Unit,
+    onAddNeondra: () -> Unit,
+    onFullEntry: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Add Entry", fontWeight = FontWeight.Bold)
+                Text(
+                    text = "$eventName • ${formatDisplayDate(eventDateMillis)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(
+                    onClick = onAddNeondra,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("event_add_option_neondra")
+                ) {
+                    Icon(Icons.Rounded.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Add نیوندرا",
+                        fontFamily = NotoArabicFamily,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                OutlinedButton(
+                    onClick = onFullEntry,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("event_add_option_full")
+                ) {
+                    Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Full Entry", fontWeight = FontWeight.SemiBold)
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
@@ -1500,7 +1598,7 @@ private fun SameDateEventGroupCard(
     onAddToEventClick: () -> Unit
 ) {
     var expanded by remember(group.groupKey) { mutableStateOf(true) }
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalAppDarkTheme.current
     val inColor = if (isDark) InBadgeFgDark else InBadgeFgLight
     val outColor = if (isDark) OutBadgeFgDark else OutBadgeFgLight
     val netPrefix = if (group.netBalance >= 0L) "+" else ""
@@ -1508,6 +1606,7 @@ private fun SameDateEventGroupCard(
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = if (isDark) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)) else null,
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -1587,7 +1686,7 @@ private fun SameDateEventGroupCard(
 
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.65f else 0.5f),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
@@ -1619,57 +1718,144 @@ private fun SameDateEventGroupCard(
             }
 
             if (expanded) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f))
                 group.entries.forEach { entry ->
-                    Row(
+                    val (catColor, catIcon) = catalog.resolveCategoryVisual(entry.eventType)
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isDark) 0.45f else 0.35f),
+                        border = if (isDark) BorderStroke(0.75.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)) else null,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .clickable { onEntryClick(entry) }
-                            .padding(horizontal = 8.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = buildString {
-                                    if (entry.familyId.isNotBlank()) append("FN ${entry.familyId} • ")
-                                    append(entry.name)
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            val sub = buildList {
-                                if (entry.fatherName.isNotBlank()) add("Father: ${entry.fatherName}")
-                                if (entry.address.isNotBlank()) add(entry.address)
-                            }.joinToString(" • ")
-                            if (sub.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    if (entry.familyId.isNotBlank()) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Text(
+                                                text = "FN ${entry.familyId}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                fontFamily = JakartaSansFamily,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp)
+                                            )
+                                        }
+                                    }
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = entry.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        val sub = buildList {
+                                            if (entry.fatherName.isNotBlank()) add("Father: ${entry.fatherName}")
+                                            if (entry.address.isNotBlank()) add(entry.address)
+                                        }.joinToString(" • ")
+                                        if (sub.isNotEmpty()) {
+                                            Text(
+                                                text = sub,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                                DirectionPill(direction = entry.parsedDirection)
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (entry.eventType.isNotBlank()) {
+                                    CategoryBadge(label = entry.eventType, color = catColor, icon = catIcon)
+                                }
+                                if (entry.reminderEnabled) {
+                                    ReminderStatusBadge(label = "Reminder")
+                                }
+                            }
+
+                            if (entry.homeItems.isNotBlank()) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+                                    shape = RoundedCornerShape(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "Home Gift / Items: ${entry.homeItems}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontFamily = NotoArabicFamily,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+
+                            val hasAnyMoney = entry.cashAmount > 0L || entry.haarAmount > 0L ||
+                                entry.salamiAmount > 0L || entry.neondraAmount > 0L
+                            if (hasAnyMoney) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (entry.cashAmount > 0L) {
+                                        MoneyTagChip(label = "نقد", amount = entry.cashAmount, tone = 0)
+                                    }
+                                    if (entry.haarAmount > 0L) {
+                                        MoneyTagChip(label = "ہار", amount = entry.haarAmount, tone = 1)
+                                    }
+                                    if (entry.salamiAmount > 0L) {
+                                        MoneyTagChip(label = "سلامی", amount = entry.salamiAmount, tone = 2)
+                                    }
+                                    if (entry.neondraAmount > 0L) {
+                                        MoneyTagChip(label = "نیوندرا", amount = entry.neondraAmount, tone = 3)
+                                    }
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text(
-                                    text = sub,
-                                    style = MaterialTheme.typography.bodySmall,
+                                    text = formatDisplayDate(entry.eventDateMillis),
+                                    style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    fontFamily = JakartaSansFamily
+                                )
+                                Text(
+                                    text = "Amount: ${formatNeondraAmount(entry.totalAmount)}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            DirectionPill(direction = entry.parsedDirection)
-                            Text(
-                                text = formatNeondraAmount(entry.totalAmount),
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
                         }
                     }
                 }
@@ -1685,14 +1871,17 @@ private fun SameDateEventGroupCard(
             ) {
                 Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("Add Entry to This Event", fontWeight = FontWeight.SemiBold)
+                Text("Add Entry", fontWeight = FontWeight.SemiBold)
             }
         }
     }
 }
 
 @Composable
-private fun EmptyEventListsCard(onAddClick: () -> Unit) {
+private fun EmptyEventListsCard(
+    onQuickNeondraClick: () -> Unit,
+    onAddClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -1707,7 +1896,7 @@ private fun EmptyEventListsCard(onAddClick: () -> Unit) {
                 .fillMaxWidth()
                 .padding(28.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Icon(
                 imageVector = Icons.Rounded.Event,
@@ -1716,21 +1905,29 @@ private fun EmptyEventListsCard(onAddClick: () -> Unit) {
                 modifier = Modifier.size(44.dp)
             )
             Text(
-                text = "No Same-Date Event Lists Yet",
+                text = "No Event Lists Yet",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
-            Text(
-                text = "Entries that share the same Event Name on the same Event Date are automatically grouped together into an Event List.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-            Button(onClick = onAddClick, shape = RoundedCornerShape(14.dp)) {
-                Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Add Full Entry")
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = onQuickNeondraClick,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Add نیوندرا", fontFamily = NotoArabicFamily, fontWeight = FontWeight.Bold)
+                }
+                OutlinedButton(
+                    onClick = onAddClick,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Full Entry")
+                }
             }
         }
     }
@@ -1767,16 +1964,6 @@ private fun EmptyLedgerState(
                 text = if (hasAnyData) "No matching entries found" else "No ledger entries yet",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-            Text(
-                text = if (hasAnyData) {
-                    "Try adjusting your filters or search query."
-                } else {
-                    "Tap the (+) button below to record your first entry or نیوندرا. Families sharing Name, Father's Name & Address are grouped automatically under one unique FN."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
             if (!hasAnyData) {
@@ -1817,7 +2004,7 @@ private fun DateRangeFilterBar(
     onApplyPreset: (startMillis: Long?, endMillis: Long?, presetLabel: String?) -> Unit,
     onClearDateRange: () -> Unit
 ) {
-    val isDark = isSystemInDarkTheme()
+    val isDark = LocalAppDarkTheme.current
     val inColor = if (isDark) InBadgeFgDark else InBadgeFgLight
     val outColor = if (isDark) OutBadgeFgDark else OutBadgeFgLight
 

@@ -23,6 +23,7 @@ import com.example.data.UiState
 import com.example.drive.LocalBackupManager
 import com.example.drive.LocalBackupStatus
 import com.example.reminders.ReminderScheduler
+import com.example.ui.theme.ThemePreferences
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,12 +43,9 @@ enum class LedgerFilter(val label: String) {
 }
 
 enum class LedgerSortOrder(val label: String, val shortLabel: String) {
-    DATE_NEWEST("Date: Newest First", "Newest"),
-    DATE_OLDEST("Date: Oldest First", "Oldest"),
-    AMOUNT_HIGHEST("Amount: High to Low", "Highest Amt"),
-    AMOUNT_LOWEST("Amount: Low to High", "Lowest Amt"),
-    EVENT_TYPE("Event Type (A–Z)", "Event Type"),
-    NAME_AZ("Name (A–Z)", "Name A–Z")
+    FN("Sort by: FN", "FN"),
+    EVENT_NAME("Sort by: Event Name", "Event Name"),
+    EVENT_TYPE("Sort by: Event Type", "Event Type")
 }
 
 data class DateRangeFilter(
@@ -85,11 +83,14 @@ class LedgerViewModel(
     private val _selectedEventTypes = MutableStateFlow<Set<String>>(emptySet())
     val selectedEventTypes: StateFlow<Set<String>> = _selectedEventTypes.asStateFlow()
 
-    private val _selectedSortOrder = MutableStateFlow(LedgerSortOrder.DATE_NEWEST)
+    private val _selectedSortOrder = MutableStateFlow(LedgerSortOrder.FN)
     val selectedSortOrder: StateFlow<LedgerSortOrder> = _selectedSortOrder.asStateFlow()
 
     private val _dateRangeFilter = MutableStateFlow(DateRangeFilter())
     val dateRangeFilter: StateFlow<DateRangeFilter> = _dateRangeFilter.asStateFlow()
+
+    private val _isDarkMode = MutableStateFlow<Boolean?>(null)
+    val isDarkMode: StateFlow<Boolean?> = _isDarkMode.asStateFlow()
 
     private val _isSaving = MutableStateFlow(false)
     val isSaving: StateFlow<Boolean> = _isSaving.asStateFlow()
@@ -251,6 +252,17 @@ class LedgerViewModel(
         )
     }
 
+    fun initThemePrefs(context: Context, systemDark: Boolean) {
+        if (_isDarkMode.value == null) {
+            _isDarkMode.value = ThemePreferences.isDarkMode(context, systemDark)
+        }
+    }
+
+    fun setDarkMode(context: Context, enabled: Boolean) {
+        ThemePreferences.setDarkMode(context, enabled)
+        _isDarkMode.value = enabled
+    }
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
     }
@@ -300,7 +312,7 @@ class LedgerViewModel(
         _selectedAddress.value = null
         _selectedEventTypes.value = emptySet()
         _dateRangeFilter.value = DateRangeFilter()
-        _selectedSortOrder.value = LedgerSortOrder.DATE_NEWEST
+        _selectedSortOrder.value = LedgerSortOrder.FN
     }
 
     fun clearActionMessage() {
@@ -791,6 +803,7 @@ class LedgerViewModel(
         eventDetail: String,
         amount: Long,
         direction: ActivityDirection,
+        eventDateMillis: Long = System.currentTimeMillis(),
         onSaved: (ActivityRecord) -> Unit = {}
     ) {
         val currentData = (dashboardState.value as? UiState.Success)?.data
@@ -809,7 +822,7 @@ class LedgerViewModel(
             address = address.trim(),
             eventType = eventType.trim().ifEmpty { "شادی" },
             eventDetail = eventDetail.trim(),
-            eventDateMillis = System.currentTimeMillis(),
+            eventDateMillis = eventDateMillis,
             direction = direction.wireValue,
             neondraAmount = amount
         )

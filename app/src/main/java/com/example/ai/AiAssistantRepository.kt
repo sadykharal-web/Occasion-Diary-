@@ -388,24 +388,7 @@ class AiAssistantRepository {
             "${family.name} کی کل ${inEntries.size} آمدن (وصول) اندراجات میں ${fmt.format(totalIn)} روپے اور ${outEntries.size} خرچ (دیے گئے) اندراجات میں ${fmt.format(totalOut)} روپے درج ہیں، اور خالص بیلنس ${if (netBalance >= 0) "+" else ""}${fmt.format(netBalance)} روپے ہے۔"
         }
 
-        val insights = buildList {
-            if (inEntries.isNotEmpty()) {
-                val topIn = inEntries.maxByOrNull { it.totalAmount }!!
-                add("سب سے بڑی آمدن (وصول): ${topIn.eventType}${if (topIn.eventDetail.isNotBlank()) " (${topIn.eventDetail})" else ""} پر ${fmt.format(topIn.totalAmount)} روپے۔")
-            } else {
-                add("${family.name} کے لیے ابھی کوئی آمدن (وصول) کا اندراج درج نہیں ہے۔")
-            }
-            if (outEntries.isNotEmpty()) {
-                val topOut = outEntries.maxByOrNull { it.totalAmount }!!
-                add("سب سے بڑا خرچ (دیا گیا): ${topOut.eventType}${if (topOut.eventDetail.isNotBlank()) " (${topOut.eventDetail})" else ""} پر ${fmt.format(topOut.totalAmount)} روپے۔")
-            } else {
-                add("${family.name} کے لیے ابھی کوئی خرچ (دیا گیا) کا اندراج درج نہیں ہے۔")
-            }
-            if (categoryBreakdowns.isNotEmpty()) {
-                val topCat = categoryBreakdowns.first()
-                add("سب سے اہم تقریب قسم: ${topCat.categoryName} (آمدن: ${fmt.format(topCat.totalIn)} بمقابلہ خرچ: ${fmt.format(topCat.totalOut)})۔")
-            }
-        }
+        val insights = emptyList<String>()
 
         return SingleFamilyInOutComparison(
             family = family,

@@ -1,5 +1,6 @@
 package com.example.ui.theme
 
+import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -7,8 +8,15 @@ import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+
+val LocalAppDarkTheme = staticCompositionLocalOf { false }
 
 private val DarkColorScheme = darkColorScheme(
     primary = EmeraldPrimaryDark,
@@ -19,15 +27,17 @@ private val DarkColorScheme = darkColorScheme(
     onSecondary = SaffronOnSecondaryDark,
     secondaryContainer = SaffronContainerDark,
     onSecondaryContainer = SaffronOnContainerDark,
-    tertiary = TealTertiaryContainer,
-    onTertiary = TealOnTertiaryContainer,
-    background = ForestObsidianBg,
+    tertiary = RoseMagentaDark,
+    onTertiary = RoseOnMagentaDark,
+    tertiaryContainer = RoseMagentaContainerDark,
+    onTertiaryContainer = RoseOnMagentaContainerDark,
+    background = MidnightObsidianBg,
     onBackground = IvoryOnDark,
-    surface = ForestSurfaceDark,
+    surface = MidnightSurfaceDark,
     onSurface = IvoryOnDark,
-    surfaceVariant = ForestSurfaceVariantDark,
+    surfaceVariant = MidnightSurfaceVariantDark,
     onSurfaceVariant = MutedOnDark,
-    outline = ForestOutlineDark,
+    outline = MidnightOutlineDark,
     error = ErrorRedDark,
     onError = OnErrorDark,
     errorContainer = ErrorContainerDark,
@@ -73,11 +83,24 @@ fun MyApplicationTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window
+            if (window != null) {
+                val controller = WindowCompat.getInsetsController(window, view)
+                controller.isAppearanceLightStatusBars = !darkTheme
+                controller.isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
+    }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        shapes = AppShapes,
-        content = content
-    )
+    CompositionLocalProvider(LocalAppDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            shapes = AppShapes,
+            content = content
+        )
+    }
 }

@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -84,6 +85,7 @@ import com.example.ui.screens.FamiliesScreen
 import com.example.ui.screens.LedgerScreen
 import com.example.ui.screens.RemindersScreen
 import com.example.ui.theme.MyApplicationTheme
+import com.example.ui.theme.ThemePreferences
 import com.example.ui.viewmodel.LedgerViewModel
 
 const val ROUTE_LEDGER = "ledger"
@@ -113,8 +115,35 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         ReminderReceiver.ensureNotificationChannel(this)
         setContent {
-            MyApplicationTheme {
-                OccasionDiaryAppShell()
+            val context = LocalContext.current
+            val appContext = context.applicationContext
+            val repository = remember(appContext) {
+                (appContext as? OccasionDiaryApplication)?.repository
+                    ?: LedgerRepository(OccasionDiaryDatabase.getInstance(appContext))
+            }
+            val viewModel: LedgerViewModel = viewModel(
+                factory = viewModelFactory {
+                    initializer {
+                        LedgerViewModel(repository)
+                    }
+                }
+            )
+            val systemDark = isSystemInDarkTheme()
+            val initialDark = remember(systemDark) {
+                ThemePreferences.isDarkMode(context, systemDark)
+            }
+            LaunchedEffect(systemDark) {
+                viewModel.initBackupPrefs(context)
+                viewModel.initThemePrefs(context, systemDark)
+            }
+            val storedDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
+            val activeDarkMode = storedDarkMode ?: initialDark
+
+            MyApplicationTheme(darkTheme = activeDarkMode) {
+                OccasionDiaryAppShell(
+                    viewModel = viewModel,
+                    isDarkMode = activeDarkMode
+                )
             }
         }
     }
@@ -128,26 +157,11 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun OccasionDiaryAppShell() {
+fun OccasionDiaryAppShell(
+    viewModel: LedgerViewModel,
+    isDarkMode: Boolean
+) {
     val context = LocalContext.current
-
-    val appContext = context.applicationContext
-    val repository = remember(appContext) {
-        (appContext as? OccasionDiaryApplication)?.repository
-            ?: LedgerRepository(OccasionDiaryDatabase.getInstance(appContext))
-    }
-
-    val viewModel: LedgerViewModel = viewModel(
-        factory = viewModelFactory {
-            initializer {
-                LedgerViewModel(repository)
-            }
-        }
-    )
-
-    LaunchedEffect(Unit) {
-        viewModel.initBackupPrefs(context)
-    }
 
     val dashboardState by viewModel.dashboardState.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
@@ -160,20 +174,8 @@ fun OccasionDiaryAppShell() {
     val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
     val localBackupStatus by viewModel.localBackupStatus.collectAsStateWithLifecycle()
     val aiSearchState by viewModel.aiSearchState.collectAsStateWithLifecycle()
-    val aiComparisonState by viewModel.aiComparisonState.collectAsStateWithLifecycle()
-    val multiFamilyAiLoading by viewModel.multiFamilyAiLoading.collectAsStateWithLifecycle()
-    val multiFamilyAiError by viewModel.multiFamilyAiError.collectAsStateWithLifecycle()
-    val selectedCompareFamilyIds by viewModel.selectedCompareFamilyIds.collectAsStateWithLifecycle()
     val selectedSingleFamilyId by viewModel.selectedSingleFamilyId.collectAsStateWithLifecycle()
     val singleFamilyComparisonState by viewModel.singleFamilyComparisonState.collectAsStateWithLifecycle()
-    val singleFamilyAiLoading by viewModel.singleFamilyAiLoading.collectAsStateWithLifecycle()
-    val singleFamilyAiError by viewModel.singleFamilyAiError.collectAsStateWithLifecycle()
-    val singleFamilyChatMessages by viewModel.singleFamilyChatMessages.collectAsStateWithLifecycle()
-    val singleFamilyChatLoading by viewModel.singleFamilyChatLoading.collectAsStateWithLifecycle()
-    val singleFamilyChatError by viewModel.singleFamilyChatError.collectAsStateWithLifecycle()
-    val multiFamilyChatMessages by viewModel.multiFamilyChatMessages.collectAsStateWithLifecycle()
-    val multiFamilyChatLoading by viewModel.multiFamilyChatLoading.collectAsStateWithLifecycle()
-    val multiFamilyChatError by viewModel.multiFamilyChatError.collectAsStateWithLifecycle()
 
     var didAttemptCategorySeed by remember { mutableStateOf(false) }
     LaunchedEffect(dashboardState) {
@@ -219,6 +221,9 @@ fun OccasionDiaryAppShell() {
     var prefilledEventType by remember { mutableStateOf<String?>(null) }
 
     var showQuickNeondraSheet by remember { mutableStateOf(false) }
+    var prefilledQuickNeondraEventDate by remember { mutableStateOf<Long?>(null) }
+    var prefilledQuickNeondraEventName by remember { mutableStateOf<String?>(null) }
+    var prefilledQuickNeondraEventType by remember { mutableStateOf<String?>(null) }
     var aiInitialTabIndex by remember { mutableIntStateOf(0) }
 
     val allActivities = (dashboardState as? UiState.Success)?.data?.activities ?: emptyList()
@@ -228,7 +233,15 @@ fun OccasionDiaryAppShell() {
         QuickNeondraSheet(
             catalog = catalog,
             isSaving = isSaving,
-            onDismiss = { showQuickNeondraSheet = false },
+            prefilledEventDateMillis = prefilledQuickNeondraEventDate,
+            prefilledEventName = prefilledQuickNeondraEventName,
+            prefilledEventType = prefilledQuickNeondraEventType,
+            onDismiss = {
+                showQuickNeondraSheet = false
+                prefilledQuickNeondraEventDate = null
+                prefilledQuickNeondraEventName = null
+                prefilledQuickNeondraEventType = null
+            },
             onSaveNeondra = { name, fatherName, address, eventType, eventDetail, amount, direction ->
                 viewModel.saveQuickNeondra(
                     context = context,
@@ -238,9 +251,13 @@ fun OccasionDiaryAppShell() {
                     eventType = eventType,
                     eventDetail = eventDetail,
                     amount = amount,
-                    direction = direction
+                    direction = direction,
+                    eventDateMillis = prefilledQuickNeondraEventDate ?: System.currentTimeMillis()
                 ) {
                     showQuickNeondraSheet = false
+                    prefilledQuickNeondraEventDate = null
+                    prefilledQuickNeondraEventName = null
+                    prefilledQuickNeondraEventType = null
                 }
             }
         )
@@ -265,7 +282,12 @@ fun OccasionDiaryAppShell() {
                         },
                         actions = {
                             IconButton(
-                                onClick = { showQuickNeondraSheet = true },
+                                onClick = {
+                                    prefilledQuickNeondraEventDate = null
+                                    prefilledQuickNeondraEventName = null
+                                    prefilledQuickNeondraEventType = null
+                                    showQuickNeondraSheet = true
+                                },
                                 modifier = Modifier.testTag("topbar_quick_neondra_button")
                             ) {
                                 Icon(
@@ -405,6 +427,9 @@ fun OccasionDiaryAppShell() {
                                 navController.navigate(ROUTE_CATEGORIES)
                             },
                             onQuickNeondraClick = {
+                                prefilledQuickNeondraEventDate = null
+                                prefilledQuickNeondraEventName = null
+                                prefilledQuickNeondraEventType = null
                                 showQuickNeondraSheet = true
                             },
                             onActivityClick = { act ->
@@ -418,6 +443,12 @@ fun OccasionDiaryAppShell() {
                                 prefilledEventName = null
                                 prefilledEventType = null
                                 navController.navigate(ROUTE_EDITOR)
+                            },
+                            onAddNeondraToEventList = { eventName, eventDateMillis, eventType ->
+                                prefilledQuickNeondraEventName = eventName
+                                prefilledQuickNeondraEventDate = eventDateMillis
+                                prefilledQuickNeondraEventType = eventType
+                                showQuickNeondraSheet = true
                             },
                             onAddToEventList = { eventName, eventDateMillis, eventType ->
                                 editingActivity = null
@@ -451,18 +482,9 @@ fun OccasionDiaryAppShell() {
                                 prefilledEventType = null
                                 navController.navigate(ROUTE_EDITOR)
                             },
-                            onCompareWithAiClick = {
-                                aiInitialTabIndex = 1
-                                if (selectedCompareFamilyIds.size < 2) {
-                                    viewModel.selectTopFamiliesForComparison(limit = 3)
-                                }
-                                navController.navigate(ROUTE_AI) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
-                                    }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+                            onActivityClick = { act ->
+                                selectedActivityId = act.id
+                                navController.navigate(ROUTE_DETAIL)
                             }
                         )
                     }
@@ -471,45 +493,20 @@ fun OccasionDiaryAppShell() {
                         AiAssistantScreen(
                             dashboardState = dashboardState,
                             aiSearchState = aiSearchState,
-                            aiComparisonState = aiComparisonState,
-                            multiFamilyAiLoading = multiFamilyAiLoading,
-                            multiFamilyAiError = multiFamilyAiError,
-                            selectedCompareFamilyIds = selectedCompareFamilyIds,
                             selectedSingleFamilyId = selectedSingleFamilyId,
                             singleFamilyComparisonState = singleFamilyComparisonState,
-                            singleFamilyAiLoading = singleFamilyAiLoading,
-                            singleFamilyAiError = singleFamilyAiError,
-                            singleFamilyChatMessages = singleFamilyChatMessages,
-                            singleFamilyChatLoading = singleFamilyChatLoading,
-                            singleFamilyChatError = singleFamilyChatError,
-                            multiFamilyChatMessages = multiFamilyChatMessages,
-                            multiFamilyChatLoading = multiFamilyChatLoading,
-                            multiFamilyChatError = multiFamilyChatError,
                             initialTabIndex = aiInitialTabIndex,
                             onRunAiSearch = { query, _ ->
                                 viewModel.runAiSearch(query, useOnlineAi = false)
                             },
                             onClearAiSearch = viewModel::clearAiSearch,
                             onSelectSingleFamily = viewModel::selectSingleFamilyForCompare,
-                            onRunSingleFamilyAiAnalysis = viewModel::runSingleFamilyOnlineAiAnalysis,
-                            onSendSingleFamilyChat = viewModel::sendSingleFamilyChatQuestion,
-                            onClearSingleFamilyChat = viewModel::clearSingleFamilyChat,
-                            onToggleFamilyCompare = viewModel::toggleFamilyForComparison,
-                            onSelectTopFamilies = { viewModel.selectTopFamiliesForComparison(3) },
-                            onRunAiComparison = { viewModel.runAiBalanceComparison() },
-                            onRunMultiFamilyAiAnalysis = viewModel::runMultiFamilyOnlineAiAnalysis,
-                            onSendMultiFamilyChat = viewModel::sendMultiFamilyChatQuestion,
-                            onClearMultiFamilyChat = viewModel::clearMultiFamilyChat,
-                            onClearAiComparison = viewModel::clearAiComparison,
                             onActivityClick = { act ->
                                 selectedActivityId = act.id
                                 navController.navigate(ROUTE_DETAIL)
                             },
                             onCompareThisFamily = { familyDocId ->
                                 viewModel.selectSingleFamilyForCompare(familyDocId)
-                                if (familyDocId !in selectedCompareFamilyIds) {
-                                    viewModel.toggleFamilyForComparison(familyDocId)
-                                }
                                 aiInitialTabIndex = 1
                             }
                         )
@@ -519,6 +516,10 @@ fun OccasionDiaryAppShell() {
                         RemindersScreen(
                             state = dashboardState,
                             backupStatus = localBackupStatus,
+                            isDarkMode = isDarkMode,
+                            onToggleDarkMode = { enabled ->
+                                viewModel.setDarkMode(context, enabled)
+                            },
                             onExportBackupClick = {
                                 exportBackupLauncher.launch(LocalBackupManager.DEFAULT_BACKUP_FILE_NAME)
                             },

@@ -239,6 +239,7 @@ class LedgerLogicTest {
         val followUpUrdu = repo.answerSingleFamilyFollowUpOffline("How much should I give next?", singleCmp)
         assertTrue(followUpUrdu.contains("18,000"))
         assertTrue(followUpUrdu.contains("روپے"))
+        assertTrue(singleCmp.insights.isEmpty())
     }
 
     @Test
@@ -533,75 +534,81 @@ class LedgerLogicTest {
     }
 
     @Test
-    fun `filterLedgerActivities supports multi-select eventTypes and all sort orders`() {
+    fun `filterLedgerActivities supports multi-select eventTypes and FN EventName EventType sort orders`() {
         val base = 1_764_000_000_000L
         val r1 = ActivityRecord(
             id = "r1",
+            familyId = "10",
             name = "Zafar",
             eventType = "شادی",
+            eventDetail = "Zain Wedding",
             eventDateMillis = base + 1_000L,
             neondraAmount = 5000L
         )
         val r2 = ActivityRecord(
             id = "r2",
+            familyId = "2",
             name = "Bilal",
             eventType = "نکاح",
+            eventDetail = "Bilal Nikah",
             eventDateMillis = base + 3_000L,
             neondraAmount = 2000L
         )
         val r3 = ActivityRecord(
             id = "r3",
+            familyId = "",
             name = "Asif",
             eventType = "عقیقہ",
+            eventDetail = "Aqeeqah Ceremony",
             eventDateMillis = base + 2_000L,
             neondraAmount = 9000L
         )
         val all = listOf(r1, r2, r3)
 
-        val multiFiltered = com.example.ui.screens.filterLedgerActivities(
+        val multiFilteredByFn = com.example.ui.screens.filterLedgerActivities(
             activities = all,
             searchQuery = "",
             selectedFilter = com.example.ui.viewmodel.LedgerFilter.ALL,
             selectedAddress = null,
             dateRangeFilter = com.example.ui.viewmodel.DateRangeFilter(),
             selectedEventTypes = setOf("شادی", "عقیقہ"),
-            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.AMOUNT_HIGHEST
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.FN
         )
-        assertEquals(listOf("r3", "r1"), multiFiltered.map { it.id })
+        assertEquals(listOf("r1", "r3"), multiFilteredByFn.map { it.id })
 
-        val oldest = com.example.ui.screens.filterLedgerActivities(
+        val byFnNumeric = com.example.ui.screens.filterLedgerActivities(
             activities = all,
             searchQuery = "",
             selectedFilter = com.example.ui.viewmodel.LedgerFilter.ALL,
             selectedAddress = null,
             dateRangeFilter = com.example.ui.viewmodel.DateRangeFilter(),
-            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.DATE_OLDEST
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.FN
         )
-        assertEquals(listOf("r1", "r3", "r2"), oldest.map { it.id })
+        assertEquals(listOf("r2", "r1", "r3"), byFnNumeric.map { it.id })
 
-        val lowestAmount = com.example.ui.screens.filterLedgerActivities(
+        val byEventName = com.example.ui.screens.filterLedgerActivities(
             activities = all,
             searchQuery = "",
             selectedFilter = com.example.ui.viewmodel.LedgerFilter.ALL,
             selectedAddress = null,
             dateRangeFilter = com.example.ui.viewmodel.DateRangeFilter(),
-            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.AMOUNT_LOWEST
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.EVENT_NAME
         )
-        assertEquals(listOf("r2", "r1", "r3"), lowestAmount.map { it.id })
+        assertEquals(listOf("r3", "r2", "r1"), byEventName.map { it.id })
 
-        val byName = com.example.ui.screens.filterLedgerActivities(
+        val byEventType = com.example.ui.screens.filterLedgerActivities(
             activities = all,
             searchQuery = "",
             selectedFilter = com.example.ui.viewmodel.LedgerFilter.ALL,
             selectedAddress = null,
             dateRangeFilter = com.example.ui.viewmodel.DateRangeFilter(),
-            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.NAME_AZ
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.EVENT_TYPE
         )
-        assertEquals(listOf("r3", "r2", "r1"), byName.map { it.id })
+        assertEquals(listOf("r1", "r3", "r2"), byEventType.map { it.id })
     }
 
     @Test
-    fun `buildSameDateEventLists respects sortOrder for groups and nested entries`() {
+    fun `buildSameDateEventLists respects FN EventName and EventType sort orders`() {
         val cal = java.util.Calendar.getInstance().apply {
             set(2026, java.util.Calendar.NOVEMBER, 12, 10, 0, 0)
             set(java.util.Calendar.MILLISECOND, 0)
@@ -611,24 +618,31 @@ class LedgerLogicTest {
         val day2 = cal.timeInMillis
 
         val activities = listOf(
-            ActivityRecord(id = "a1", name = "Zaid", eventDetail = "Walima", eventDateMillis = day1, direction = "IN", neondraAmount = 1000L),
-            ActivityRecord(id = "a2", name = "Ali", eventDetail = "Walima", eventDateMillis = day1 + 1000L, direction = "OUT", neondraAmount = 8000L),
-            ActivityRecord(id = "a3", name = "Bilal", eventDetail = "Aqeeqah", eventDateMillis = day2, direction = "IN", neondraAmount = 2000L)
+            ActivityRecord(id = "a1", familyId = "10", name = "Zaid", eventType = "شادی", eventDetail = "Walima", eventDateMillis = day1, direction = "IN", neondraAmount = 1000L),
+            ActivityRecord(id = "a2", familyId = "2", name = "Ali", eventType = "نکاح", eventDetail = "Walima", eventDateMillis = day1 + 1000L, direction = "OUT", neondraAmount = 8000L),
+            ActivityRecord(id = "a3", familyId = "5", name = "Bilal", eventType = "عقیقہ", eventDetail = "Aqeeqah", eventDateMillis = day2, direction = "IN", neondraAmount = 2000L)
         )
 
-        val byHighestAmount = com.example.ui.screens.buildSameDateEventLists(
+        val byFn = com.example.ui.screens.buildSameDateEventLists(
             activities = activities,
-            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.AMOUNT_HIGHEST
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.FN
         )
-        assertEquals(listOf("Walima", "Aqeeqah"), byHighestAmount.map { it.eventName })
-        assertEquals(listOf("a2", "a1"), byHighestAmount.first().entries.map { it.id })
+        assertEquals(listOf("Walima", "Aqeeqah"), byFn.map { it.eventName })
+        assertEquals(listOf("a2", "a1"), byFn.first().entries.map { it.id })
 
-        val byNameAz = com.example.ui.screens.buildSameDateEventLists(
+        val byEventName = com.example.ui.screens.buildSameDateEventLists(
             activities = activities,
-            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.NAME_AZ
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.EVENT_NAME
         )
-        assertEquals(listOf("Aqeeqah", "Walima"), byNameAz.map { it.eventName })
-        assertEquals(listOf("a2", "a1"), byNameAz[1].entries.map { it.id })
+        assertEquals(listOf("Aqeeqah", "Walima"), byEventName.map { it.eventName })
+        assertEquals(listOf("a2", "a1"), byEventName[1].entries.map { it.id })
+
+        val byEventType = com.example.ui.screens.buildSameDateEventLists(
+            activities = activities,
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.EVENT_TYPE
+        )
+        assertEquals(listOf("Walima", "Aqeeqah"), byEventType.map { it.eventName })
+        assertEquals(listOf("a1", "a2"), byEventType[0].entries.map { it.id })
     }
 
     @Test
