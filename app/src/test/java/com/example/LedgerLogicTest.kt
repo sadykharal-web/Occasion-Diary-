@@ -796,5 +796,11 @@ class LedgerLogicTest {
         val urduKgHit = repo.searchFamiliesAndEvents("کلوگرام", families, activities, emptyList()).getOrThrow()
         assertEquals(setOf("a1", "a3"), urduKgHit.matchedActivityIds.toSet())
     }
+
+    @Test
+    fun `World website URL and Family Events backup filename are configured cleanly`() {
+        assertEquals("https://raizan.gamer.free", com.example.ui.screens.WORLD_WEBSITE_URL)
+        assertEquals("Family_Events_Backup.xlsx", com.example.drive.LocalBackupManager.DEFAULT_BACKUP_FILE_NAME)
+    }
 }
 

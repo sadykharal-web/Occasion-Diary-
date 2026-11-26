@@ -1,15 +1,16 @@
 <resources>
-    <string name="app_name">Life Line</string>
+    <string name="app_name">Family Events</string>
     <string name="app_tagline">Offline family ledger, In/Out tracker, reminders &amp; comparisons</string>
 
     <!-- Navigation -->
     <string name="nav_ledger">Ledger</string>
     <string name="nav_families">Families</string>
     <string name="nav_ai">Search</string>
+    <string name="nav_world">World</string>
     <string name="nav_reminders">Settings</string>
 
     <!-- Onboarding / App Highlights -->
-    <string name="app_welcome_title">Welcome to Life Line</string>
+    <string name="app_welcome_title">Welcome to Family Events</string>
     <string name="app_welcome_subtitle">Keep your families, events, and نیوندرا ledger 100% offline on your device.</string>
     <string name="app_feature_sync">Automatic family grouping by Name, Father\'s Name &amp; Address</string>
     <string name="app_feature_reminders">Event reminders, alerts, and device calendar sync</string>

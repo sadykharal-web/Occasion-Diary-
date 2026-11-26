@@ -42,7 +42,7 @@ data class LocalBackupStatus(
 
 object LocalBackupManager {
     private const val TAG = "LocalBackupManager"
-    const val DEFAULT_BACKUP_FILE_NAME = "Life_Line_Backup.xlsx"
+    const val DEFAULT_BACKUP_FILE_NAME = "Family_Events_Backup.xlsx"
     const val XLSX_MIME_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     private const val PREFS_NAME = "occasion_diary_local_backup"
     private const val KEY_LAST_BACKUP = "last_backup_millis"
@@ -116,7 +116,7 @@ object LocalBackupManager {
         if (text.startsWith("{")) {
             return parseBackupJson(text)
         }
-        error("Unsupported backup file format. Please select a Life Line Excel (.xlsx) backup file.")
+        error("Unsupported backup file format. Please select a Family Events Excel (.xlsx) backup file.")
     }
 
     fun serializeBackupXlsxToBytes(
@@ -209,7 +209,7 @@ object LocalBackupManager {
             ?: emptyList()
 
         if (ledgerTable.isEmpty() && familiesTable.isEmpty() && categoriesTable.isEmpty() && eventsTable.isEmpty()) {
-            error("No valid Life Line sheets found inside this Excel (.xlsx) file.")
+            error("No valid Family Events sheets found inside this Excel (.xlsx) file.")
         }
 
         val dateFmt = SimpleDateFormat("dd-MM-yyyy", Locale.ENGLISH)

@@ -22,6 +22,6 @@ dependencyResolutionManagement {
   }
 }
 
-rootProject.name = "Life Line"
+rootProject.name = "Family Events"
 
 include(":app")

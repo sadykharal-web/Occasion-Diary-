@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Book
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.rounded.Category
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,6 +58,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -84,6 +87,7 @@ import com.example.ui.screens.CategoriesScreen
 import com.example.ui.screens.FamiliesScreen
 import com.example.ui.screens.LedgerScreen
 import com.example.ui.screens.RemindersScreen
+import com.example.ui.screens.WorldScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.ThemePreferences
 import com.example.ui.viewmodel.LedgerViewModel
@@ -91,6 +95,7 @@ import com.example.ui.viewmodel.LedgerViewModel
 const val ROUTE_LEDGER = "ledger"
 const val ROUTE_FAMILIES = "families"
 const val ROUTE_AI = "ai"
+const val ROUTE_WORLD = "world"
 const val ROUTE_REMINDERS = "reminders"
 const val ROUTE_DETAIL = "detail"
 const val ROUTE_EDITOR = "editor"
@@ -105,6 +110,7 @@ private enum class TopTab(
     LEDGER(ROUTE_LEDGER, R.string.nav_ledger, Icons.Rounded.Book, Icons.Outlined.Book),
     FAMILIES(ROUTE_FAMILIES, R.string.nav_families, Icons.Rounded.Groups, Icons.Outlined.Groups),
     AI(ROUTE_AI, R.string.nav_ai, Icons.Rounded.Search, Icons.Outlined.Search),
+    WORLD(ROUTE_WORLD, R.string.nav_world, Icons.Rounded.Public, Icons.Outlined.Public),
     REMINDERS(ROUTE_REMINDERS, R.string.nav_reminders, Icons.Rounded.Notifications, Icons.Outlined.Notifications)
 }
 
@@ -358,7 +364,14 @@ fun OccasionDiaryAppShell(
                                         contentDescription = stringResource(tab.labelRes)
                                     )
                                 },
-                                label = { Text(stringResource(tab.labelRes)) }
+                                label = {
+                                    Text(
+                                        text = stringResource(tab.labelRes),
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             )
                         }
                     }
@@ -394,7 +407,14 @@ fun OccasionDiaryAppShell(
                                         contentDescription = stringResource(tab.labelRes)
                                     )
                                 },
-                                label = { Text(stringResource(tab.labelRes)) }
+                                label = {
+                                    Text(
+                                        text = stringResource(tab.labelRes),
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             )
                         }
                     }
@@ -510,6 +530,10 @@ fun OccasionDiaryAppShell(
                                 aiInitialTabIndex = 1
                             }
                         )
+                    }
+
+                    composable(ROUTE_WORLD) {
+                        WorldScreen()
                     }
 
                     composable(ROUTE_REMINDERS) {
