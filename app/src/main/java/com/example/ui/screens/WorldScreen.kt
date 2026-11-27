@@ -30,10 +30,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Refresh
@@ -41,8 +44,10 @@ import androidx.compose.material.icons.rounded.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -71,6 +76,8 @@ const val WORLD_WEBSITE_URL = "https://raizan.gamer.free"
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun WorldScreen(
+    isFullScreen: Boolean = false,
+    onToggleFullScreen: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -87,8 +94,12 @@ fun WorldScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var triedHttpFallback by remember { mutableStateOf(false) }
 
-    BackHandler(enabled = canGoBack && !rendererCrashed) {
-        webViewRef?.goBack()
+    BackHandler(enabled = isFullScreen || (canGoBack && !rendererCrashed)) {
+        if (isFullScreen) {
+            onToggleFullScreen(false)
+        } else {
+            webViewRef?.goBack()
+        }
     }
 
     DisposableEffect(webViewGeneration) {
@@ -109,105 +120,89 @@ fun WorldScreen(
             .fillMaxSize()
             .testTag("world_screen")
     ) {
-        Surface(
-            tonalElevation = 2.dp,
-            color = MaterialTheme.colorScheme.surface,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+        if (!isFullScreen) {
+            Surface(
+                tonalElevation = 2.dp,
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Public,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Public,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
                         Text(
                             text = "World",
-                            style = MaterialTheme.typography.titleSmall,
+                            style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Text(
-                            text = currentUrl
-                                .removePrefix("https://")
-                                .removePrefix("http://")
-                                .trimEnd('/'),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
                     }
-                }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(
-                        onClick = { webViewRef?.goBack() },
-                        enabled = canGoBack && !rendererCrashed,
-                        modifier = Modifier.testTag("world_back_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                    IconButton(
-                        onClick = { webViewRef?.goForward() },
-                        enabled = canGoForward && !rendererCrashed,
-                        modifier = Modifier.testTag("world_forward_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
-                            contentDescription = "Forward"
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            hasError = false
-                            errorMessage = null
-                            if (rendererCrashed || webViewRef == null) {
-                                rendererCrashed = false
-                                triedHttpFallback = false
-                                pendingLoadUrl = currentUrl.ifBlank { WORLD_WEBSITE_URL }
-                                webViewGeneration++
-                            } else {
-                                webViewRef?.reload()
-                            }
-                        },
-                        modifier = Modifier.testTag("world_refresh_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Refresh,
-                            contentDescription = "Refresh"
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            runCatching {
-                                context.startActivity(
-                                    Intent(Intent.ACTION_VIEW, Uri.parse(currentUrl))
-                                )
-                            }
-                        },
-                        modifier = Modifier.testTag("world_open_browser_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.OpenInBrowser,
-                            contentDescription = "Open in browser"
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = { webViewRef?.goBack() },
+                            enabled = canGoBack && !rendererCrashed,
+                            modifier = Modifier.testTag("world_back_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
+                                contentDescription = "Back"
+                            )
+                        }
+                        IconButton(
+                            onClick = { webViewRef?.goForward() },
+                            enabled = canGoForward && !rendererCrashed,
+                            modifier = Modifier.testTag("world_forward_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                                contentDescription = "Forward"
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                hasError = false
+                                errorMessage = null
+                                if (rendererCrashed || webViewRef == null) {
+                                    rendererCrashed = false
+                                    triedHttpFallback = false
+                                    pendingLoadUrl = currentUrl.ifBlank { WORLD_WEBSITE_URL }
+                                    webViewGeneration++
+                                } else {
+                                    webViewRef?.reload()
+                                }
+                            },
+                            modifier = Modifier.testTag("world_refresh_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Refresh,
+                                contentDescription = "Refresh"
+                            )
+                        }
+                        IconButton(
+                            onClick = { onToggleFullScreen(true) },
+                            modifier = Modifier.testTag("world_fullscreen_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Fullscreen,
+                                contentDescription = "Full screen"
+                            )
+                        }
                     }
                 }
             }
@@ -470,6 +465,26 @@ fun WorldScreen(
                             }
                         }
                     }
+                }
+            }
+            if (isFullScreen) {
+                FilledTonalIconButton(
+                    onClick = { onToggleFullScreen(false) },
+                    shape = CircleShape,
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                        contentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp)
+                        .size(48.dp)
+                        .testTag("world_exit_fullscreen_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.FullscreenExit,
+                        contentDescription = "Exit full screen"
+                    )
                 }
             }
         }

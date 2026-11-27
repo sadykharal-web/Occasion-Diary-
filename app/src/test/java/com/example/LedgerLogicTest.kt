@@ -802,5 +802,26 @@ class LedgerLogicTest {
         assertEquals("https://raizan.gamer.free", com.example.ui.screens.WORLD_WEBSITE_URL)
         assertEquals("Family_Events_Backup.xlsx", com.example.drive.LocalBackupManager.DEFAULT_BACKUP_FILE_NAME)
     }
+
+    @Test
+    fun `filterFamiliesForCompare stays empty on blank query and matches by name or FN`() {
+        val families = listOf(
+            FamilyProfile(id = "f1", familyId = "101", name = "Ali Khan", fatherName = "Akram", address = "Lahore"),
+            FamilyProfile(id = "f2", familyId = "102", name = "Bilal Ahmed", fatherName = "Nazeer", address = "Multan"),
+            FamilyProfile(id = "f3", familyId = "205", name = "Usman Ali", fatherName = "Saeed", address = "Karachi")
+        )
+
+        assertTrue(com.example.ui.screens.filterFamiliesForCompare(families, "   ").isEmpty())
+
+        val byName = com.example.ui.screens.filterFamiliesForCompare(families, "Ali")
+        assertEquals(listOf("f1", "f3"), byName.map { it.id })
+
+        val byFnNumber = com.example.ui.screens.filterFamiliesForCompare(families, "102")
+        assertEquals(listOf("f2"), byFnNumber.map { it.id })
+
+        val byFnPrefix = com.example.ui.screens.filterFamiliesForCompare(families, "FN 205")
+        assertEquals(listOf("f3"), byFnPrefix.map { it.id })
+    }
 }
+
 

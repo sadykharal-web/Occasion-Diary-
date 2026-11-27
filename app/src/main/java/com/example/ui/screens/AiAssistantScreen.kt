@@ -23,6 +23,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.CompareArrows
 import androidx.compose.material.icons.rounded.ArrowDownward
@@ -64,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.ai.AiSearchResult
@@ -97,6 +100,37 @@ private val OFFLINE_SEARCH_PRESETS = listOf(
     "نیوندرا"
 )
 
+fun filterFamiliesForCompare(
+    families: List<FamilyProfile>,
+    query: String
+): List<FamilyProfile> {
+    val cleanQuery = query.trim().lowercase()
+    if (cleanQuery.isBlank()) return emptyList()
+    val numericToken = cleanQuery
+        .removePrefix("fn")
+        .trim()
+        .takeIf { it.isNotBlank() && it.all { ch -> ch.isDigit() } }
+
+    return families
+        .filter { fam ->
+            fam.name.lowercase().contains(cleanQuery) ||
+                fam.fatherName.lowercase().contains(cleanQuery) ||
+                fam.address.lowercase().contains(cleanQuery) ||
+                fam.familyId.lowercase().contains(cleanQuery) ||
+                (numericToken != null && fam.familyId.lowercase() == numericToken)
+        }
+        .sortedWith(
+            compareBy<FamilyProfile>(
+                { fam -> if (fam.name.lowercase().startsWith(cleanQuery)) 0 else 1 },
+                { fam ->
+                    if (numericToken != null && fam.familyId.lowercase() == numericToken) 0 else 1
+                },
+                { fam -> fam.name.lowercase() },
+                { fam -> fam.familyId.toIntOrNull() ?: Int.MAX_VALUE }
+            )
+        )
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AiAssistantScreen(
@@ -115,6 +149,7 @@ fun AiAssistantScreen(
     val isDark = LocalAppDarkTheme.current
     var selectedTab by rememberSaveable(initialTabIndex) { mutableIntStateOf(initialTabIndex) }
     var searchPrompt by rememberSaveable { mutableStateOf("") }
+    var compareFamilyQuery by rememberSaveable { mutableStateOf("") }
 
     val dashboardData = (dashboardState as? UiState.Success)?.data
     val families = dashboardData?.families ?: emptyList()
@@ -433,7 +468,8 @@ fun AiAssistantScreen(
                     }
                 }
             } else {
-                // Compare In & Out (Strictly Within 1 Family)
+                // Compare In & Out (Search by Name / FN)
+                val compareMatches = filterFamiliesForCompare(families, compareFamilyQuery)
                 item {
                     Card(
                         shape = RoundedCornerShape(20.dp),
@@ -446,50 +482,151 @@ fun AiAssistantScreen(
                             verticalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
                             Text(
-                                text = "Select Family",
+                                text = "Compare Family",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold
                             )
 
-                            if (families.isEmpty()) {
-                                Text(
-                                    text = "No families available yet.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            } else {
-                                FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    families.forEach { fam ->
-                                        val isSelected = fam.id == selectedSingleFamilyId
-                                        FilterChip(
-                                            selected = isSelected,
-                                            onClick = { onSelectSingleFamily(fam.id) },
-                                            leadingIcon = if (isSelected) {
-                                                {
-                                                    Icon(
-                                                        imageVector = Icons.Rounded.Check,
-                                                        contentDescription = null,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
+                            OutlinedTextField(
+                                value = compareFamilyQuery,
+                                onValueChange = { compareFamilyQuery = it },
+                                placeholder = { Text("Search name or FN...") },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.Search, contentDescription = null)
+                                },
+                                trailingIcon = {
+                                    if (compareFamilyQuery.isNotEmpty()) {
+                                        IconButton(
+                                            onClick = { compareFamilyQuery = "" }
+                                        ) {
+                                            Icon(Icons.Rounded.Clear, contentDescription = "Clear search")
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                                keyboardActions = KeyboardActions(
+                                    onSearch = {
+                                        compareMatches.firstOrNull()?.let { matched ->
+                                            onSelectSingleFamily(matched.id)
+                                            compareFamilyQuery = ""
+                                        }
+                                    }
+                                ),
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("compare_family_search_input")
+                            )
+
+                            when {
+                                families.isEmpty() -> {
+                                    Text(
+                                        text = "No families available yet.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                compareFamilyQuery.isBlank() && selectedSingleFamilyId == null -> {
+                                    Text(
+                                        text = "Search by name to select and compare FN In / Out entries.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                compareFamilyQuery.isNotBlank() && compareMatches.isEmpty() -> {
+                                    Text(
+                                        text = "No family found matching \"$compareFamilyQuery\".",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+
+                                compareMatches.isNotEmpty() -> {
+                                    Column(
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        compareMatches.take(12).forEach { fam ->
+                                            val isSelected = fam.id == selectedSingleFamilyId
+                                            Surface(
+                                                shape = RoundedCornerShape(14.dp),
+                                                color = if (isSelected) {
+                                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
+                                                } else {
+                                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                                },
+                                                border = BorderStroke(
+                                                    1.dp,
+                                                    if (isSelected) {
+                                                        MaterialTheme.colorScheme.primary
+                                                    } else {
+                                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                                                    }
+                                                ),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(14.dp))
+                                                    .clickable {
+                                                        onSelectSingleFamily(fam.id)
+                                                        compareFamilyQuery = ""
+                                                    }
+                                                    .testTag("compare_family_result_${fam.id}")
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                                        modifier = Modifier.weight(1f)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Groups,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text(
+                                                                text = if (fam.familyId.isNotBlank()) "${fam.name} (FN ${fam.familyId})" else fam.name,
+                                                                style = MaterialTheme.typography.bodyMedium,
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                            val meta = buildList {
+                                                                if (fam.fatherName.isNotBlank()) add("ولد: ${fam.fatherName}")
+                                                                if (fam.address.isNotBlank()) add(fam.address)
+                                                            }.joinToString(" • ")
+                                                            if (meta.isNotEmpty()) {
+                                                                Text(
+                                                                    text = meta,
+                                                                    style = MaterialTheme.typography.bodySmall,
+                                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                                    maxLines = 1,
+                                                                    overflow = TextOverflow.Ellipsis
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+                                                    if (isSelected) {
+                                                        Icon(
+                                                            imageVector = Icons.Rounded.Check,
+                                                            contentDescription = "Selected",
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.size(18.dp)
+                                                        )
+                                                    }
                                                 }
-                                            } else null,
-                                            label = {
-                                                Text(
-                                                    text = if (fam.familyId.isNotBlank()) "${fam.name} (FN ${fam.familyId})" else fam.name,
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                            },
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                            ),
-                                            modifier = Modifier.testTag("single_family_chip_${fam.id}")
-                                        )
+                                            }
+                                        }
                                     }
                                 }
                             }

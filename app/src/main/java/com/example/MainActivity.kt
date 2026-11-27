@@ -231,6 +231,13 @@ fun OccasionDiaryAppShell(
     var prefilledQuickNeondraEventName by remember { mutableStateOf<String?>(null) }
     var prefilledQuickNeondraEventType by remember { mutableStateOf<String?>(null) }
     var aiInitialTabIndex by remember { mutableIntStateOf(0) }
+    var isWorldFullScreen by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentRoute) {
+        if (currentRoute != ROUTE_WORLD) {
+            isWorldFullScreen = false
+        }
+    }
 
     val allActivities = (dashboardState as? UiState.Success)?.data?.activities ?: emptyList()
     val catalog = (dashboardState as? UiState.Success)?.data?.catalog ?: DropdownCatalog()
@@ -269,7 +276,8 @@ fun OccasionDiaryAppShell(
         )
     }
 
-    val showChrome = currentRoute in TopTab.entries.map { it.route }
+    val showChrome = currentRoute in TopTab.entries.map { it.route } &&
+        !(isWorldFullScreen && currentRoute == ROUTE_WORLD)
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val useNavigationRail = maxWidth >= 700.dp
@@ -533,7 +541,10 @@ fun OccasionDiaryAppShell(
                     }
 
                     composable(ROUTE_WORLD) {
-                        WorldScreen()
+                        WorldScreen(
+                            isFullScreen = isWorldFullScreen,
+                            onToggleFullScreen = { isWorldFullScreen = it }
+                        )
                     }
 
                     composable(ROUTE_REMINDERS) {
