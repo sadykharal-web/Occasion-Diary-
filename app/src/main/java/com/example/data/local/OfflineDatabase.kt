@@ -193,6 +193,18 @@ interface OccasionDiaryDao {
     @Query("UPDATE activities SET eventType = :newName, updatedAtMillis = :updatedAtMillis WHERE LOWER(eventType) = LOWER(:oldName)")
     suspend fun renameActivityEventType(oldName: String, newName: String, updatedAtMillis: Long)
 
+    @Query("UPDATE activities SET eventDetail = :newTitle, updatedAtMillis = :updatedAtMillis WHERE id IN (:activityIds)")
+    suspend fun renameActivitiesEventDetail(activityIds: List<String>, newTitle: String, updatedAtMillis: Long)
+
+    @Query("UPDATE events SET title = :newTitle, updatedAtMillis = :updatedAtMillis WHERE id IN (:eventIds)")
+    suspend fun renameEventsTitle(eventIds: List<String>, newTitle: String, updatedAtMillis: Long)
+
+    @Query("DELETE FROM activities WHERE id IN (:activityIds)")
+    suspend fun deleteActivitiesByIds(activityIds: List<String>)
+
+    @Query("DELETE FROM events WHERE id IN (:eventIds)")
+    suspend fun deleteEventsByIds(eventIds: List<String>)
+
     @Query("UPDATE activities SET familyId = :familyId, name = :name, fatherName = :fatherName, address = :address, updatedAtMillis = :updatedAtMillis WHERE familyDocId = :familyDocId")
     suspend fun syncFamilyFieldsToActivities(
         familyDocId: String,

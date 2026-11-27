@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,23 +20,35 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.CardGiftcard
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DeleteOutline
+import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EventNote
+import androidx.compose.material.icons.rounded.PostAdd
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,6 +56,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
@@ -67,6 +81,7 @@ data class EventDirectoryGroup(
     val dayStartMillis: Long,
     val eventTypes: List<String>,
     val entries: List<ActivityRecord>,
+    val matchingEventIds: List<String> = emptyList(),
     val summary: FamilyFinancialSummary
 )
 
@@ -74,6 +89,14 @@ fun buildEventDirectoryGroups(
     activities: List<ActivityRecord>,
     events: List<EventEntry> = emptyList()
 ): List<EventDirectoryGroup> {
+    val eventsBySignature = events
+        .filter { it.title.trim().isNotEmpty() }
+        .groupBy { evt ->
+            val dayStart = localDayStartMillis(evt.eventDateMillis)
+            val cleanTitle = evt.title.trim().replace(Regex("\\s+"), " ").lowercase(Locale.ENGLISH)
+            "${dayStart}__$cleanTitle"
+        }
+
     val activityGrouped = activities.groupBy { act ->
         val dayStart = localDayStartMillis(act.eventDateMillis)
         val rawDetail = act.eventDetail.trim().replace(Regex("\\s+"), " ")
@@ -103,11 +126,13 @@ fun buildEventDirectoryGroups(
         val title = detailCandidates.firstOrNull { cand -> cand.any { it.isUpperCase() } }
             ?: detailCandidates.firstOrNull()
             ?: first.eventType.trim().ifBlank { "Event" }
-        coveredTitleDateKeys.add("${dayStart}__${title.lowercase(Locale.ENGLISH)}")
+        val signature = "${dayStart}__${title.lowercase(Locale.ENGLISH)}"
+        coveredTitleDateKeys.add(signature)
         val eventTypes = sortedEntries
             .map { it.eventType.trim() }
             .filter { it.isNotEmpty() }
             .distinct()
+        val matchedEvents = eventsBySignature[signature].orEmpty().map { it.id }
 
         result.add(
             EventDirectoryGroup(
@@ -116,6 +141,7 @@ fun buildEventDirectoryGroups(
                 dayStartMillis = dayStart,
                 eventTypes = eventTypes,
                 entries = sortedEntries,
+                matchingEventIds = matchedEvents,
                 summary = computeFamilyFinancialSummary(sortedEntries)
             )
         )
@@ -134,6 +160,7 @@ fun buildEventDirectoryGroups(
                         dayStartMillis = dayStart,
                         eventTypes = emptyList(),
                         entries = emptyList(),
+                        matchingEventIds = listOf(evt.id),
                         summary = computeFamilyFinancialSummary(emptyList())
                     )
                 )
@@ -153,7 +180,11 @@ internal fun EventDirectoryCard(
     group: EventDirectoryGroup,
     catalog: DropdownCatalog,
     isDark: Boolean,
-    onCardClick: () -> Unit
+    onCardClick: () -> Unit,
+    onEditClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+    onQuickNeondraClick: () -> Unit,
+    onNewEntryClick: () -> Unit
 ) {
     val inColor = if (isDark) InBadgeFgDark else InBadgeFgLight
     val outColor = if (isDark) OutBadgeFgDark else OutBadgeFgLight
@@ -226,6 +257,24 @@ internal fun EventDirectoryCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                }
+                Row {
+                    IconButton(
+                        onClick = onEditClick,
+                        modifier = Modifier.testTag("edit_event_${group.key}")
+                    ) {
+                        Icon(Icons.Rounded.Edit, contentDescription = "Edit Event")
+                    }
+                    IconButton(
+                        onClick = onDeleteClick,
+                        modifier = Modifier.testTag("delete_event_${group.key}")
+                    ) {
+                        Icon(
+                            Icons.Rounded.DeleteOutline,
+                            contentDescription = "Delete Event",
+                            tint = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
             }
@@ -339,21 +388,70 @@ internal fun EventDirectoryCard(
                         .testTag("event_entries_pill_${group.key}")
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         Text(
                             text = "${group.entries.size} ${if (group.entries.size == 1) "entry" else "entries"}",
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                             contentDescription = "View Event Entries",
                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledTonalButton(
+                        onClick = onQuickNeondraClick,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .heightIn(min = 40.dp)
+                            .testTag("event_neondra_button_${group.key}")
+                    ) {
+                        Icon(
+                            Icons.Rounded.AccountBalanceWallet,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "نیوندرا",
+                            fontFamily = NotoArabicFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onNewEntryClick,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .heightIn(min = 40.dp)
+                            .testTag("event_new_entry_button_${group.key}")
+                    ) {
+                        Icon(Icons.Rounded.PostAdd, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "New Entry",
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -368,6 +466,8 @@ internal fun EventEntriesBottomSheet(
     group: EventDirectoryGroup,
     catalog: DropdownCatalog,
     onDismiss: () -> Unit,
+    onQuickNeondra: () -> Unit,
+    onNewEntry: () -> Unit,
     onEntryClick: (ActivityRecord) -> Unit
 ) {
     val isDark = LocalAppDarkTheme.current
@@ -470,11 +570,45 @@ internal fun EventEntriesBottomSheet(
                 }
             }
 
-            Text(
-                text = "Entries (${group.entries.size})",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Entries (${group.entries.size})",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    FilledTonalButton(
+                        onClick = onQuickNeondra,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Rounded.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "نیوندرا",
+                            fontFamily = NotoArabicFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onNewEntry,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Rounded.PostAdd, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("New Entry", fontSize = 12.sp)
+                    }
+                }
+            }
 
             if (group.entries.isEmpty()) {
                 Surface(
@@ -639,4 +773,60 @@ internal fun EventEntriesBottomSheet(
             }
         }
     }
+}
+
+@Composable
+internal fun EventGroupEditorDialog(
+    initialTitle: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var title by remember(initialTitle) { mutableStateOf(initialTitle) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Event Name") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = {
+                        title = it
+                        error = null
+                    },
+                    label = { Text("Event Name *") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("edit_event_name_input")
+                )
+                if (error != null) {
+                    Text(
+                        text = error!!,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val trimmed = title.trim().replace(Regex("\\s+"), " ")
+                    if (trimmed.isEmpty()) {
+                        error = "Event name is required."
+                        return@TextButton
+                    }
+                    onConfirm(trimmed)
+                },
+                modifier = Modifier.testTag("confirm_edit_event_button")
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }

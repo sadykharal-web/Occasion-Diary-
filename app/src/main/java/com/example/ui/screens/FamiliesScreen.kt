@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CardGiftcard
 import androidx.compose.material.icons.rounded.Close
@@ -38,6 +39,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -66,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
@@ -127,6 +130,11 @@ fun FamiliesScreen(
     onSaveFamily: (FamilyProfile) -> Unit,
     onDeleteFamily: (String) -> Unit,
     onNewActivityForFamily: (FamilyProfile) -> Unit,
+    onQuickNeondraForFamily: (FamilyProfile) -> Unit = {},
+    onQuickNeondraForEvent: (eventName: String, eventDateMillis: Long, eventType: String?) -> Unit = { _, _, _ -> },
+    onNewActivityForEvent: (eventName: String, eventDateMillis: Long, eventType: String?) -> Unit = { _, _, _ -> },
+    onRenameEventGroup: (activityIds: List<String>, eventIds: List<String>, newTitle: String) -> Unit = { _, _, _ -> },
+    onDeleteEventGroup: (activityIds: List<String>, eventIds: List<String>) -> Unit = { _, _ -> },
     onActivityClick: (ActivityRecord) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -138,6 +146,8 @@ fun FamiliesScreen(
     var deletingFamily by remember { mutableStateOf<FamilyProfile?>(null) }
     var inspectingFamily by remember { mutableStateOf<FamilyProfile?>(null) }
     var inspectingEventGroup by remember { mutableStateOf<EventDirectoryGroup?>(null) }
+    var editingEventGroup by remember { mutableStateOf<EventDirectoryGroup?>(null) }
+    var deletingEventGroup by remember { mutableStateOf<EventDirectoryGroup?>(null) }
 
     BackHandler(enabled = selectedTab == 1 && inspectingEventGroup == null) {
         selectedTab = 0
@@ -234,6 +244,10 @@ fun FamiliesScreen(
             entries = famActs,
             catalog = catalog,
             onDismiss = { inspectingFamily = null },
+            onQuickNeondra = {
+                inspectingFamily = null
+                onQuickNeondraForFamily(fam)
+            },
             onNewEntry = {
                 inspectingFamily = null
                 onNewActivityForFamily(fam)
@@ -245,11 +259,80 @@ fun FamiliesScreen(
         )
     }
 
+    editingEventGroup?.let { grp ->
+        EventGroupEditorDialog(
+            initialTitle = grp.title,
+            onDismiss = { editingEventGroup = null },
+            onConfirm = { newTitle ->
+                editingEventGroup = null
+                onRenameEventGroup(
+                    grp.entries.map { it.id },
+                    grp.matchingEventIds,
+                    newTitle
+                )
+            }
+        )
+    }
+
+    deletingEventGroup?.let { grp ->
+        AlertDialog(
+            onDismissRequest = { deletingEventGroup = null },
+            title = { Text("Delete Event?") },
+            text = {
+                Text(
+                    buildString {
+                        append("Are you sure you want to delete \"${grp.title}\" (${formatDisplayDate(grp.dayStartMillis)})?")
+                        if (grp.entries.isNotEmpty()) {
+                            append("\n\nThis will also delete ${grp.entries.size} ledger ")
+                            append(if (grp.entries.size == 1) "entry" else "entries")
+                            append(" in this event.")
+                        }
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deletingEventGroup = null
+                        onDeleteEventGroup(
+                            grp.entries.map { it.id },
+                            grp.matchingEventIds
+                        )
+                    },
+                    modifier = Modifier.testTag("confirm_delete_event_button")
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingEventGroup = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
     inspectingEventGroup?.let { evtGroup ->
         EventEntriesBottomSheet(
             group = evtGroup,
             catalog = catalog,
             onDismiss = { inspectingEventGroup = null },
+            onQuickNeondra = {
+                inspectingEventGroup = null
+                onQuickNeondraForEvent(
+                    evtGroup.title,
+                    evtGroup.dayStartMillis,
+                    evtGroup.eventTypes.firstOrNull()
+                )
+            },
+            onNewEntry = {
+                inspectingEventGroup = null
+                onNewActivityForEvent(
+                    evtGroup.title,
+                    evtGroup.dayStartMillis,
+                    evtGroup.eventTypes.firstOrNull()
+                )
+            },
             onEntryClick = { record ->
                 inspectingEventGroup = null
                 onActivityClick(record)
@@ -471,6 +554,7 @@ fun FamiliesScreen(
                                     showFamilyDialog = true
                                 },
                                 onDeleteClick = { deletingFamily = family },
+                                onQuickNeondraClick = { onQuickNeondraForFamily(family) },
                                 onNewEntryClick = { onNewActivityForFamily(family) }
                             )
                         }
@@ -504,7 +588,23 @@ fun FamiliesScreen(
                                 group = eventGroup,
                                 catalog = catalog,
                                 isDark = isDark,
-                                onCardClick = { inspectingEventGroup = eventGroup }
+                                onCardClick = { inspectingEventGroup = eventGroup },
+                                onEditClick = { editingEventGroup = eventGroup },
+                                onDeleteClick = { deletingEventGroup = eventGroup },
+                                onQuickNeondraClick = {
+                                    onQuickNeondraForEvent(
+                                        eventGroup.title,
+                                        eventGroup.dayStartMillis,
+                                        eventGroup.eventTypes.firstOrNull()
+                                    )
+                                },
+                                onNewEntryClick = {
+                                    onNewActivityForEvent(
+                                        eventGroup.title,
+                                        eventGroup.dayStartMillis,
+                                        eventGroup.eventTypes.firstOrNull()
+                                    )
+                                }
                             )
                         }
                     }
@@ -524,6 +624,7 @@ private fun FamilyDirectoryCard(
     onCardClick: () -> Unit,
     onEditClick: () -> Unit,
     onDeleteClick: () -> Unit,
+    onQuickNeondraClick: () -> Unit,
     onNewEntryClick: () -> Unit
 ) {
     val inColor = if (isDark) InBadgeFgDark else InBadgeFgLight
@@ -718,33 +819,72 @@ private fun FamilyDirectoryCard(
                         .testTag("family_entries_pill_${family.id}")
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         Text(
                             text = "$entriesCount ${if (entriesCount == 1) "entry" else "entries"}",
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Icon(
                             imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                             contentDescription = "View Entries",
                             tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(15.dp)
                         )
                     }
                 }
 
-                OutlinedButton(
-                    onClick = onNewEntryClick,
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Rounded.PostAdd, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("New Entry")
+                    FilledTonalButton(
+                        onClick = onQuickNeondraClick,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .heightIn(min = 40.dp)
+                            .testTag("family_neondra_button_${family.id}")
+                    ) {
+                        Icon(
+                            Icons.Rounded.AccountBalanceWallet,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "نیوندرا",
+                            fontFamily = NotoArabicFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onNewEntryClick,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier
+                            .heightIn(min = 40.dp)
+                            .testTag("family_new_entry_button_${family.id}")
+                    ) {
+                        Icon(Icons.Rounded.PostAdd, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "New Entry",
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
                 }
             }
         }
@@ -803,6 +943,7 @@ private fun FamilyEntriesBottomSheet(
     entries: List<ActivityRecord>,
     catalog: DropdownCatalog,
     onDismiss: () -> Unit,
+    onQuickNeondra: () -> Unit,
     onNewEntry: () -> Unit,
     onEntryClick: (ActivityRecord) -> Unit
 ) {
@@ -918,14 +1059,33 @@ private fun FamilyEntriesBottomSheet(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.Bold
                 )
-                OutlinedButton(
-                    onClick = onNewEntry,
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Rounded.PostAdd, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("New Entry")
+                    FilledTonalButton(
+                        onClick = onQuickNeondra,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Rounded.AccountBalanceWallet, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = "نیوندرا",
+                            fontFamily = NotoArabicFamily,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = onNewEntry,
+                        shape = RoundedCornerShape(10.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Icon(Icons.Rounded.PostAdd, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("New Entry", fontSize = 12.sp)
+                    }
                 }
             }
 

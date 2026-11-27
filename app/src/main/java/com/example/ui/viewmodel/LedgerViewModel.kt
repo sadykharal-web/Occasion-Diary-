@@ -356,6 +356,46 @@ class LedgerViewModel(
         }
     }
 
+    fun renameEventGroup(
+        activityIds: List<String>,
+        eventIds: List<String>,
+        newTitle: String
+    ) {
+        viewModelScope.launch {
+            _isSaving.value = true
+            val result = repository.renameEventGroup(
+                activityIds = activityIds,
+                eventIds = eventIds,
+                newTitle = newTitle
+            )
+            _isSaving.value = false
+            result.onSuccess {
+                _actionMessage.value = "Event updated to \"${newTitle.trim()}\"."
+            }.onFailure { err ->
+                _actionMessage.value = err.localizedMessage ?: "Failed to rename event."
+            }
+        }
+    }
+
+    fun deleteEventGroup(
+        context: Context,
+        activityIds: List<String>,
+        eventIds: List<String>
+    ) {
+        viewModelScope.launch {
+            repository.deleteEventGroup(activityIds = activityIds, eventIds = eventIds)
+                .onSuccess {
+                    activityIds.forEach { actId ->
+                        ReminderScheduler.cancelReminder(context.applicationContext, actId)
+                    }
+                    _actionMessage.value = "Event deleted."
+                }
+                .onFailure { err ->
+                    _actionMessage.value = err.localizedMessage ?: "Failed to delete event."
+                }
+        }
+    }
+
     // --- Offline Search (over Offline Room Data) ---
 
     fun runAiSearch(query: String, @Suppress("UNUSED_PARAMETER") useOnlineAi: Boolean = false) {

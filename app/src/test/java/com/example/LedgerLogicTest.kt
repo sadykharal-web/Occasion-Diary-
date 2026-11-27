@@ -880,11 +880,13 @@ class LedgerLogicTest {
         assertEquals("Walima Reception", walima.title)
         assertEquals(0, walima.entries.size)
         assertEquals(0L, walima.summary.totalIn)
+        assertEquals(listOf("e2"), walima.matchingEventIds)
 
         val aqiqah = groups[1]
         assertEquals("عقیقہ", aqiqah.title)
         assertEquals(1, aqiqah.entries.size)
         assertEquals(1000L, aqiqah.summary.totalIn)
+        assertTrue(aqiqah.matchingEventIds.isEmpty())
 
         val wedding = groups[2]
         assertEquals("Ali Wedding", wedding.title)
@@ -892,6 +894,7 @@ class LedgerLogicTest {
         assertEquals(7000L, wedding.summary.totalIn)
         assertEquals(1500L, wedding.summary.totalOut)
         assertEquals(listOf("1", "2"), wedding.entries.map { it.familyId })
+        assertEquals(listOf("e1"), wedding.matchingEventIds)
     }
 }
 

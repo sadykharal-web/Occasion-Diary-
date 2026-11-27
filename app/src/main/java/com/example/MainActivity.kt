@@ -229,6 +229,7 @@ fun OccasionDiaryAppShell(
     var prefilledEventType by remember { mutableStateOf<String?>(null) }
 
     var showQuickNeondraSheet by remember { mutableStateOf(false) }
+    var prefilledQuickNeondraFamily by remember { mutableStateOf<FamilyProfile?>(null) }
     var prefilledQuickNeondraEventDate by remember { mutableStateOf<Long?>(null) }
     var prefilledQuickNeondraEventName by remember { mutableStateOf<String?>(null) }
     var prefilledQuickNeondraEventType by remember { mutableStateOf<String?>(null) }
@@ -248,11 +249,13 @@ fun OccasionDiaryAppShell(
         QuickNeondraSheet(
             catalog = catalog,
             isSaving = isSaving,
+            prefilledFamily = prefilledQuickNeondraFamily,
             prefilledEventDateMillis = prefilledQuickNeondraEventDate,
             prefilledEventName = prefilledQuickNeondraEventName,
             prefilledEventType = prefilledQuickNeondraEventType,
             onDismiss = {
                 showQuickNeondraSheet = false
+                prefilledQuickNeondraFamily = null
                 prefilledQuickNeondraEventDate = null
                 prefilledQuickNeondraEventName = null
                 prefilledQuickNeondraEventType = null
@@ -270,6 +273,7 @@ fun OccasionDiaryAppShell(
                     eventDateMillis = prefilledQuickNeondraEventDate ?: System.currentTimeMillis()
                 ) {
                     showQuickNeondraSheet = false
+                    prefilledQuickNeondraFamily = null
                     prefilledQuickNeondraEventDate = null
                     prefilledQuickNeondraEventName = null
                     prefilledQuickNeondraEventType = null
@@ -398,6 +402,7 @@ fun OccasionDiaryAppShell(
                                 navController.navigate(ROUTE_CATEGORIES)
                             },
                             onQuickNeondraClick = {
+                                prefilledQuickNeondraFamily = null
                                 prefilledQuickNeondraEventDate = null
                                 prefilledQuickNeondraEventName = null
                                 prefilledQuickNeondraEventType = null
@@ -416,6 +421,7 @@ fun OccasionDiaryAppShell(
                                 navController.navigate(ROUTE_EDITOR)
                             },
                             onAddNeondraToEventList = { eventName, eventDateMillis, eventType ->
+                                prefilledQuickNeondraFamily = null
                                 prefilledQuickNeondraEventName = eventName
                                 prefilledQuickNeondraEventDate = eventDateMillis
                                 prefilledQuickNeondraEventType = eventType
@@ -452,6 +458,42 @@ fun OccasionDiaryAppShell(
                                 prefilledEventName = null
                                 prefilledEventType = null
                                 navController.navigate(ROUTE_EDITOR)
+                            },
+                            onQuickNeondraForFamily = { fam ->
+                                prefilledQuickNeondraFamily = fam
+                                prefilledQuickNeondraEventDate = null
+                                prefilledQuickNeondraEventName = null
+                                prefilledQuickNeondraEventType = null
+                                showQuickNeondraSheet = true
+                            },
+                            onQuickNeondraForEvent = { eventName, eventDateMillis, eventType ->
+                                prefilledQuickNeondraFamily = null
+                                prefilledQuickNeondraEventName = eventName
+                                prefilledQuickNeondraEventDate = eventDateMillis
+                                prefilledQuickNeondraEventType = eventType
+                                showQuickNeondraSheet = true
+                            },
+                            onNewActivityForEvent = { eventName, eventDateMillis, eventType ->
+                                editingActivity = null
+                                prefilledFamily = null
+                                prefilledDateMillis = eventDateMillis
+                                prefilledEventName = eventName
+                                prefilledEventType = eventType
+                                navController.navigate(ROUTE_EDITOR)
+                            },
+                            onRenameEventGroup = { activityIds, eventIds, newTitle ->
+                                viewModel.renameEventGroup(
+                                    activityIds = activityIds,
+                                    eventIds = eventIds,
+                                    newTitle = newTitle
+                                )
+                            },
+                            onDeleteEventGroup = { activityIds, eventIds ->
+                                viewModel.deleteEventGroup(
+                                    context = context,
+                                    activityIds = activityIds,
+                                    eventIds = eventIds
+                                )
                             },
                             onActivityClick = { act ->
                                 selectedActivityId = act.id

@@ -687,4 +687,50 @@ class LedgerRepository(
             Result.failure(e)
         }
     }
+
+    suspend fun renameEventGroup(
+        activityIds: List<String>,
+        eventIds: List<String>,
+        newTitle: String
+    ): Result<Unit> {
+        return try {
+            val cleanTitle = newTitle.trim().replace(Regex("\\s+"), " ").take(200)
+            require(cleanTitle.isNotEmpty()) { "Event name cannot be blank." }
+            val now = System.currentTimeMillis()
+            val validActivityIds = activityIds.filter { it.isNotBlank() }
+            val validEventIds = eventIds.filter { it.isNotBlank() }
+            if (validActivityIds.isNotEmpty()) {
+                dao.renameActivitiesEventDetail(validActivityIds, cleanTitle, now)
+            }
+            if (validEventIds.isNotEmpty()) {
+                dao.renameEventsTitle(validEventIds, cleanTitle, now)
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteEventGroup(
+        activityIds: List<String>,
+        eventIds: List<String>
+    ): Result<Unit> {
+        return try {
+            val validActivityIds = activityIds.filter { it.isNotBlank() }
+            val validEventIds = eventIds.filter { it.isNotBlank() }
+            if (validActivityIds.isNotEmpty()) {
+                dao.deleteActivitiesByIds(validActivityIds)
+            }
+            if (validEventIds.isNotEmpty()) {
+                dao.deleteEventsByIds(validEventIds)
+            }
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

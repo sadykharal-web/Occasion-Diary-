@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import com.example.data.ActivityDirection
 import com.example.data.DropdownCatalog
 import com.example.data.FamilyIdentityMatcher
+import com.example.data.FamilyProfile
 import com.example.ui.theme.LocalAppDarkTheme
 import com.example.ui.theme.NotoArabicFamily
 
@@ -65,6 +66,7 @@ private val QUICK_NEONDRA_EVENT_TYPES = listOf("شادی", "نکاح", "عقیق
 fun QuickNeondraSheet(
     catalog: DropdownCatalog,
     isSaving: Boolean,
+    prefilledFamily: FamilyProfile? = null,
     prefilledEventDateMillis: Long? = null,
     prefilledEventName: String? = null,
     prefilledEventType: String? = null,
@@ -89,6 +91,7 @@ fun QuickNeondraSheet(
         QuickNeondraContent(
             catalog = catalog,
             isSaving = isSaving,
+            prefilledFamily = prefilledFamily,
             prefilledEventDateMillis = prefilledEventDateMillis,
             prefilledEventName = prefilledEventName,
             prefilledEventType = prefilledEventType,
@@ -107,6 +110,7 @@ fun QuickNeondraSheet(
 fun QuickNeondraContent(
     catalog: DropdownCatalog,
     isSaving: Boolean,
+    prefilledFamily: FamilyProfile? = null,
     prefilledEventDateMillis: Long? = null,
     prefilledEventName: String? = null,
     prefilledEventType: String? = null,
@@ -123,9 +127,9 @@ fun QuickNeondraContent(
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalAppDarkTheme.current
-    var name by remember { mutableStateOf("") }
-    var fatherName by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
+    var name by remember(prefilledFamily) { mutableStateOf(prefilledFamily?.name.orEmpty()) }
+    var fatherName by remember(prefilledFamily) { mutableStateOf(prefilledFamily?.fatherName.orEmpty()) }
+    var address by remember(prefilledFamily) { mutableStateOf(prefilledFamily?.address.orEmpty()) }
     var eventType by remember(prefilledEventType) {
         mutableStateOf(
             prefilledEventType?.takeIf { it in QUICK_NEONDRA_EVENT_TYPES }
