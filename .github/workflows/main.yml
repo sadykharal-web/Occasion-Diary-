@@ -64,17 +64,36 @@ jobs:
           fi
           ls -lh debug.keystore
 
-      - name: Restore google-services.json if secret is set
+      - name: Prepare google-services.json
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          if [ ! -f app/google-services.json ] && [ -n "$GOOGLE_SERVICES_JSON" ]; then
+          APP_ID=$(sed -n 's/.*applicationId[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)
+          echo "Detected applicationId: $APP_ID"
+
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            TMP_GS=$(mktemp)
             if printf '%s' "$GOOGLE_SERVICES_JSON" | grep -q '"project_info"'; then
-              printf '%s\n' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+              printf '%s\n' "$GOOGLE_SERVICES_JSON" > "$TMP_GS"
             else
-              printf '%s' "$GOOGLE_SERVICES_JSON" | tr -d ' \r\n' | base64 -d > app/google-services.json
+              printf '%s' "$GOOGLE_SERVICES_JSON" | tr -d ' \r\n' | base64 -d > "$TMP_GS" || true
             fi
-            echo "Restored app/google-services.json from GitHub secret."
+            if [ -n "$APP_ID" ] && grep -q "\"$APP_ID\"" "$TMP_GS" 2>/dev/null; then
+              mv "$TMP_GS" app/google-services.json
+              echo "Applied app/google-services.json from GitHub secret."
+            elif [ ! -f app/google-services.json ] && grep -q '"project_info"' "$TMP_GS" 2>/dev/null; then
+              mv "$TMP_GS" app/google-services.json
+              echo "Restored app/google-services.json from GitHub secret."
+            else
+              rm -f "$TMP_GS"
+            fi
+          fi
+
+          if [ -f app/google-services.json ] && [ -n "$APP_ID" ]; then
+            if ! grep -q "\"$APP_ID\"" app/google-services.json; then
+              echo "::warning::Stale app/google-services.json does not contain package '$APP_ID'. Skipping Google Services plugin for this CI build so APK compiles; update app/google-services.json or the GOOGLE_SERVICES_JSON secret to enable Online AI."
+              rm -f app/google-services.json
+            fi
           elif [ ! -f app/google-services.json ]; then
             echo "::warning::app/google-services.json is missing. Building offline-capable APK (add GOOGLE_SERVICES_JSON secret to enable Online AI in GitHub builds)."
           fi
