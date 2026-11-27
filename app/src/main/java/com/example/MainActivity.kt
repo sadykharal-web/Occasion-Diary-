@@ -7,7 +7,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -15,25 +18,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Book
-import androidx.compose.material.icons.rounded.Category
-import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -43,21 +39,18 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -87,6 +80,7 @@ import com.example.ui.screens.CategoriesScreen
 import com.example.ui.screens.FamiliesScreen
 import com.example.ui.screens.LedgerScreen
 import com.example.ui.screens.RemindersScreen
+import com.example.ui.screens.SplashScreen
 import com.example.ui.screens.WorldScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.ui.theme.ThemePreferences
@@ -146,10 +140,19 @@ class MainActivity : ComponentActivity() {
             val activeDarkMode = storedDarkMode ?: initialDark
 
             MyApplicationTheme(darkTheme = activeDarkMode) {
-                OccasionDiaryAppShell(
-                    viewModel = viewModel,
-                    isDarkMode = activeDarkMode
-                )
+                var showSplash by rememberSaveable { mutableStateOf(true) }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    OccasionDiaryAppShell(
+                        viewModel = viewModel,
+                        isDarkMode = activeDarkMode
+                    )
+                    AnimatedVisibility(
+                        visible = showSplash,
+                        exit = fadeOut()
+                    ) {
+                        SplashScreen(onFinished = { showSplash = false })
+                    }
+                }
             }
         }
     }
@@ -161,7 +164,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OccasionDiaryAppShell(
     viewModel: LedgerViewModel,
@@ -285,65 +287,6 @@ fun OccasionDiaryAppShell(
         Scaffold(
             snackbarHost = { SnackbarHost(snackbarHostState) },
             contentWindowInsets = WindowInsets.safeDrawing,
-            topBar = {
-                if (showChrome) {
-                    TopAppBar(
-                        title = {
-                            Text(
-                                text = stringResource(R.string.app_name),
-                                fontWeight = FontWeight.Bold
-                            )
-                        },
-                        actions = {
-                            IconButton(
-                                onClick = {
-                                    prefilledQuickNeondraEventDate = null
-                                    prefilledQuickNeondraEventName = null
-                                    prefilledQuickNeondraEventType = null
-                                    showQuickNeondraSheet = true
-                                },
-                                modifier = Modifier.testTag("topbar_quick_neondra_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.AccountBalanceWallet,
-                                    contentDescription = stringResource(R.string.action_quick_neondra)
-                                )
-                            }
-                            IconButton(
-                                onClick = { navController.navigate(ROUTE_CATEGORIES) },
-                                modifier = Modifier.testTag("topbar_categories_button")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Category,
-                                    contentDescription = "Manage Event Types"
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    exportBackupLauncher.launch(LocalBackupManager.DEFAULT_BACKUP_FILE_NAME)
-                                },
-                                enabled = !localBackupStatus.isBusy,
-                                modifier = Modifier.testTag("topbar_backup_export_button")
-                            ) {
-                                if (localBackupStatus.isBusy) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(20.dp),
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Rounded.Download,
-                                        contentDescription = "Export Offline Backup"
-                                    )
-                                }
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.background
-                        )
-                    )
-                }
-            },
             bottomBar = {
                 if (showChrome && !useNavigationRail) {
                     NavigationBar(
