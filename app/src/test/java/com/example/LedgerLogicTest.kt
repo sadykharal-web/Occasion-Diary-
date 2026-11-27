@@ -17,6 +17,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 class LedgerLogicTest {
@@ -823,6 +824,74 @@ class LedgerLogicTest {
 
         val byFnPrefix = com.example.ui.screens.filterFamiliesForCompare(families, "FN 205")
         assertEquals(listOf("f3"), byFnPrefix.map { it.id })
+    }
+
+    @Test
+    fun `buildEventDirectoryGroups computes In Out totals and entries count per event`() {
+        val cal = Calendar.getInstance().apply {
+            set(2026, Calendar.NOVEMBER, 20, 11, 0, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val dayOne = cal.timeInMillis
+        val dayTwo = dayOne + 86_400_000L
+
+        val activities = listOf(
+            ActivityRecord(
+                id = "a1",
+                familyId = "2",
+                name = "Bilal",
+                eventType = "شادی",
+                eventDetail = "Ali  Wedding",
+                eventDateMillis = dayOne,
+                direction = "IN",
+                cashAmount = 5000L,
+                neondraAmount = 2000L
+            ),
+            ActivityRecord(
+                id = "a2",
+                familyId = "1",
+                name = "Akram",
+                eventType = "شادی",
+                eventDetail = "ali wedding",
+                eventDateMillis = dayOne + 3_600_000L,
+                direction = "OUT",
+                salamiAmount = 1500L
+            ),
+            ActivityRecord(
+                id = "a3",
+                familyId = "3",
+                name = "Saeed",
+                eventType = "عقیقہ",
+                eventDetail = "",
+                eventDateMillis = dayTwo,
+                direction = "IN",
+                haarAmount = 1000L
+            )
+        )
+        val standaloneEvents = listOf(
+            EventEntry(id = "e1", title = "Ali Wedding", eventDateMillis = dayOne),
+            EventEntry(id = "e2", title = "Walima Reception", eventDateMillis = dayTwo + 86_400_000L)
+        )
+
+        val groups = com.example.ui.screens.buildEventDirectoryGroups(activities, standaloneEvents)
+        assertEquals(3, groups.size)
+
+        val walima = groups[0]
+        assertEquals("Walima Reception", walima.title)
+        assertEquals(0, walima.entries.size)
+        assertEquals(0L, walima.summary.totalIn)
+
+        val aqiqah = groups[1]
+        assertEquals("عقیقہ", aqiqah.title)
+        assertEquals(1, aqiqah.entries.size)
+        assertEquals(1000L, aqiqah.summary.totalIn)
+
+        val wedding = groups[2]
+        assertEquals("Ali Wedding", wedding.title)
+        assertEquals(2, wedding.entries.size)
+        assertEquals(7000L, wedding.summary.totalIn)
+        assertEquals(1500L, wedding.summary.totalOut)
+        assertEquals(listOf("1", "2"), wedding.entries.map { it.familyId })
     }
 }
 
