@@ -117,8 +117,8 @@ fun CategoryBadge(
     val isDark = LocalAppDarkTheme.current
     val resolvedColor = adaptiveCategoryColor(color, isDark)
     Surface(
-        color = resolvedColor.copy(alpha = if (isDark) 0.22f else 0.14f),
-        border = if (isDark) BorderStroke(1.dp, resolvedColor.copy(alpha = 0.42f)) else null,
+        color = resolvedColor.copy(alpha = if (isDark) 0.22f else 0.17f),
+        border = BorderStroke(1.dp, resolvedColor.copy(alpha = if (isDark) 0.42f else 0.36f)),
         shape = RoundedCornerShape(10.dp),
         modifier = modifier
     ) {
@@ -166,7 +166,7 @@ fun DirectionPill(
 
     Surface(
         color = bgColor,
-        border = if (isDark) BorderStroke(1.dp, fgColor.copy(alpha = 0.35f)) else null,
+        border = BorderStroke(1.dp, fgColor.copy(alpha = if (isDark) 0.35f else 0.30f)),
         shape = RoundedCornerShape(50),
         modifier = modifier
     ) {
@@ -201,7 +201,7 @@ fun ReminderStatusBadge(
     val fg = if (isDark) ReminderAmberFgDark else ReminderAmberFgLight
     Surface(
         color = bg,
-        border = if (isDark) BorderStroke(1.dp, fg.copy(alpha = 0.35f)) else null,
+        border = BorderStroke(1.dp, fg.copy(alpha = if (isDark) 0.35f else 0.30f)),
         shape = RoundedCornerShape(50),
         modifier = modifier
     ) {
@@ -238,10 +238,10 @@ fun HeroLedgerSummaryCard(
             listOf(HeroLightStart, HeroLightMid, HeroLightEnd)
         }
     )
-    val inValueColor = if (isDark) InBadgeFgDark else Color.White
-    val outValueColor = if (isDark) OutBadgeFgDark else Color.White
-    val familyValueColor = if (isDark) Color(0xFFFFD166) else Color.White
-    val reminderValueColor = if (isDark) Color(0xFFFF9ECE) else Color.White
+    val inValueColor = if (isDark) InBadgeFgDark else Color(0xFFA7F3D0)
+    val outValueColor = if (isDark) OutBadgeFgDark else Color(0xFFFFD6E0)
+    val familyValueColor = if (isDark) Color(0xFFFFD166) else Color(0xFFFDE68A)
+    val reminderValueColor = if (isDark) Color(0xFFFF9ECE) else Color(0xFFE9D5FF)
 
     Box(
         modifier = modifier

@@ -2,28 +2,28 @@ package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Heritage Emerald & Saffron Gold Light Palette
-val EmeraldPrimary = Color(0xFF0F5C4D)
+// Vibrant Colorful Festive Light Palette
+val EmeraldPrimary = Color(0xFF00897B)
 val EmeraldOnPrimary = Color(0xFFFFFFFF)
-val EmeraldPrimaryContainer = Color(0xFFD2EFE6)
-val EmeraldOnPrimaryContainer = Color(0xFF06382E)
+val EmeraldPrimaryContainer = Color(0xFFB2F5EA)
+val EmeraldOnPrimaryContainer = Color(0xFF003831)
 
-val SaffronSecondary = Color(0xFFB87314)
+val SaffronSecondary = Color(0xFFE65100)
 val SaffronOnSecondary = Color(0xFFFFFFFF)
-val SaffronSecondaryContainer = Color(0xFFFCECD2)
-val SaffronOnSecondaryContainer = Color(0xFF3E2400)
+val SaffronSecondaryContainer = Color(0xFFFFE0B2)
+val SaffronOnSecondaryContainer = Color(0xFF4E1D00)
 
-val TealTertiary = Color(0xFF28666E)
+val TealTertiary = Color(0xFF7C3AED)
 val TealOnTertiary = Color(0xFFFFFFFF)
-val TealTertiaryContainer = Color(0xFFCDE9ED)
-val TealOnTertiaryContainer = Color(0xFF052E34)
+val TealTertiaryContainer = Color(0xFFEDE9FE)
+val TealOnTertiaryContainer = Color(0xFF2E1065)
 
-val IvoryBackground = Color(0xFFFAF7F0)
+val IvoryBackground = Color(0xFFF0F7FF)
 val WarmSurface = Color(0xFFFFFFFF)
-val ParchmentSurfaceVariant = Color(0xFFF2ECE0)
-val WarmOutline = Color(0xFFD8D0C1)
-val CharcoalOnBackground = Color(0xFF1A1E1C)
-val MutedOnSurfaceVariant = Color(0xFF5A635E)
+val ParchmentSurfaceVariant = Color(0xFFE0EEFF)
+val WarmOutline = Color(0xFFB6CCF0)
+val CharcoalOnBackground = Color(0xFF0F172A)
+val MutedOnSurfaceVariant = Color(0xFF475569)
 
 // Vibrant Midnight Jewel Dark Palette
 val EmeraldPrimaryDark = Color(0xFF3CE6B8)
@@ -49,27 +49,27 @@ val IvoryOnDark = Color(0xFFF3F6FF)
 val MutedOnDark = Color(0xFFB8C4E0)
 
 // Hero Ledger Card Gradients
-val HeroLightStart = Color(0xFF0D5C4C)
-val HeroLightMid = Color(0xFF127A6E)
-val HeroLightEnd = Color(0xFF1A658F)
+val HeroLightStart = Color(0xFF059669)
+val HeroLightMid = Color(0xFF0284C7)
+val HeroLightEnd = Color(0xFF7C3AED)
 
 val HeroDarkStart = Color(0xFF0E5E52)
 val HeroDarkMid = Color(0xFF1D438A)
 val HeroDarkEnd = Color(0xFF5E2478)
 
 // Semantic In / Out & Reminder Status Colors
-val InBadgeBgLight = Color(0xFFDCF5E7)
-val InBadgeFgLight = Color(0xFF157F4D)
+val InBadgeBgLight = Color(0xFFD1FAE5)
+val InBadgeFgLight = Color(0xFF047857)
 val InBadgeBgDark = Color(0xFF0B462D)
 val InBadgeFgDark = Color(0xFF5CF2A9)
 
-val OutBadgeBgLight = Color(0xFFFCE4E0)
-val OutBadgeFgLight = Color(0xFFB83B2B)
+val OutBadgeBgLight = Color(0xFFFFE4E6)
+val OutBadgeFgLight = Color(0xFFBE123C)
 val OutBadgeBgDark = Color(0xFF591724)
 val OutBadgeFgDark = Color(0xFFFF8899)
 
-val ReminderAmberBgLight = Color(0xFFFFF0D4)
-val ReminderAmberFgLight = Color(0xFF9E6100)
+val ReminderAmberBgLight = Color(0xFFFEF3C7)
+val ReminderAmberFgLight = Color(0xFFB45309)
 val ReminderAmberBgDark = Color(0xFF4D3105)
 val ReminderAmberFgDark = Color(0xFFFFD166)
 

@@ -6,7 +6,7 @@
     <string name="nav_ledger">Ledger</string>
     <string name="nav_families">Families</string>
     <string name="nav_ai">Search</string>
-    <string name="nav_world">World</string>
+    <string name="nav_world">Live</string>
     <string name="nav_reminders">Settings</string>
 
     <!-- Onboarding / App Highlights -->

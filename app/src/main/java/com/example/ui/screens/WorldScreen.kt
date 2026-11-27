@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.OpenInBrowser
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Refresh
@@ -137,14 +138,14 @@ fun WorldScreen(
     ) {
         if (!isFullScreen) {
             Surface(
-                tonalElevation = 2.dp,
-                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 3.dp,
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -160,7 +161,7 @@ fun WorldScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
-                            text = "World",
+                            text = "Live",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
@@ -187,6 +188,29 @@ fun WorldScreen(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
                                 contentDescription = "Forward"
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                hasError = false
+                                errorMessage = null
+                                triedHttpFallback = false
+                                currentUrl = WORLD_WEBSITE_URL
+                                if (rendererCrashed || webViewRef == null) {
+                                    rendererCrashed = false
+                                    crashRecoveryAttempts = 0
+                                    pendingLoadUrl = WORLD_WEBSITE_URL
+                                    webViewGeneration++
+                                } else {
+                                    webViewRef?.loadUrl(WORLD_WEBSITE_URL)
+                                }
+                            },
+                            modifier = Modifier.testTag("world_home_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Home,
+                                contentDescription = "Website Home",
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
                         IconButton(

@@ -160,7 +160,7 @@ fun RemindersScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                                 Text(
-                                    text = if (isDarkMode) "Dark Mode • Colorful Midnight" else "Light Mode • Warm Ivory",
+                                    text = if (isDarkMode) "Dark Mode • Colorful Midnight" else "Light Mode • Colorful Festive",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
