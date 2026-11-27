@@ -329,17 +329,19 @@ class LedgerLogicTest {
         )
         items = com.example.ui.screens.appendHomeGiftItem(
             items,
-            com.example.ui.screens.formatSuitGiftItem("مردانہ سوٹ", 1)
+            com.example.ui.screens.formatSuitGiftItem("بچگانہ سوٹ", 1)
         )
         items = com.example.ui.screens.appendHomeGiftItem(
             items,
-            com.example.ui.screens.formatKgGiftItem("پھل", 3)
+            com.example.ui.screens.formatKgGiftItem("آم", 3)
         )
         items = com.example.ui.screens.appendHomeGiftItem(
             items,
             com.example.ui.screens.formatKgGiftItem("مٹھائی", 5)
         )
-        assertEquals("2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 کلوگرام پھل, 5 کلوگرام مٹھائی", items)
+        assertEquals("دو زنانہ سوٹ, ایک بچگانہ سوٹ, تین کلوگرام آم, پانچ کلوگرام مٹھائی", items)
+        assertEquals(listOf("زنانہ سوٹ", "مردانہ سوٹ", "بچگانہ سوٹ"), com.example.ui.screens.SUIT_TYPE_OPTIONS)
+        assertTrue(com.example.ui.screens.FRUIT_GIFT_OPTIONS.containsAll(listOf("آم", "سیب", "کیلا", "انار", "انگور")))
     }
 
     @Test

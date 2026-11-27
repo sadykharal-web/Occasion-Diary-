@@ -12,6 +12,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +30,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
@@ -46,17 +48,16 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -75,11 +76,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.example.data.ActivityCategory
 import com.example.data.ActivityDirection
@@ -101,6 +105,77 @@ import java.util.Calendar
 private val SUIT_COUNT_OPTIONS = (1..20).toList()
 private val KG_COUNT_OPTIONS = (1..25).toList()
 
+val SUIT_TYPE_OPTIONS = listOf(
+    "زنانہ سوٹ",
+    "مردانہ سوٹ",
+    "بچگانہ سوٹ"
+)
+
+val FRUIT_GIFT_OPTIONS = listOf(
+    "آم",
+    "سیب",
+    "کیلا",
+    "مالٹا",
+    "کینو",
+    "موسمی",
+    "انگور",
+    "انار",
+    "امرود",
+    "آڑو",
+    "خوبانی",
+    "آلو بخارا",
+    "تربوز",
+    "خربوزہ",
+    "سردا",
+    "گرما",
+    "پپیتا",
+    "انناس",
+    "کھجور",
+    "چیکو",
+    "لیچی",
+    "اسٹرابیری",
+    "ناشپاتی",
+    "فالسہ",
+    "جامن",
+    "لوکاٹ",
+    "انجیر",
+    "ناریل",
+    "چکوترہ",
+    "شریفہ",
+    "چیری",
+    "پھل (مکس)"
+)
+
+private val URDU_NUMBER_WORDS = mapOf(
+    1 to "ایک",
+    2 to "دو",
+    3 to "تین",
+    4 to "چار",
+    5 to "پانچ",
+    6 to "چھ",
+    7 to "سات",
+    8 to "آٹھ",
+    9 to "نو",
+    10 to "دس",
+    11 to "گیارہ",
+    12 to "بارہ",
+    13 to "تیرہ",
+    14 to "چودہ",
+    15 to "پندرہ",
+    16 to "سولہ",
+    17 to "سترہ",
+    18 to "اٹھارہ",
+    19 to "انیس",
+    20 to "بیس",
+    21 to "اکیس",
+    22 to "بائیس",
+    23 to "تیئیس",
+    24 to "چوبیس",
+    25 to "پچیس"
+)
+
+fun toUrduNumberWord(value: Int): String = URDU_NUMBER_WORDS[value] ?: value.toString()
+
 fun appendHomeGiftItem(existing: String, newItem: String): String {
     val cleanItem = newItem.trim()
     if (cleanItem.isEmpty()) return existing
@@ -110,12 +185,12 @@ fun appendHomeGiftItem(existing: String, newItem: String): String {
 
 fun formatSuitGiftItem(label: String, count: Int): String {
     val safeCount = count.coerceAtLeast(1)
-    return "$safeCount $label"
+    return "${toUrduNumberWord(safeCount)} $label"
 }
 
 fun formatKgGiftItem(label: String, kg: Int): String {
     val safeKg = kg.coerceAtLeast(1)
-    return "$safeKg کلوگرام $label"
+    return "${toUrduNumberWord(safeKg)} کلوگرام $label"
 }
 
 private val REMINDER_OFFSETS = listOf(0L, 60L, 180L, 1440L, 2880L)
@@ -180,8 +255,9 @@ fun ActivityEditorScreen(
     var homeItems by remember {
         mutableStateOf(initialRecord?.homeItems ?: "")
     }
-    var selectedLadySuitCount by remember { mutableIntStateOf(1) }
-    var selectedGentsSuitCount by remember { mutableIntStateOf(1) }
+    var selectedSuitType by remember { mutableStateOf(SUIT_TYPE_OPTIONS.first()) }
+    var selectedSuitCount by remember { mutableIntStateOf(1) }
+    var selectedFruitType by remember { mutableStateOf(FRUIT_GIFT_OPTIONS.first()) }
     var selectedFruitsKg by remember { mutableIntStateOf(1) }
     var selectedSweetsKg by remember { mutableIntStateOf(1) }
     var cashAmountText by remember {
@@ -420,7 +496,6 @@ fun ActivityEditorScreen(
                             },
                             label = "Name *",
                             placeholder = "e.g. Rajab Ali",
-                            supportingText = "Same Name + Father's Name + Address automatically share one FN",
                             options = nameOptions,
                             onOptionSelected = { opt ->
                                 name = opt.primaryValue
@@ -684,7 +759,7 @@ fun ActivityEditorScreen(
                             value = homeItems,
                             onValueChange = { homeItems = it },
                             label = { Text("تحائف") },
-                            placeholder = { Text("e.g. 2 زنانہ سوٹ, 1 مردانہ سوٹ, 3 کلوگرام پھل, 2 کلوگرام مٹھائی...") },
+                            placeholder = { Text("مثلاً دو زنانہ سوٹ, ایک بچگانہ سوٹ, تین کلوگرام آم, دو کلوگرام مٹھائی...") },
                             leadingIcon = { Icon(Icons.Rounded.Home, contentDescription = null) },
                             minLines = 2,
                             maxLines = 5,
@@ -701,7 +776,7 @@ fun ActivityEditorScreen(
                         ) {
                             Column(
                                 modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 Text(
                                     text = "تحائف Categories",
@@ -710,58 +785,59 @@ fun ActivityEditorScreen(
                                     fontWeight = FontWeight.Bold
                                 )
 
-                                // زنانہ سوٹ (Lady Suit) + No. dropdown
-                                GiftCategoryQuantityRow(
-                                    label = "زنانہ سوٹ",
-                                    options = SUIT_COUNT_OPTIONS,
-                                    selectedValue = selectedLadySuitCount,
+                                // سوٹ (زنانہ / مردانہ / بچگانہ) + گنتی + ایڈ بٹن ایک لائن میں
+                                GiftItemAndQuantityRow(
+                                    itemOptions = SUIT_TYPE_OPTIONS,
+                                    selectedItem = selectedSuitType,
+                                    onItemSelected = { selectedSuitType = it },
+                                    quantityOptions = SUIT_COUNT_OPTIONS,
+                                    selectedQuantity = selectedSuitCount,
                                     unitSuffix = "",
-                                    onValueSelected = { selectedLadySuitCount = it },
+                                    onQuantitySelected = { selectedSuitCount = it },
                                     onAddClick = {
                                         homeItems = appendHomeGiftItem(
                                             homeItems,
-                                            formatSuitGiftItem("زنانہ سوٹ", selectedLadySuitCount)
+                                            formatSuitGiftItem(selectedSuitType, selectedSuitCount)
                                         )
                                     },
-                                    dropdownTag = "home_gift_lady_suit_dropdown",
-                                    addButtonTag = "home_gift_lady_suit_add_button"
+                                    itemWeight = 1.2f,
+                                    quantityWeight = 0.8f,
+                                    itemDropdownTag = "home_gift_suit_type_dropdown",
+                                    quantityDropdownTag = "home_gift_suit_count_dropdown",
+                                    addButtonTag = "home_gift_suit_add_button"
                                 )
 
-                                // مردانہ سوٹ (Gents Suit) + No. dropdown
-                                GiftCategoryQuantityRow(
-                                    label = "مردانہ سوٹ",
-                                    options = SUIT_COUNT_OPTIONS,
-                                    selectedValue = selectedGentsSuitCount,
-                                    unitSuffix = "",
-                                    onValueSelected = { selectedGentsSuitCount = it },
-                                    onAddClick = {
-                                        homeItems = appendHomeGiftItem(
-                                            homeItems,
-                                            formatSuitGiftItem("مردانہ سوٹ", selectedGentsSuitCount)
-                                        )
-                                    },
-                                    dropdownTag = "home_gift_gents_suit_dropdown",
-                                    addButtonTag = "home_gift_gents_suit_add_button"
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                                 )
 
-                                // پھل (Fruits) + No. کلوگرام dropdown
-                                GiftCategoryQuantityRow(
-                                    label = "پھل",
-                                    options = KG_COUNT_OPTIONS,
-                                    selectedValue = selectedFruitsKg,
+                                // پھل (پھلوں کے نام) + کلوگرام + ایڈ بٹن ایک لائن میں
+                                GiftItemAndQuantityRow(
+                                    itemOptions = FRUIT_GIFT_OPTIONS,
+                                    selectedItem = selectedFruitType,
+                                    onItemSelected = { selectedFruitType = it },
+                                    quantityOptions = KG_COUNT_OPTIONS,
+                                    selectedQuantity = selectedFruitsKg,
                                     unitSuffix = " کلوگرام",
-                                    onValueSelected = { selectedFruitsKg = it },
+                                    onQuantitySelected = { selectedFruitsKg = it },
                                     onAddClick = {
                                         homeItems = appendHomeGiftItem(
                                             homeItems,
-                                            formatKgGiftItem("پھل", selectedFruitsKg)
+                                            formatKgGiftItem(selectedFruitType, selectedFruitsKg)
                                         )
                                     },
-                                    dropdownTag = "home_gift_fruits_dropdown",
+                                    itemWeight = 1.05f,
+                                    quantityWeight = 0.95f,
+                                    itemDropdownTag = "home_gift_fruit_type_dropdown",
+                                    quantityDropdownTag = "home_gift_fruits_dropdown",
                                     addButtonTag = "home_gift_fruits_add_button"
                                 )
 
-                                // مٹھائی (Sweets) + No. کلوگرام dropdown
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                )
+
+                                // مٹھائی + کلوگرام + ایڈ بٹن ایک لائن میں
                                 GiftCategoryQuantityRow(
                                     label = "مٹھائی",
                                     options = KG_COUNT_OPTIONS,
@@ -780,69 +856,81 @@ fun ActivityEditorScreen(
                             }
                         }
 
-                        // 3 Entries Above Neondra: نقد (Cash), ہار (Haar), سلامی (Salami)
-                        OutlinedTextField(
-                            value = cashAmountText,
-                            onValueChange = { input ->
-                                cashAmountText = input.filter { it.isDigit() }.take(9)
-                            },
-                            label = {
-                                Text(
-                                    text = "نقد",
-                                    fontFamily = NotoArabicFamily,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            },
-                            placeholder = { Text("e.g. 5000") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("editor_cash_amount_input")
-                        )
+                        // 3 Entries Above Neondra in one line: نقد (Cash), سلامی (Salami), ہار (Haar)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            OutlinedTextField(
+                                value = cashAmountText,
+                                onValueChange = { input ->
+                                    cashAmountText = input.filter { it.isDigit() }.take(9)
+                                },
+                                label = {
+                                    Text(
+                                        text = "نقد",
+                                        fontFamily = NotoArabicFamily,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                placeholder = { Text("0") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("editor_cash_amount_input")
+                            )
 
-                        OutlinedTextField(
-                            value = haarAmountText,
-                            onValueChange = { input ->
-                                haarAmountText = input.filter { it.isDigit() }.take(9)
-                            },
-                            label = {
-                                Text(
-                                    text = "ہار",
-                                    fontFamily = NotoArabicFamily,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            },
-                            placeholder = { Text("e.g. 2000") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("editor_haar_amount_input")
-                        )
+                            OutlinedTextField(
+                                value = salamiAmountText,
+                                onValueChange = { input ->
+                                    salamiAmountText = input.filter { it.isDigit() }.take(9)
+                                },
+                                label = {
+                                    Text(
+                                        text = "سلامی",
+                                        fontFamily = NotoArabicFamily,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                placeholder = { Text("0") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("editor_salami_amount_input")
+                            )
 
-                        OutlinedTextField(
-                            value = salamiAmountText,
-                            onValueChange = { input ->
-                                salamiAmountText = input.filter { it.isDigit() }.take(9)
-                            },
-                            label = {
-                                Text(
-                                    text = "سلامی",
-                                    fontFamily = NotoArabicFamily,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            },
-                            placeholder = { Text("e.g. 1000") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("editor_salami_amount_input")
-                        )
+                            OutlinedTextField(
+                                value = haarAmountText,
+                                onValueChange = { input ->
+                                    haarAmountText = input.filter { it.isDigit() }.take(9)
+                                },
+                                label = {
+                                    Text(
+                                        text = "ہار",
+                                        fontFamily = NotoArabicFamily,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                placeholder = { Text("0") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("editor_haar_amount_input")
+                            )
+                        }
 
                         OutlinedTextField(
                             value = neondraText,
@@ -1086,7 +1174,149 @@ fun ActivityEditorScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CompactUrduDropdownField(
+    selectedLabel: String,
+    options: List<String>,
+    onSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box(modifier = modifier) {
+        Surface(
+            onClick = { expanded = true },
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(
+                width = 1.dp,
+                color = if (expanded) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.7f)
+                }
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 8.dp, end = 4.dp, top = 10.dp, bottom = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = selectedLabel,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    fontFamily = NotoArabicFamily,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = Icons.Rounded.ArrowDropDown,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .rotate(if (expanded) 180f else 0f)
+                )
+            }
+        }
+
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier
+                .widthIn(min = 160.dp)
+                .heightIn(max = 320.dp)
+        ) {
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = option,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontFamily = NotoArabicFamily,
+                            fontWeight = if (option == selectedLabel) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    onClick = {
+                        onSelected(option)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GiftItemAndQuantityRow(
+    itemOptions: List<String>,
+    selectedItem: String,
+    onItemSelected: (String) -> Unit,
+    quantityOptions: List<Int>,
+    selectedQuantity: Int,
+    unitSuffix: String,
+    onQuantitySelected: (Int) -> Unit,
+    onAddClick: () -> Unit,
+    itemWeight: Float,
+    quantityWeight: Float,
+    itemDropdownTag: String,
+    quantityDropdownTag: String,
+    addButtonTag: String
+) {
+    val quantityLabels = remember(quantityOptions, unitSuffix) {
+        quantityOptions.map { "${toUrduNumberWord(it)}$unitSuffix" }
+    }
+    val selectedQuantityLabel = "${toUrduNumberWord(selectedQuantity)}$unitSuffix"
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CompactUrduDropdownField(
+            selectedLabel = selectedItem,
+            options = itemOptions,
+            onSelected = onItemSelected,
+            modifier = Modifier
+                .weight(itemWeight)
+                .testTag(itemDropdownTag)
+        )
+
+        CompactUrduDropdownField(
+            selectedLabel = selectedQuantityLabel,
+            options = quantityLabels,
+            onSelected = { chosenLabel ->
+                val index = quantityLabels.indexOf(chosenLabel)
+                if (index in quantityOptions.indices) {
+                    onQuantitySelected(quantityOptions[index])
+                }
+            },
+            modifier = Modifier
+                .weight(quantityWeight)
+                .testTag(quantityDropdownTag)
+        )
+
+        FilledTonalButton(
+            onClick = onAddClick,
+            shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+            modifier = Modifier
+                .height(48.dp)
+                .testTag(addButtonTag)
+        ) {
+            Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(2.dp))
+            Text("Add", maxLines = 1, softWrap = false)
+        }
+    }
+}
+
 @Composable
 private fun GiftCategoryQuantityRow(
     label: String,
@@ -1098,11 +1328,14 @@ private fun GiftCategoryQuantityRow(
     dropdownTag: String,
     addButtonTag: String
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    val quantityLabels = remember(options, unitSuffix) {
+        options.map { "${toUrduNumberWord(it)}$unitSuffix" }
+    }
+    val selectedLabel = "${toUrduNumberWord(selectedValue)}$unitSuffix"
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
@@ -1110,62 +1343,35 @@ private fun GiftCategoryQuantityRow(
             style = MaterialTheme.typography.bodyMedium,
             fontFamily = NotoArabicFamily,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.weight(1f)
+            maxLines = 1,
+            modifier = Modifier.weight(0.9f)
         )
 
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = !expanded },
-            modifier = Modifier
-                .width(116.dp)
-                .testTag(dropdownTag)
-        ) {
-            OutlinedTextField(
-                value = "$selectedValue$unitSuffix",
-                onValueChange = {},
-                readOnly = true,
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = NotoArabicFamily),
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-            )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                options.forEach { count ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = "$count$unitSuffix",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontFamily = NotoArabicFamily,
-                                fontWeight = if (count == selectedValue) FontWeight.Bold else FontWeight.Normal
-                            )
-                        },
-                        onClick = {
-                            onValueSelected(count)
-                            expanded = false
-                        }
-                    )
+        CompactUrduDropdownField(
+            selectedLabel = selectedLabel,
+            options = quantityLabels,
+            onSelected = { chosenLabel ->
+                val index = quantityLabels.indexOf(chosenLabel)
+                if (index in options.indices) {
+                    onValueSelected(options[index])
                 }
-            }
-        }
+            },
+            modifier = Modifier
+                .weight(1.1f)
+                .testTag(dropdownTag)
+        )
 
         FilledTonalButton(
             onClick = onAddClick,
             shape = RoundedCornerShape(12.dp),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
             modifier = Modifier
                 .height(48.dp)
                 .testTag(addButtonTag)
         ) {
             Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("Add")
+            Spacer(modifier = Modifier.width(2.dp))
+            Text("Add", maxLines = 1, softWrap = false)
         }
     }
 }
