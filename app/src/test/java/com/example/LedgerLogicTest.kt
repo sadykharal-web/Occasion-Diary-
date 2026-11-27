@@ -896,6 +896,64 @@ class LedgerLogicTest {
         assertEquals(listOf("1", "2"), wedding.entries.map { it.familyId })
         assertEquals(listOf("e1"), wedding.matchingEventIds)
     }
+
+    @Test
+    fun `sortFamiliesDirectory and sortEventDirectoryGroups sort by FN Name and Event cleanly`() {
+        val fam1 = FamilyProfile(id = "f1", familyId = "10", name = "Zafar")
+        val fam2 = FamilyProfile(id = "f2", familyId = "2", name = "Bilal")
+        val fam3 = FamilyProfile(id = "f3", familyId = "5", name = "Asif")
+        val families = listOf(fam1, fam2, fam3)
+
+        val actByFam = mapOf(
+            "f1" to listOf(ActivityRecord(id = "a1", familyDocId = "f1", familyId = "10", name = "Zafar", eventType = "شادی", eventDetail = "Walima", eventDateMillis = 3000L)),
+            "f2" to listOf(ActivityRecord(id = "a2", familyDocId = "f2", familyId = "2", name = "Bilal", eventType = "نکاح", eventDetail = "Aqeeqah", eventDateMillis = 2000L)),
+            "f3" to emptyList()
+        )
+
+        assertEquals(
+            listOf("f2", "f3", "f1"),
+            com.example.ui.screens.sortFamiliesDirectory(families, actByFam, com.example.ui.screens.FamiliesSortOrder.FN).map { it.id }
+        )
+        assertEquals(
+            listOf("f3", "f2", "f1"),
+            com.example.ui.screens.sortFamiliesDirectory(families, actByFam, com.example.ui.screens.FamiliesSortOrder.NAME).map { it.id }
+        )
+        assertEquals(
+            listOf("f2", "f1", "f3"),
+            com.example.ui.screens.sortFamiliesDirectory(families, actByFam, com.example.ui.screens.FamiliesSortOrder.EVENT).map { it.id }
+        )
+
+        val grp1 = com.example.ui.screens.EventDirectoryGroup(
+            key = "g1",
+            title = "Zain Wedding",
+            dayStartMillis = 1000L,
+            eventTypes = listOf("شادی"),
+            entries = listOf(ActivityRecord(id = "a10", familyId = "10", name = "Bilal")),
+            summary = com.example.ui.screens.computeFamilyFinancialSummary(emptyList())
+        )
+        val grp2 = com.example.ui.screens.EventDirectoryGroup(
+            key = "g2",
+            title = "Aqeeqah",
+            dayStartMillis = 2000L,
+            eventTypes = listOf("عقیقہ"),
+            entries = listOf(ActivityRecord(id = "a2", familyId = "2", name = "Zafar")),
+            summary = com.example.ui.screens.computeFamilyFinancialSummary(emptyList())
+        )
+        val groups = listOf(grp1, grp2)
+
+        assertEquals(
+            listOf("g2", "g1"),
+            com.example.ui.screens.sortEventDirectoryGroups(groups, com.example.ui.screens.FamiliesSortOrder.FN).map { it.key }
+        )
+        assertEquals(
+            listOf("g1", "g2"),
+            com.example.ui.screens.sortEventDirectoryGroups(groups, com.example.ui.screens.FamiliesSortOrder.NAME).map { it.key }
+        )
+        assertEquals(
+            listOf("g2", "g1"),
+            com.example.ui.screens.sortEventDirectoryGroups(groups, com.example.ui.screens.FamiliesSortOrder.EVENT).map { it.key }
+        )
+    }
 }
 
 

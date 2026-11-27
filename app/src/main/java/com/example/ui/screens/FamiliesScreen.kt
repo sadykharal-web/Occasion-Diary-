@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,12 +22,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CardGiftcard
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Edit
@@ -40,6 +44,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -52,6 +58,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -88,6 +95,95 @@ import com.example.ui.theme.NotoArabicFamily
 import com.example.ui.theme.OutBadgeFgDark
 import com.example.ui.theme.OutBadgeFgLight
 import com.example.ui.viewmodel.LedgerDashboardData
+import java.util.Locale
+
+enum class FamiliesSortOrder(val label: String) {
+    FN("By FN"),
+    NAME("By Name"),
+    EVENT("By Event")
+}
+
+internal fun sortFamiliesDirectory(
+    families: List<FamilyProfile>,
+    activitiesByFamilyDocId: Map<String, List<ActivityRecord>>,
+    sortOrder: FamiliesSortOrder
+): List<FamilyProfile> {
+    return when (sortOrder) {
+        FamiliesSortOrder.FN -> families.sortedWith(
+            compareBy<FamilyProfile> { it.familyId.trim().isEmpty() }
+                .thenBy { it.familyId.trim().toIntOrNull() ?: Int.MAX_VALUE }
+                .thenBy { it.familyId.trim().lowercase(Locale.ENGLISH) }
+                .thenBy { it.name.trim().lowercase(Locale.ENGLISH) }
+        )
+        FamiliesSortOrder.NAME -> families.sortedWith(
+            compareBy<FamilyProfile> { it.name.trim().isEmpty() }
+                .thenBy { it.name.trim().lowercase(Locale.ENGLISH) }
+                .thenBy { it.familyId.trim().toIntOrNull() ?: Int.MAX_VALUE }
+                .thenBy { it.familyId.trim().lowercase(Locale.ENGLISH) }
+        )
+        FamiliesSortOrder.EVENT -> families.sortedWith(
+            compareBy<FamilyProfile> { fam ->
+                val famActs = activitiesByFamilyDocId[fam.id].orEmpty()
+                val latest = famActs.maxByOrNull { it.eventDateMillis }
+                val label = latest?.eventDetail?.trim()?.replace(Regex("\\s+"), " ")
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: latest?.eventType?.trim().orEmpty()
+                label.isEmpty()
+            }
+                .thenBy { fam ->
+                    val famActs = activitiesByFamilyDocId[fam.id].orEmpty()
+                    val latest = famActs.maxByOrNull { it.eventDateMillis }
+                    val label = latest?.eventDetail?.trim()?.replace(Regex("\\s+"), " ")
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: latest?.eventType?.trim().orEmpty()
+                    label.lowercase(Locale.ENGLISH)
+                }
+                .thenByDescending { fam ->
+                    activitiesByFamilyDocId[fam.id].orEmpty().maxOfOrNull { it.eventDateMillis } ?: Long.MIN_VALUE
+                }
+                .thenBy { it.familyId.trim().toIntOrNull() ?: Int.MAX_VALUE }
+                .thenBy { it.name.trim().lowercase(Locale.ENGLISH) }
+        )
+    }
+}
+
+internal fun sortEventDirectoryGroups(
+    groups: List<EventDirectoryGroup>,
+    sortOrder: FamiliesSortOrder
+): List<EventDirectoryGroup> {
+    return when (sortOrder) {
+        FamiliesSortOrder.FN -> groups.sortedWith(
+            compareBy<EventDirectoryGroup> { grp ->
+                grp.entries.mapNotNull { it.familyId.trim().toIntOrNull() }.minOrNull() ?: Int.MAX_VALUE
+            }
+                .thenBy { grp -> grp.entries.none { it.familyId.isNotBlank() } }
+                .thenBy { grp ->
+                    grp.entries.filter { it.familyId.isNotBlank() }
+                        .minOfOrNull { it.familyId.trim().lowercase(Locale.ENGLISH) }
+                        .orEmpty()
+                }
+                .thenByDescending { it.dayStartMillis }
+                .thenBy { it.title.trim().lowercase(Locale.ENGLISH) }
+        )
+        FamiliesSortOrder.NAME -> groups.sortedWith(
+            compareBy<EventDirectoryGroup> { grp ->
+                grp.entries.none { it.name.isNotBlank() }
+            }
+                .thenBy { grp ->
+                    grp.entries.mapNotNull {
+                        it.name.trim().takeIf { n -> n.isNotEmpty() }?.lowercase(Locale.ENGLISH)
+                    }.minOrNull().orEmpty()
+                }
+                .thenBy { it.title.trim().lowercase(Locale.ENGLISH) }
+                .thenByDescending { it.dayStartMillis }
+        )
+        FamiliesSortOrder.EVENT -> groups.sortedWith(
+            compareBy<EventDirectoryGroup> { it.title.trim().isEmpty() }
+                .thenBy { it.title.trim().lowercase(Locale.ENGLISH) }
+                .thenByDescending { it.dayStartMillis }
+        )
+    }
+}
 
 data class FamilyFinancialSummary(
     val totalIn: Long,
@@ -141,6 +237,7 @@ fun FamiliesScreen(
     val isDark = LocalAppDarkTheme.current
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
+    var sortOrder by rememberSaveable { mutableStateOf(FamiliesSortOrder.FN) }
     var editingFamily by remember { mutableStateOf<FamilyProfile?>(null) }
     var showFamilyDialog by remember { mutableStateOf(false) }
     var deletingFamily by remember { mutableStateOf<FamilyProfile?>(null) }
@@ -159,24 +256,37 @@ fun FamiliesScreen(
     val events = data?.events ?: emptyList()
     val catalog = data?.catalog ?: DropdownCatalog()
 
+    val activitiesByFamilyDocId = remember(families, activities) {
+        families.associate { fam ->
+            fam.id to activities.filter { act ->
+                FamilyIdentityMatcher.activityBelongsToFamily(act, fam)
+            }
+        }
+    }
+
     val eventGroups = remember(activities, events) {
         buildEventDirectoryGroups(activities = activities, events = events)
     }
 
-    val filteredFamilies = remember(families, search) {
+    val filteredFamilies = remember(families, activitiesByFamilyDocId, search, sortOrder) {
         val q = search.trim()
-        if (q.isEmpty()) families
+        val matched = if (q.isEmpty()) families
         else families.filter { fam ->
             fam.name.contains(q, ignoreCase = true) ||
                 fam.familyId.contains(q, ignoreCase = true) ||
                 fam.fatherName.contains(q, ignoreCase = true) ||
                 fam.address.contains(q, ignoreCase = true)
         }
+        sortFamiliesDirectory(
+            families = matched,
+            activitiesByFamilyDocId = activitiesByFamilyDocId,
+            sortOrder = sortOrder
+        )
     }
 
-    val filteredEventGroups = remember(eventGroups, search) {
+    val filteredEventGroups = remember(eventGroups, search, sortOrder) {
         val q = search.trim()
-        if (q.isEmpty()) eventGroups
+        val matched = if (q.isEmpty()) eventGroups
         else eventGroups.filter { grp ->
             grp.title.contains(q, ignoreCase = true) ||
                 formatDisplayDate(grp.dayStartMillis).contains(q, ignoreCase = true) ||
@@ -186,6 +296,10 @@ fun FamiliesScreen(
                         act.familyId.contains(q, ignoreCase = true)
                 }
         }
+        sortEventDirectoryGroups(
+            groups = matched,
+            sortOrder = sortOrder
+        )
     }
 
     if (showFamilyDialog) {
@@ -513,6 +627,67 @@ fun FamiliesScreen(
                     )
                 }
 
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.Sort,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = "Sort:",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        FamiliesSortOrder.entries.forEach { option ->
+                            val isSelected = sortOrder == option
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { sortOrder = option },
+                                label = {
+                                    Text(
+                                        text = option.label,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                },
+                                leadingIcon = if (isSelected) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                } else null,
+                                shape = RoundedCornerShape(12.dp),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ),
+                                modifier = Modifier
+                                    .minimumInteractiveComponentSize()
+                                    .testTag("families_sort_${option.name.lowercase(Locale.ENGLISH)}")
+                            )
+                        }
+                    }
+                }
+
                 if (selectedTab == 0) {
                     if (filteredFamilies.isEmpty()) {
                         item {
@@ -538,9 +713,7 @@ fun FamiliesScreen(
                         }
                     } else {
                         items(filteredFamilies, key = { it.id }) { family ->
-                            val famActs = activities.filter { act ->
-                                FamilyIdentityMatcher.activityBelongsToFamily(act, family)
-                            }
+                            val famActs = activitiesByFamilyDocId[family.id].orEmpty()
                             val summary = computeFamilyFinancialSummary(famActs)
 
                             FamilyDirectoryCard(
