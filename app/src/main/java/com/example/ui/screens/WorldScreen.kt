@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.net.http.SslError
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -54,7 +56,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -73,6 +74,31 @@ import androidx.compose.ui.viewinterop.AndroidView
 
 const val WORLD_WEBSITE_URL = "https://raizan.gamer.free"
 
+private fun isEmulatorEnvironment(): Boolean {
+    return Build.FINGERPRINT.startsWith("generic") ||
+        Build.FINGERPRINT.startsWith("unknown") ||
+        Build.MODEL.contains("google_sdk") ||
+        Build.MODEL.contains("Emulator") ||
+        Build.MODEL.contains("Android SDK built for x86") ||
+        Build.MANUFACTURER.contains("Genymotion") ||
+        Build.HARDWARE.contains("goldfish") ||
+        Build.HARDWARE.contains("ranchu") ||
+        Build.PRODUCT.contains("sdk") ||
+        Build.PRODUCT.contains("emulator")
+}
+
+private fun disposeWebViewSafely(webView: WebView) {
+    runCatching {
+        webView.stopLoading()
+        webView.webChromeClient = null
+        webView.webViewClient = WebViewClient()
+        webView.onPause()
+        (webView.parent as? ViewGroup)?.removeView(webView)
+        webView.removeAllViews()
+        webView.destroy()
+    }
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun WorldScreen(
@@ -81,9 +107,11 @@ fun WorldScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val mainHandler = remember { Handler(Looper.getMainLooper()) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var webViewGeneration by remember { mutableIntStateOf(0) }
-    var useSoftwareLayer by remember { mutableStateOf(false) }
+    var useSoftwareLayer by remember { mutableStateOf(isEmulatorEnvironment()) }
+    var crashRecoveryAttempts by remember { mutableIntStateOf(0) }
     var rendererCrashed by remember { mutableStateOf(false) }
     var pendingLoadUrl by remember { mutableStateOf(WORLD_WEBSITE_URL) }
     var progress by remember { mutableIntStateOf(0) }
@@ -99,19 +127,6 @@ fun WorldScreen(
             onToggleFullScreen(false)
         } else {
             webViewRef?.goBack()
-        }
-    }
-
-    DisposableEffect(webViewGeneration) {
-        onDispose {
-            webViewRef?.let { wv ->
-                wv.stopLoading()
-                wv.onPause()
-                (wv.parent as? ViewGroup)?.removeView(wv)
-                wv.removeAllViews()
-                wv.destroy()
-            }
-            webViewRef = null
         }
     }
 
@@ -180,6 +195,7 @@ fun WorldScreen(
                                 errorMessage = null
                                 if (rendererCrashed || webViewRef == null) {
                                     rendererCrashed = false
+                                    crashRecoveryAttempts = 0
                                     triedHttpFallback = false
                                     pendingLoadUrl = currentUrl.ifBlank { WORLD_WEBSITE_URL }
                                     webViewGeneration++
@@ -241,9 +257,10 @@ fun WorldScreen(
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                     setRendererPriorityPolicy(
                                         WebView.RENDERER_PRIORITY_IMPORTANT,
-                                        false
+                                        true
                                     )
                                 }
+                                onResume()
                                 settings.apply {
                                     javaScriptEnabled = true
                                     domStorageEnabled = true
@@ -309,7 +326,8 @@ fun WorldScreen(
                                             val failingUrl = request.url?.toString().orEmpty()
                                             if (!triedHttpFallback && failingUrl.startsWith("https://")) {
                                                 triedHttpFallback = true
-                                                view?.loadUrl(failingUrl.replaceFirst("https://", "http://"))
+                                                val fallbackUrl = failingUrl.replaceFirst("https://", "http://")
+                                                view?.post { view.loadUrl(fallbackUrl) }
                                                 return
                                             }
                                             hasError = true
@@ -328,7 +346,8 @@ fun WorldScreen(
                                         val failingUrl = error?.url.orEmpty()
                                         if (!triedHttpFallback && failingUrl.startsWith("https://")) {
                                             triedHttpFallback = true
-                                            view?.loadUrl(failingUrl.replaceFirst("https://", "http://"))
+                                            val fallbackUrl = failingUrl.replaceFirst("https://", "http://")
+                                            view?.post { view.loadUrl(fallbackUrl) }
                                             return
                                         }
                                         hasError = true
@@ -343,26 +362,23 @@ fun WorldScreen(
                                         if (webViewRef === view) {
                                             webViewRef = null
                                         }
-                                        view?.let { deadView ->
-                                            runCatching {
-                                                (deadView.parent as? ViewGroup)?.removeView(deadView)
-                                                deadView.removeAllViews()
-                                                deadView.destroy()
+                                        view?.let { disposeWebViewSafely(it) }
+                                        mainHandler.post {
+                                            progress = 100
+                                            canGoBack = false
+                                            canGoForward = false
+                                            if (crashRecoveryAttempts < 1) {
+                                                crashRecoveryAttempts++
+                                                useSoftwareLayer = true
+                                                hasError = false
+                                                errorMessage = null
+                                                pendingLoadUrl = currentUrl.ifBlank { WORLD_WEBSITE_URL }
+                                                webViewGeneration++
+                                            } else {
+                                                rendererCrashed = true
+                                                hasError = true
+                                                errorMessage = "The webpage renderer stopped responding on this device. You can retry or open raizan.gamer.free in your browser."
                                             }
-                                        }
-                                        progress = 100
-                                        canGoBack = false
-                                        canGoForward = false
-                                        if (!useSoftwareLayer) {
-                                            useSoftwareLayer = true
-                                            hasError = false
-                                            errorMessage = null
-                                            pendingLoadUrl = currentUrl.ifBlank { WORLD_WEBSITE_URL }
-                                            webViewGeneration++
-                                        } else {
-                                            rendererCrashed = true
-                                            hasError = true
-                                            errorMessage = "The webpage renderer stopped responding on this device. You can retry or open raizan.gamer.free in your browser."
                                         }
                                         return true
                                     }
@@ -370,6 +386,12 @@ fun WorldScreen(
                                 webViewRef = this
                                 loadUrl(pendingLoadUrl)
                             }
+                        },
+                        onRelease = { view ->
+                            if (webViewRef === view) {
+                                webViewRef = null
+                            }
+                            disposeWebViewSafely(view)
                         }
                     )
                 }
@@ -424,6 +446,7 @@ fun WorldScreen(
                                         triedHttpFallback = false
                                         if (rendererCrashed || webViewRef == null) {
                                             rendererCrashed = false
+                                            crashRecoveryAttempts = 0
                                             pendingLoadUrl = WORLD_WEBSITE_URL
                                             webViewGeneration++
                                         } else {
