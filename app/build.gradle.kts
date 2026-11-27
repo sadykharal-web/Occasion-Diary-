@@ -15,7 +15,7 @@ android {
   compileSdk { version = release(36) { minorApiLevel = 1 } }
 
   defaultConfig {
-    applicationId = "com.aistudio.neondraledger.kxvrpq"
+    applicationId = "com.raizan.family.events"
     minSdk = 24
     targetSdk = 36
     versionCode = 1

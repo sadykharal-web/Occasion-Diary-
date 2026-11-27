@@ -3,7 +3,6 @@ package com.example.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +20,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,7 +35,6 @@ import androidx.compose.material.icons.rounded.Event
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.Search
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -92,13 +89,6 @@ import com.example.ui.theme.OutBadgeFgDark
 import com.example.ui.theme.OutBadgeFgLight
 import com.example.ui.viewmodel.LedgerDashboardData
 import kotlin.math.max
-
-private val OFFLINE_SEARCH_PRESETS = listOf(
-    "Who has the highest In balance?",
-    "شادی",
-    "نقد",
-    "نیوندرا"
-)
 
 fun filterFamiliesForCompare(
     families: List<FamilyProfile>,
@@ -229,23 +219,6 @@ fun AiAssistantScreen(
                                 .fillMaxWidth()
                                 .testTag("ai_search_input")
                         )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OFFLINE_SEARCH_PRESETS.forEach { preset ->
-                                AssistChip(
-                                    onClick = {
-                                        searchPrompt = preset
-                                        onRunAiSearch(preset, false)
-                                    },
-                                    label = { Text(preset) }
-                                )
-                            }
-                        }
 
                         Button(
                             onClick = { onRunAiSearch(searchPrompt, false) },
