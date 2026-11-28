@@ -75,18 +75,25 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import java.util.Collections
+import java.util.WeakHashMap
 
 const val WORLD_WEBSITE_URL = "https://raizan.gamer.free"
 
+private val disposedWebViews: MutableSet<WebView> =
+    Collections.newSetFromMap(WeakHashMap())
+
 private fun disposeWebViewSafely(
     webView: WebView,
-    detachFromParent: Boolean = false
+    detachFromParent: Boolean = true
 ) {
+    if (!disposedWebViews.add(webView)) return
     runCatching {
         webView.stopLoading()
         webView.webChromeClient = null
         webView.webViewClient = WebViewClient()
         webView.onPause()
+        webView.clearHistory()
         if (detachFromParent) {
             (webView.parent as? ViewGroup)?.removeView(webView)
         }
@@ -297,12 +304,6 @@ fun WorldScreen(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    setRendererPriorityPolicy(
-                                        WebView.RENDERER_PRIORITY_IMPORTANT,
-                                        false
-                                    )
-                                }
                                 settings.apply {
                                     javaScriptEnabled = true
                                     domStorageEnabled = true
@@ -440,7 +441,7 @@ fun WorldScreen(
                                 webViewRef = this
                                 val targetUrl = pendingLoadUrl
                                 post {
-                                    if (webViewRef === this) {
+                                    if (webViewRef === this && !disposedWebViews.contains(this)) {
                                         if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
                                             onResume()
                                         }
@@ -453,7 +454,7 @@ fun WorldScreen(
                             if (webViewRef === view) {
                                 webViewRef = null
                             }
-                            disposeWebViewSafely(view, detachFromParent = false)
+                            disposeWebViewSafely(view, detachFromParent = true)
                         }
                     )
                 }

@@ -23,12 +23,10 @@ import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Public
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Public
-import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -42,7 +40,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -75,7 +72,6 @@ import com.example.reminders.ReminderReceiver
 import com.example.ui.components.QuickNeondraSheet
 import com.example.ui.screens.ActivityDetailScreen
 import com.example.ui.screens.ActivityEditorScreen
-import com.example.ui.screens.AiAssistantScreen
 import com.example.ui.screens.CategoriesScreen
 import com.example.ui.screens.FamiliesScreen
 import com.example.ui.screens.LedgerScreen
@@ -88,7 +84,6 @@ import com.example.ui.viewmodel.LedgerViewModel
 
 const val ROUTE_LEDGER = "ledger"
 const val ROUTE_FAMILIES = "families"
-const val ROUTE_AI = "ai"
 const val ROUTE_WORLD = "world"
 const val ROUTE_REMINDERS = "reminders"
 const val ROUTE_DETAIL = "detail"
@@ -103,7 +98,6 @@ private enum class TopTab(
 ) {
     LEDGER(ROUTE_LEDGER, R.string.nav_ledger, Icons.Rounded.Book, Icons.Outlined.Book),
     FAMILIES(ROUTE_FAMILIES, R.string.nav_families, Icons.Rounded.Groups, Icons.Outlined.Groups),
-    AI(ROUTE_AI, R.string.nav_ai, Icons.Rounded.Search, Icons.Outlined.Search),
     WORLD(ROUTE_WORLD, R.string.nav_world, Icons.Rounded.Public, Icons.Outlined.Public),
     REMINDERS(ROUTE_REMINDERS, R.string.nav_reminders, Icons.Rounded.Notifications, Icons.Outlined.Notifications)
 }
@@ -181,7 +175,6 @@ fun OccasionDiaryAppShell(
     val isSaving by viewModel.isSaving.collectAsStateWithLifecycle()
     val actionMessage by viewModel.actionMessage.collectAsStateWithLifecycle()
     val localBackupStatus by viewModel.localBackupStatus.collectAsStateWithLifecycle()
-    val aiSearchState by viewModel.aiSearchState.collectAsStateWithLifecycle()
     val selectedSingleFamilyId by viewModel.selectedSingleFamilyId.collectAsStateWithLifecycle()
     val singleFamilyComparisonState by viewModel.singleFamilyComparisonState.collectAsStateWithLifecycle()
 
@@ -233,7 +226,6 @@ fun OccasionDiaryAppShell(
     var prefilledQuickNeondraEventDate by remember { mutableStateOf<Long?>(null) }
     var prefilledQuickNeondraEventName by remember { mutableStateOf<String?>(null) }
     var prefilledQuickNeondraEventType by remember { mutableStateOf<String?>(null) }
-    var aiInitialTabIndex by remember { mutableIntStateOf(0) }
     var isWorldFullScreen by remember { mutableStateOf(false) }
 
     LaunchedEffect(currentRoute) {
@@ -302,9 +294,6 @@ fun OccasionDiaryAppShell(
                             NavigationBarItem(
                                 selected = selected,
                                 onClick = {
-                                    if (tab == TopTab.AI) {
-                                        aiInitialTabIndex = 0
-                                    }
                                     navController.navigate(tab.route) {
                                         popUpTo(navController.graph.findStartDestination().id) {
                                             saveState = true
@@ -345,9 +334,6 @@ fun OccasionDiaryAppShell(
                             NavigationRailItem(
                                 selected = selected,
                                 onClick = {
-                                    if (tab == TopTab.AI) {
-                                        aiInitialTabIndex = 0
-                                    }
                                     navController.navigate(tab.route) {
                                         popUpTo(navController.graph.findStartDestination().id) {
                                             saveState = true
@@ -512,32 +498,12 @@ fun OccasionDiaryAppShell(
                                     eventIds = eventIds
                                 )
                             },
-                            onActivityClick = { act ->
-                                selectedActivityId = act.id
-                                navController.navigate(ROUTE_DETAIL)
-                            }
-                        )
-                    }
-
-                    composable(ROUTE_AI) {
-                        AiAssistantScreen(
-                            dashboardState = dashboardState,
-                            aiSearchState = aiSearchState,
                             selectedSingleFamilyId = selectedSingleFamilyId,
                             singleFamilyComparisonState = singleFamilyComparisonState,
-                            initialTabIndex = aiInitialTabIndex,
-                            onRunAiSearch = { query, _ ->
-                                viewModel.runAiSearch(query, useOnlineAi = false)
-                            },
-                            onClearAiSearch = viewModel::clearAiSearch,
                             onSelectSingleFamily = viewModel::selectSingleFamilyForCompare,
                             onActivityClick = { act ->
                                 selectedActivityId = act.id
                                 navController.navigate(ROUTE_DETAIL)
-                            },
-                            onCompareThisFamily = { familyDocId ->
-                                viewModel.selectSingleFamilyForCompare(familyDocId)
-                                aiInitialTabIndex = 1
                             }
                         )
                     }

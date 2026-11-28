@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.CompareArrows
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.AccountBalanceWallet
@@ -62,7 +63,6 @@ import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -76,6 +76,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ai.SingleFamilyInOutComparison
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.DropdownCatalog
@@ -96,6 +97,12 @@ import com.example.ui.theme.OutBadgeFgDark
 import com.example.ui.theme.OutBadgeFgLight
 import com.example.ui.viewmodel.LedgerDashboardData
 import java.util.Locale
+
+enum class FamiliesTab {
+    FAMILIES,
+    EVENTS,
+    COMPARE
+}
 
 enum class FamiliesSortOrder(val label: String) {
     FN("By FN"),
@@ -231,12 +238,16 @@ fun FamiliesScreen(
     onNewActivityForEvent: (eventName: String, eventDateMillis: Long, eventType: String?) -> Unit = { _, _, _ -> },
     onRenameEventGroup: (activityIds: List<String>, eventIds: List<String>, newTitle: String) -> Unit = { _, _, _ -> },
     onDeleteEventGroup: (activityIds: List<String>, eventIds: List<String>) -> Unit = { _, _ -> },
+    selectedSingleFamilyId: String? = null,
+    singleFamilyComparisonState: UiState<SingleFamilyInOutComparison>? = null,
+    onSelectSingleFamily: (String) -> Unit = {},
     onActivityClick: (ActivityRecord) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalAppDarkTheme.current
-    var selectedTab by rememberSaveable { mutableIntStateOf(0) }
+    var selectedTab by rememberSaveable { mutableStateOf(FamiliesTab.FAMILIES) }
     var search by remember { mutableStateOf("") }
+    var compareFamilyQuery by rememberSaveable { mutableStateOf("") }
     var sortOrder by rememberSaveable { mutableStateOf(FamiliesSortOrder.FN) }
     var editingFamily by remember { mutableStateOf<FamilyProfile?>(null) }
     var showFamilyDialog by remember { mutableStateOf(false) }
@@ -246,8 +257,8 @@ fun FamiliesScreen(
     var editingEventGroup by remember { mutableStateOf<EventDirectoryGroup?>(null) }
     var deletingEventGroup by remember { mutableStateOf<EventDirectoryGroup?>(null) }
 
-    BackHandler(enabled = selectedTab == 1 && inspectingEventGroup == null) {
-        selectedTab = 0
+    BackHandler(enabled = selectedTab != FamiliesTab.FAMILIES && inspectingEventGroup == null && inspectingFamily == null) {
+        selectedTab = FamiliesTab.FAMILIES
     }
 
     val data = (state as? UiState.Success)?.data
@@ -457,7 +468,7 @@ fun FamiliesScreen(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
-            if (selectedTab == 0) {
+            if (selectedTab == FamiliesTab.FAMILIES) {
                 FloatingActionButton(
                     onClick = {
                         editingFamily = null
@@ -490,7 +501,7 @@ fun FamiliesScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                item {
+                item(key = "families_section_tabs") {
                     Card(
                         shape = RoundedCornerShape(20.dp),
                         colors = CardDefaults.cardColors(
@@ -506,11 +517,11 @@ fun FamiliesScreen(
                                 .fillMaxWidth()
                                 .padding(8.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            val familiesSelected = selectedTab == 0
+                            val familiesSelected = selectedTab == FamiliesTab.FAMILIES
                             Surface(
-                                onClick = { selectedTab = 0 },
+                                onClick = { selectedTab = FamiliesTab.FAMILIES },
                                 shape = RoundedCornerShape(14.dp),
                                 color = if (familiesSelected) {
                                     MaterialTheme.colorScheme.primary
@@ -523,13 +534,13 @@ fun FamiliesScreen(
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .heightIn(min = 48.dp)
+                                    .heightIn(min = 52.dp)
                                     .testTag("families_tab_button")
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.Groups,
@@ -539,12 +550,11 @@ fun FamiliesScreen(
                                         } else {
                                             MaterialTheme.colorScheme.primary
                                         },
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = "Families (${families.size})",
-                                        style = MaterialTheme.typography.titleSmall,
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (familiesSelected) {
                                             MaterialTheme.colorScheme.onPrimary
@@ -558,9 +568,9 @@ fun FamiliesScreen(
                                 }
                             }
 
-                            val eventsSelected = selectedTab == 1
+                            val eventsSelected = selectedTab == FamiliesTab.EVENTS
                             Surface(
-                                onClick = { selectedTab = 1 },
+                                onClick = { selectedTab = FamiliesTab.EVENTS },
                                 shape = RoundedCornerShape(14.dp),
                                 color = if (eventsSelected) {
                                     MaterialTheme.colorScheme.primary
@@ -573,13 +583,13 @@ fun FamiliesScreen(
                                 ),
                                 modifier = Modifier
                                     .weight(1f)
-                                    .heightIn(min = 48.dp)
+                                    .heightIn(min = 52.dp)
                                     .testTag("event_list_tab_button")
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.Center
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Rounded.EventNote,
@@ -589,14 +599,62 @@ fun FamiliesScreen(
                                         } else {
                                             MaterialTheme.colorScheme.tertiary
                                         },
-                                        modifier = Modifier.size(20.dp)
+                                        modifier = Modifier.size(18.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Event List (${eventGroups.size})",
-                                        style = MaterialTheme.typography.titleSmall,
+                                        text = "Events (${eventGroups.size})",
+                                        fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (eventsSelected) {
+                                            MaterialTheme.colorScheme.onPrimary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        },
+                                        maxLines = 1,
+                                        softWrap = false,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+
+                            val compareSelected = selectedTab == FamiliesTab.COMPARE
+                            Surface(
+                                onClick = { selectedTab = FamiliesTab.COMPARE },
+                                shape = RoundedCornerShape(14.dp),
+                                color = if (compareSelected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)
+                                },
+                                border = if (compareSelected) null else BorderStroke(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .heightIn(min = 52.dp)
+                                    .testTag("families_compare_tab_button")
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Rounded.CompareArrows,
+                                        contentDescription = null,
+                                        tint = if (compareSelected) {
+                                            MaterialTheme.colorScheme.onPrimary
+                                        } else {
+                                            MaterialTheme.colorScheme.secondary
+                                        },
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = "Compare",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (compareSelected) {
                                             MaterialTheme.colorScheme.onPrimary
                                         } else {
                                             MaterialTheme.colorScheme.onSurface
@@ -611,175 +669,195 @@ fun FamiliesScreen(
                     }
                 }
 
-                item {
-                    OutlinedTextField(
-                        value = search,
-                        onValueChange = { search = it },
-                        placeholder = {
-                            Text(if (selectedTab == 0) "Search families..." else "Search events...")
-                        },
-                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(16.dp),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("families_search_input")
-                    )
-                }
+                if (selectedTab != FamiliesTab.COMPARE) {
+                    item(key = "families_search_bar") {
+                        OutlinedTextField(
+                            value = search,
+                            onValueChange = { search = it },
+                            placeholder = {
+                                Text(if (selectedTab == FamiliesTab.FAMILIES) "Search families..." else "Search events...")
+                            },
+                            leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("families_search_input")
+                        )
+                    }
 
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    item(key = "families_sort_row") {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.Sort,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = "Sort:",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        FamiliesSortOrder.entries.forEach { option ->
-                            val isSelected = sortOrder == option
-                            FilterChip(
-                                selected = isSelected,
-                                onClick = { sortOrder = option },
-                                label = {
-                                    Text(
-                                        text = option.label,
-                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                },
-                                leadingIcon = if (isSelected) {
-                                    {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Check,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Rounded.Sort,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    text = "Sort:",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            FamiliesSortOrder.entries.forEach { option ->
+                                val isSelected = sortOrder == option
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { sortOrder = option },
+                                    label = {
+                                        Text(
+                                            text = option.label,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
-                                    }
-                                } else null,
-                                shape = RoundedCornerShape(12.dp),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                ),
-                                modifier = Modifier
-                                    .minimumInteractiveComponentSize()
-                                    .testTag("families_sort_${option.name.lowercase(Locale.ENGLISH)}")
-                            )
+                                    },
+                                    leadingIcon = if (isSelected) {
+                                        {
+                                            Icon(
+                                                imageVector = Icons.Rounded.Check,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    } else null,
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        selectedLeadingIconColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    ),
+                                    modifier = Modifier
+                                        .minimumInteractiveComponentSize()
+                                        .testTag("families_sort_${option.name.lowercase(Locale.ENGLISH)}")
+                                )
+                            }
                         }
                     }
                 }
 
-                if (selectedTab == 0) {
-                    if (filteredFamilies.isEmpty()) {
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.Groups,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(44.dp)
-                                )
-                                Text(
-                                    text = "No families saved yet",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    } else {
-                        items(filteredFamilies, key = { it.id }) { family ->
-                            val famActs = activitiesByFamilyDocId[family.id].orEmpty()
-                            val summary = computeFamilyFinancialSummary(famActs)
-
-                            FamilyDirectoryCard(
-                                family = family,
-                                entriesCount = famActs.size,
-                                summary = summary,
-                                isDark = isDark,
-                                onCardClick = { inspectingFamily = family },
-                                onEditClick = {
-                                    editingFamily = family
-                                    showFamilyDialog = true
-                                },
-                                onDeleteClick = { deletingFamily = family },
-                                onQuickNeondraClick = { onQuickNeondraForFamily(family) },
-                                onNewEntryClick = { onNewActivityForFamily(family) }
-                            )
-                        }
-                    }
-                } else {
-                    if (filteredEventGroups.isEmpty()) {
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Rounded.EventNote,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(44.dp)
-                                )
-                                Text(
-                                    text = "No events found yet",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                        }
-                    } else {
-                        items(filteredEventGroups, key = { it.key }) { eventGroup ->
-                            EventDirectoryCard(
-                                group = eventGroup,
-                                catalog = catalog,
-                                isDark = isDark,
-                                onCardClick = { inspectingEventGroup = eventGroup },
-                                onEditClick = { editingEventGroup = eventGroup },
-                                onDeleteClick = { deletingEventGroup = eventGroup },
-                                onQuickNeondraClick = {
-                                    onQuickNeondraForEvent(
-                                        eventGroup.title,
-                                        eventGroup.dayStartMillis,
-                                        eventGroup.eventTypes.firstOrNull()
+                when (selectedTab) {
+                    FamiliesTab.FAMILIES -> {
+                        if (filteredFamilies.isEmpty()) {
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Groups,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(44.dp)
                                     )
-                                },
-                                onNewEntryClick = {
-                                    onNewActivityForEvent(
-                                        eventGroup.title,
-                                        eventGroup.dayStartMillis,
-                                        eventGroup.eventTypes.firstOrNull()
+                                    Text(
+                                        text = "No families saved yet",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        textAlign = TextAlign.Center
                                     )
                                 }
-                            )
+                            }
+                        } else {
+                            items(filteredFamilies, key = { it.id }) { family ->
+                                val famActs = activitiesByFamilyDocId[family.id].orEmpty()
+                                val summary = computeFamilyFinancialSummary(famActs)
+
+                                FamilyDirectoryCard(
+                                    family = family,
+                                    entriesCount = famActs.size,
+                                    summary = summary,
+                                    isDark = isDark,
+                                    onCardClick = { inspectingFamily = family },
+                                    onEditClick = {
+                                        editingFamily = family
+                                        showFamilyDialog = true
+                                    },
+                                    onDeleteClick = { deletingFamily = family },
+                                    onQuickNeondraClick = { onQuickNeondraForFamily(family) },
+                                    onNewEntryClick = { onNewActivityForFamily(family) }
+                                )
+                            }
                         }
+                    }
+
+                    FamiliesTab.EVENTS -> {
+                        if (filteredEventGroups.isEmpty()) {
+                            item {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(32.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.EventNote,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(44.dp)
+                                    )
+                                    Text(
+                                        text = "No events found yet",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        } else {
+                            items(filteredEventGroups, key = { it.key }) { eventGroup ->
+                                EventDirectoryCard(
+                                    group = eventGroup,
+                                    catalog = catalog,
+                                    isDark = isDark,
+                                    onCardClick = { inspectingEventGroup = eventGroup },
+                                    onEditClick = { editingEventGroup = eventGroup },
+                                    onDeleteClick = { deletingEventGroup = eventGroup },
+                                    onQuickNeondraClick = {
+                                        onQuickNeondraForEvent(
+                                            eventGroup.title,
+                                            eventGroup.dayStartMillis,
+                                            eventGroup.eventTypes.firstOrNull()
+                                        )
+                                    },
+                                    onNewEntryClick = {
+                                        onNewActivityForEvent(
+                                            eventGroup.title,
+                                            eventGroup.dayStartMillis,
+                                            eventGroup.eventTypes.firstOrNull()
+                                        )
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    FamiliesTab.COMPARE -> {
+                        familiesCompareContent(
+                            families = families,
+                            catalog = catalog,
+                            isDark = isDark,
+                            compareFamilyQuery = compareFamilyQuery,
+                            onCompareFamilyQueryChange = { compareFamilyQuery = it },
+                            selectedSingleFamilyId = selectedSingleFamilyId,
+                            singleFamilyComparisonState = singleFamilyComparisonState,
+                            onSelectSingleFamily = onSelectSingleFamily,
+                            onActivityClick = onActivityClick
+                        )
                     }
                 }
             }
