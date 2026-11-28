@@ -8,7 +8,6 @@ import android.net.http.SslError
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.view.View
 import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
@@ -57,6 +56,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -72,29 +72,24 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 const val WORLD_WEBSITE_URL = "https://raizan.gamer.free"
 
-private fun isEmulatorEnvironment(): Boolean {
-    return Build.FINGERPRINT.startsWith("generic") ||
-        Build.FINGERPRINT.startsWith("unknown") ||
-        Build.MODEL.contains("google_sdk") ||
-        Build.MODEL.contains("Emulator") ||
-        Build.MODEL.contains("Android SDK built for x86") ||
-        Build.MANUFACTURER.contains("Genymotion") ||
-        Build.HARDWARE.contains("goldfish") ||
-        Build.HARDWARE.contains("ranchu") ||
-        Build.PRODUCT.contains("sdk") ||
-        Build.PRODUCT.contains("emulator")
-}
-
-private fun disposeWebViewSafely(webView: WebView) {
+private fun disposeWebViewSafely(
+    webView: WebView,
+    detachFromParent: Boolean = false
+) {
     runCatching {
         webView.stopLoading()
         webView.webChromeClient = null
         webView.webViewClient = WebViewClient()
         webView.onPause()
-        (webView.parent as? ViewGroup)?.removeView(webView)
+        if (detachFromParent) {
+            (webView.parent as? ViewGroup)?.removeView(webView)
+        }
         webView.removeAllViews()
         webView.destroy()
     }
@@ -108,12 +103,13 @@ fun WorldScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val mainHandler = remember { Handler(Looper.getMainLooper()) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var webViewGeneration by remember { mutableIntStateOf(0) }
-    var useSoftwareLayer by remember { mutableStateOf(isEmulatorEnvironment()) }
     var crashRecoveryAttempts by remember { mutableIntStateOf(0) }
     var rendererCrashed by remember { mutableStateOf(false) }
+    var pendingRecoveryOnResume by remember { mutableStateOf(false) }
     var pendingLoadUrl by remember { mutableStateOf(WORLD_WEBSITE_URL) }
     var progress by remember { mutableIntStateOf(0) }
     var canGoBack by remember { mutableStateOf(false) }
@@ -122,6 +118,32 @@ fun WorldScreen(
     var hasError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var triedHttpFallback by remember { mutableStateOf(false) }
+
+    DisposableEffect(lifecycleOwner, webViewRef) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_RESUME -> {
+                    webViewRef?.onResume()
+                    if (pendingRecoveryOnResume) {
+                        pendingRecoveryOnResume = false
+                        rendererCrashed = false
+                        hasError = false
+                        errorMessage = null
+                        pendingLoadUrl = currentUrl.ifBlank { WORLD_WEBSITE_URL }
+                        webViewGeneration++
+                    }
+                }
+                Lifecycle.Event.ON_PAUSE -> {
+                    webViewRef?.onPause()
+                }
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     BackHandler(enabled = isFullScreen || (canGoBack && !rendererCrashed)) {
         if (isFullScreen) {
@@ -275,16 +297,12 @@ fun WorldScreen(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
                                 )
-                                if (useSoftwareLayer) {
-                                    setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                                }
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                                     setRendererPriorityPolicy(
                                         WebView.RENDERER_PRIORITY_IMPORTANT,
-                                        true
+                                        false
                                     )
                                 }
-                                onResume()
                                 settings.apply {
                                     javaScriptEnabled = true
                                     domStorageEnabled = true
@@ -294,14 +312,22 @@ fun WorldScreen(
                                     builtInZoomControls = true
                                     displayZoomControls = false
                                     setSupportZoom(true)
-                                    mediaPlaybackRequiresUserGesture = false
+                                    mediaPlaybackRequiresUserGesture = true
                                     mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                                     cacheMode = WebSettings.LOAD_DEFAULT
                                     allowFileAccess = false
                                     allowContentAccess = true
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                        offscreenPreRaster = false
+                                    }
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                        safeBrowsingEnabled = false
+                                    }
                                 }
-                                CookieManager.getInstance().setAcceptCookie(true)
-                                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                                runCatching {
+                                    CookieManager.getInstance().setAcceptCookie(true)
+                                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                                }
                                 webChromeClient = object : WebChromeClient() {
                                     override fun onProgressChanged(view: WebView?, newProgress: Int) {
                                         progress = newProgress
@@ -386,14 +412,18 @@ fun WorldScreen(
                                         if (webViewRef === view) {
                                             webViewRef = null
                                         }
-                                        view?.let { disposeWebViewSafely(it) }
+                                        view?.let { disposeWebViewSafely(it, detachFromParent = true) }
                                         mainHandler.post {
                                             progress = 100
                                             canGoBack = false
                                             canGoForward = false
-                                            if (crashRecoveryAttempts < 1) {
+                                            val isForeground = lifecycleOwner.lifecycle.currentState
+                                                .isAtLeast(Lifecycle.State.RESUMED)
+                                            if (!isForeground) {
+                                                pendingRecoveryOnResume = true
+                                                rendererCrashed = true
+                                            } else if (detail?.didCrash() == false && crashRecoveryAttempts < 1) {
                                                 crashRecoveryAttempts++
-                                                useSoftwareLayer = true
                                                 hasError = false
                                                 errorMessage = null
                                                 pendingLoadUrl = currentUrl.ifBlank { WORLD_WEBSITE_URL }
@@ -408,14 +438,22 @@ fun WorldScreen(
                                     }
                                 }
                                 webViewRef = this
-                                loadUrl(pendingLoadUrl)
+                                val targetUrl = pendingLoadUrl
+                                post {
+                                    if (webViewRef === this) {
+                                        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                                            onResume()
+                                        }
+                                        loadUrl(targetUrl)
+                                    }
+                                }
                             }
                         },
                         onRelease = { view ->
                             if (webViewRef === view) {
                                 webViewRef = null
                             }
-                            disposeWebViewSafely(view)
+                            disposeWebViewSafely(view, detachFromParent = false)
                         }
                     )
                 }

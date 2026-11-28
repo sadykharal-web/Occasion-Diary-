@@ -435,6 +435,23 @@ fun OccasionDiaryAppShell(
                                 prefilledEventType = eventType
                                 navController.navigate(ROUTE_EDITOR)
                             },
+                            onSaveFamily = { fam -> viewModel.saveFamily(context, fam) },
+                            onDeleteFamily = { id -> viewModel.deleteFamily(context, id) },
+                            onQuickNeondraForFamily = { fam ->
+                                prefilledQuickNeondraFamily = fam
+                                prefilledQuickNeondraEventDate = null
+                                prefilledQuickNeondraEventName = null
+                                prefilledQuickNeondraEventType = null
+                                showQuickNeondraSheet = true
+                            },
+                            onNewActivityForFamily = { fam ->
+                                editingActivity = null
+                                prefilledFamily = fam
+                                prefilledDateMillis = null
+                                prefilledEventName = null
+                                prefilledEventType = null
+                                navController.navigate(ROUTE_EDITOR)
+                            },
                             onAddClick = {
                                 editingActivity = null
                                 prefilledFamily = null

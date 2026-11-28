@@ -954,6 +954,57 @@ class LedgerLogicTest {
             com.example.ui.screens.sortEventDirectoryGroups(groups, com.example.ui.screens.FamiliesSortOrder.EVENT).map { it.key }
         )
     }
+
+    @Test
+    fun `EventsSectionViewMode order and filterAndSortFamiliesForLedger work cleanly`() {
+        assertEquals(
+            listOf(
+                com.example.ui.screens.EventsSectionViewMode.FAMILIES,
+                com.example.ui.screens.EventsSectionViewMode.EVENTS,
+                com.example.ui.screens.EventsSectionViewMode.ALL_ENTRIES
+            ),
+            com.example.ui.screens.EventsSectionViewMode.entries
+        )
+
+        val f1 = FamilyProfile(id = "f1", familyId = "10", name = "Zafar", address = "Lahore")
+        val f2 = FamilyProfile(id = "f2", familyId = "2", name = "Bilal", address = "Multan")
+        val f3 = FamilyProfile(id = "f3", familyId = "5", name = "Asif", address = "Lahore")
+        val families = listOf(f1, f2, f3)
+        val filteredActs = listOf(
+            ActivityRecord(id = "a1", familyDocId = "f1", familyId = "10", name = "Zafar", eventType = "شادی", eventDetail = "Walima", eventDateMillis = 3000L),
+            ActivityRecord(id = "a2", familyDocId = "f2", familyId = "2", name = "Bilal", eventType = "نکاح", eventDetail = "Nikah", eventDateMillis = 2000L)
+        )
+
+        val defaultByFn = com.example.ui.screens.filterAndSortFamiliesForLedger(
+            families = families,
+            filteredActivities = filteredActs,
+            searchQuery = "",
+            selectedAddress = null,
+            hasEntryLevelFilters = false,
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.FN
+        )
+        assertEquals(listOf("f2", "f3", "f1"), defaultByFn.map { it.first.id })
+
+        val onlyWithEntriesByName = com.example.ui.screens.filterAndSortFamiliesForLedger(
+            families = families,
+            filteredActivities = filteredActs,
+            searchQuery = "",
+            selectedAddress = null,
+            hasEntryLevelFilters = true,
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.NAME_AZ
+        )
+        assertEquals(listOf("f2", "f1"), onlyWithEntriesByName.map { it.first.id })
+
+        val byEventType = com.example.ui.screens.filterAndSortFamiliesForLedger(
+            families = families,
+            filteredActivities = filteredActs,
+            searchQuery = "",
+            selectedAddress = null,
+            hasEntryLevelFilters = true,
+            sortOrder = com.example.ui.viewmodel.LedgerSortOrder.EVENT_TYPE
+        )
+        assertEquals(listOf("f1", "f2"), byEventType.map { it.first.id })
+    }
 }
 
 

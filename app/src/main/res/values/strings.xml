@@ -3,7 +3,7 @@
     <string name="app_tagline">Offline family ledger, In/Out tracker, reminders &amp; comparisons</string>
 
     <!-- Navigation -->
-    <string name="nav_ledger">Ledger</string>
+    <string name="nav_ledger">Events</string>
     <string name="nav_families">Families</string>
     <string name="nav_ai">Search</string>
     <string name="nav_world">World</string>

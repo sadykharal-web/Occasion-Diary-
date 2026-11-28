@@ -789,7 +789,7 @@ fun FamiliesScreen(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun FamilyDirectoryCard(
+internal fun FamilyDirectoryCard(
     family: FamilyProfile,
     entriesCount: Int,
     summary: FamilyFinancialSummary,
@@ -1166,7 +1166,7 @@ internal fun FamilyCategoryInOutChip(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-private fun FamilyEntriesBottomSheet(
+internal fun FamilyEntriesBottomSheet(
     family: FamilyProfile,
     entries: List<ActivityRecord>,
     catalog: DropdownCatalog,
@@ -1426,7 +1426,7 @@ private fun FamilyEntriesBottomSheet(
 }
 
 @Composable
-private fun FamilyEditorDialog(
+internal fun FamilyEditorDialog(
     initial: FamilyProfile?,
     suggestedFn: String,
     onDismiss: () -> Unit,

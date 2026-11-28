@@ -78,6 +78,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,9 +90,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.ActivityDirection
 import com.example.data.ActivityRecord
 import com.example.data.EventEntry
+import com.example.data.FamilyIdentityMatcher
+import com.example.data.FamilyProfile
 import com.example.data.UiState
 import com.example.ui.components.CategoryBadge
 import com.example.ui.components.DirectionPill
@@ -116,6 +120,12 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.concurrent.TimeUnit
 
+enum class EventsSectionViewMode(val label: String) {
+    FAMILIES("Families"),
+    EVENTS("Events"),
+    ALL_ENTRIES("All Entries")
+}
+
 data class SameDateEventGroup(
     val groupKey: String,
     val eventName: String,
@@ -126,6 +136,79 @@ data class SameDateEventGroup(
     val totalOut: Long
 ) {
     val netBalance: Long get() = totalIn - totalOut
+}
+
+internal fun filterAndSortFamiliesForLedger(
+    families: List<FamilyProfile>,
+    filteredActivities: List<ActivityRecord>,
+    searchQuery: String,
+    selectedAddress: String?,
+    hasEntryLevelFilters: Boolean,
+    sortOrder: LedgerSortOrder
+): List<Pair<FamilyProfile, List<ActivityRecord>>> {
+    val q = searchQuery.trim()
+    val matched = families.mapNotNull { family ->
+        val famActs = filteredActivities.filter { act ->
+            FamilyIdentityMatcher.activityBelongsToFamily(act, family)
+        }
+        val matchesSearch = q.isEmpty() ||
+            family.name.contains(q, ignoreCase = true) ||
+            family.familyId.contains(q, ignoreCase = true) ||
+            family.fatherName.contains(q, ignoreCase = true) ||
+            family.address.contains(q, ignoreCase = true) ||
+            famActs.isNotEmpty()
+        val matchesAddress = selectedAddress == null ||
+            family.address.equals(selectedAddress, ignoreCase = true) ||
+            famActs.isNotEmpty()
+        val matchesEntryFilter = !hasEntryLevelFilters || famActs.isNotEmpty()
+        if (matchesSearch && matchesAddress && matchesEntryFilter) {
+            family to famActs
+        } else {
+            null
+        }
+    }
+
+    return when (sortOrder) {
+        LedgerSortOrder.FN -> matched.sortedWith(
+            compareBy<Pair<FamilyProfile, List<ActivityRecord>>> { it.first.familyId.trim().isEmpty() }
+                .thenBy { it.first.familyId.trim().toIntOrNull() ?: Int.MAX_VALUE }
+                .thenBy { it.first.familyId.trim().lowercase(Locale.ENGLISH) }
+                .thenBy { it.first.name.trim().lowercase(Locale.ENGLISH) }
+        )
+        LedgerSortOrder.NAME_AZ -> matched.sortedWith(
+            compareBy<Pair<FamilyProfile, List<ActivityRecord>>> { it.first.name.trim().isEmpty() }
+                .thenBy { it.first.name.trim().lowercase(Locale.ENGLISH) }
+                .thenBy { it.first.familyId.trim().toIntOrNull() ?: Int.MAX_VALUE }
+        )
+        LedgerSortOrder.EVENT_NAME -> matched.sortedWith(
+            compareBy<Pair<FamilyProfile, List<ActivityRecord>>> { (_, acts) ->
+                val latest = acts.maxByOrNull { it.eventDateMillis }
+                val label = latest?.eventDetail?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: latest?.eventType?.trim().orEmpty()
+                label.isEmpty()
+            }
+                .thenBy { (_, acts) ->
+                    val latest = acts.maxByOrNull { it.eventDateMillis }
+                    val label = latest?.eventDetail?.trim()?.takeIf { it.isNotEmpty() }
+                        ?: latest?.eventType?.trim().orEmpty()
+                    label.lowercase(Locale.ENGLISH)
+                }
+                .thenByDescending { (_, acts) -> acts.maxOfOrNull { it.eventDateMillis } ?: Long.MIN_VALUE }
+                .thenBy { it.first.familyId.trim().toIntOrNull() ?: Int.MAX_VALUE }
+        )
+        LedgerSortOrder.EVENT_TYPE -> matched.sortedWith(
+            compareBy<Pair<FamilyProfile, List<ActivityRecord>>> { (_, acts) ->
+                val latest = acts.maxByOrNull { it.eventDateMillis }
+                latest?.eventType?.trim().orEmpty().isEmpty()
+            }
+                .thenBy { (_, acts) ->
+                    val latest = acts.maxByOrNull { it.eventDateMillis }
+                    latest?.eventType?.trim().orEmpty().lowercase(Locale.ENGLISH)
+                }
+                .thenByDescending { (_, acts) -> acts.maxOfOrNull { it.eventDateMillis } ?: Long.MIN_VALUE }
+                .thenBy { it.first.familyId.trim().toIntOrNull() ?: Int.MAX_VALUE }
+        )
+    }
 }
 
 private fun compareByFnRecord(a: ActivityRecord, b: ActivityRecord): Int {
@@ -431,13 +514,20 @@ fun LedgerScreen(
     onEditActivityClick: (ActivityRecord) -> Unit = onActivityClick,
     onAddNeondraToEventList: (eventName: String, eventDateMillis: Long, eventType: String) -> Unit = { _, _, _ -> },
     onAddToEventList: (eventName: String, eventDateMillis: Long, eventType: String) -> Unit = { _, _, _ -> },
+    onSaveFamily: (FamilyProfile) -> Unit = {},
+    onDeleteFamily: (String) -> Unit = {},
+    onQuickNeondraForFamily: (FamilyProfile) -> Unit = {},
+    onNewActivityForFamily: (FamilyProfile) -> Unit = {},
     onAddClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val isDark = LocalAppDarkTheme.current
     var showDateRangeDialog by remember { mutableStateOf(false) }
-    var showEventListsMode by remember { mutableStateOf(false) }
+    var viewMode by rememberSaveable { mutableStateOf(EventsSectionViewMode.FAMILIES) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var inspectingFamily by remember { mutableStateOf<FamilyProfile?>(null) }
+    var editingFamily by remember { mutableStateOf<FamilyProfile?>(null) }
+    var deletingFamily by remember { mutableStateOf<FamilyProfile?>(null) }
 
     if (showDateRangeDialog) {
         LedgerDateRangePickerDialog(
@@ -454,6 +544,79 @@ fun LedgerScreen(
         )
     }
 
+    val successData = (state as? UiState.Success)?.data
+    editingFamily?.let { famToEdit ->
+        FamilyEditorDialog(
+            initial = famToEdit,
+            suggestedFn = successData?.catalog?.nextSuggestedFamilyId ?: "1",
+            onDismiss = { editingFamily = null },
+            onConfirm = { profile ->
+                editingFamily = null
+                onSaveFamily(profile)
+            }
+        )
+    }
+
+    deletingFamily?.let { famToDelete ->
+        val linkedCount = successData?.activities?.count {
+            FamilyIdentityMatcher.activityBelongsToFamily(it, famToDelete)
+        } ?: 0
+        AlertDialog(
+            onDismissRequest = { deletingFamily = null },
+            title = { Text("Delete Family (FN ${famToDelete.familyId})?") },
+            text = {
+                Text(
+                    buildString {
+                        append("Are you sure you want to delete \"${famToDelete.name}\" (FN ${famToDelete.familyId})?")
+                        if (linkedCount > 0) {
+                            append("\n\nThis family currently has $linkedCount ledger ")
+                            append(if (linkedCount == 1) "entry." else "entries.")
+                        }
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deletingFamily = null
+                        onDeleteFamily(famToDelete.id)
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deletingFamily = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    inspectingFamily?.let { fam ->
+        val famActs = (successData?.activities ?: emptyList())
+            .filter { FamilyIdentityMatcher.activityBelongsToFamily(it, fam) }
+            .sortedByDescending { it.eventDateMillis }
+        FamilyEntriesBottomSheet(
+            family = fam,
+            entries = famActs,
+            catalog = successData?.catalog ?: com.example.data.DropdownCatalog(),
+            onDismiss = { inspectingFamily = null },
+            onQuickNeondra = {
+                inspectingFamily = null
+                onQuickNeondraForFamily(fam)
+            },
+            onNewEntry = {
+                inspectingFamily = null
+                onNewActivityForFamily(fam)
+            },
+            onEntryClick = { record ->
+                inspectingFamily = null
+                onActivityClick(record)
+            }
+        )
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         floatingActionButton = {
@@ -465,7 +628,7 @@ fun LedgerScreen(
             ) {
                 Icon(
                     imageVector = Icons.Rounded.Add,
-                    contentDescription = "Add Ledger Entry"
+                    contentDescription = "Add Entry"
                 )
             }
         }
@@ -543,6 +706,28 @@ fun LedgerScreen(
 
                     val sameDateEventLists = remember(filteredList, sortOrder) {
                         buildSameDateEventLists(filteredList, sortOrder)
+                    }
+
+                    val hasEntryLevelFilters = selectedFilter != LedgerFilter.ALL ||
+                        selectedEventTypes.isNotEmpty() ||
+                        dateRangeFilter.isActive
+
+                    val ledgerFamilies = remember(
+                        data.families,
+                        filteredList,
+                        searchQuery,
+                        selectedAddress,
+                        hasEntryLevelFilters,
+                        sortOrder
+                    ) {
+                        filterAndSortFamiliesForLedger(
+                            families = data.families,
+                            filteredActivities = filteredList,
+                            searchQuery = searchQuery,
+                            selectedAddress = selectedAddress,
+                            hasEntryLevelFilters = hasEntryLevelFilters,
+                            sortOrder = sortOrder
+                        )
                     }
 
                     val availableEventTypes = remember(data.catalog.eventTypes, data.activities) {
@@ -644,22 +829,33 @@ fun LedgerScreen(
                         }
 
                         item(key = "ledger_view_mode_toggle") {
+                            val modes = EventsSectionViewMode.entries
                             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                                SegmentedButton(
-                                    selected = !showEventListsMode,
-                                    onClick = { showEventListsMode = false },
-                                    shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                                    modifier = Modifier.testTag("ledger_mode_all_entries")
-                                ) {
-                                    Text("All Entries (${filteredList.size})")
-                                }
-                                SegmentedButton(
-                                    selected = showEventListsMode,
-                                    onClick = { showEventListsMode = true },
-                                    shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                                    modifier = Modifier.testTag("ledger_mode_event_lists")
-                                ) {
-                                    Text("Event Lists (${sameDateEventLists.size})")
+                                modes.forEachIndexed { index, mode ->
+                                    val count = when (mode) {
+                                        EventsSectionViewMode.FAMILIES -> ledgerFamilies.size
+                                        EventsSectionViewMode.EVENTS -> sameDateEventLists.size
+                                        EventsSectionViewMode.ALL_ENTRIES -> filteredList.size
+                                    }
+                                    val isSelected = viewMode == mode
+                                    SegmentedButton(
+                                        selected = isSelected,
+                                        onClick = { viewMode = mode },
+                                        shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size),
+                                        icon = {},
+                                        modifier = Modifier
+                                            .minimumInteractiveComponentSize()
+                                            .testTag("events_mode_${mode.name.lowercase(Locale.ENGLISH)}")
+                                    ) {
+                                        Text(
+                                            text = "${mode.label} ($count)",
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -675,10 +871,10 @@ fun LedgerScreen(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = if (showEventListsMode) {
-                                            "Same-Date Event Lists (${sameDateEventLists.size})"
-                                        } else {
-                                            "Ledger Entries (${filteredList.size})"
+                                        text = when (viewMode) {
+                                            EventsSectionViewMode.FAMILIES -> "Families (${ledgerFamilies.size})"
+                                            EventsSectionViewMode.EVENTS -> "Events (${sameDateEventLists.size})"
+                                            EventsSectionViewMode.ALL_ENTRIES -> "All Entries (${filteredList.size})"
                                         },
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
@@ -872,63 +1068,98 @@ fun LedgerScreen(
                             }
                         }
 
-                        if (showEventListsMode) {
-                            if (sameDateEventLists.isEmpty()) {
-                                item(key = "event_lists_empty") {
-                                    EmptyEventListsCard(
-                                        onQuickNeondraClick = onQuickNeondraClick,
-                                        onAddClick = onAddClick
-                                    )
+                        when (viewMode) {
+                            EventsSectionViewMode.FAMILIES -> {
+                                if (ledgerFamilies.isEmpty()) {
+                                    item(key = "ledger_families_empty") {
+                                        EmptyLedgerState(
+                                            hasAnyData = data.families.isNotEmpty() || data.activities.isNotEmpty(),
+                                            onAddClick = onAddClick
+                                        )
+                                    }
+                                } else {
+                                    items(
+                                        items = ledgerFamilies,
+                                        key = { "events_family_${it.first.id}" }
+                                    ) { (family, famActs) ->
+                                        val summary = computeFamilyFinancialSummary(famActs)
+                                        FamilyDirectoryCard(
+                                            family = family,
+                                            entriesCount = famActs.size,
+                                            summary = summary,
+                                            isDark = isDark,
+                                            onCardClick = { inspectingFamily = family },
+                                            onEditClick = { editingFamily = family },
+                                            onDeleteClick = { deletingFamily = family },
+                                            onQuickNeondraClick = { onQuickNeondraForFamily(family) },
+                                            onNewEntryClick = { onNewActivityForFamily(family) }
+                                        )
+                                    }
                                 }
-                            } else {
-                                items(
-                                    items = sameDateEventLists,
-                                    key = { "event_group_${it.groupKey}" }
-                                ) { group ->
-                                    SameDateEventGroupCard(
-                                        group = group,
-                                        catalog = data.catalog,
-                                        onEntryClick = onActivityClick,
-                                        onAddNeondraClick = {
-                                            onAddNeondraToEventList(
-                                                group.eventName,
-                                                group.eventDayStartMillis,
-                                                group.eventTypes.firstOrNull().orEmpty()
-                                            )
-                                        },
-                                        onAddFullEntryClick = {
-                                            onAddToEventList(
-                                                group.eventName,
-                                                group.eventDayStartMillis,
-                                                group.eventTypes.firstOrNull().orEmpty()
+                            }
+
+                            EventsSectionViewMode.EVENTS -> {
+                                if (sameDateEventLists.isEmpty()) {
+                                    item(key = "event_lists_empty") {
+                                        EmptyEventListsCard(
+                                            onQuickNeondraClick = onQuickNeondraClick,
+                                            onAddClick = onAddClick
+                                        )
+                                    }
+                                } else {
+                                    items(
+                                        items = sameDateEventLists,
+                                        key = { "event_group_${it.groupKey}" }
+                                    ) { group ->
+                                        SameDateEventGroupCard(
+                                            group = group,
+                                            catalog = data.catalog,
+                                            onEntryClick = onActivityClick,
+                                            onAddNeondraClick = {
+                                                onAddNeondraToEventList(
+                                                    group.eventName,
+                                                    group.eventDayStartMillis,
+                                                    group.eventTypes.firstOrNull().orEmpty()
+                                                )
+                                            },
+                                            onAddFullEntryClick = {
+                                                onAddToEventList(
+                                                    group.eventName,
+                                                    group.eventDayStartMillis,
+                                                    group.eventTypes.firstOrNull().orEmpty()
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+
+                            EventsSectionViewMode.ALL_ENTRIES -> {
+                                if (filteredList.isEmpty()) {
+                                    item(key = "ledger_empty") {
+                                        EmptyLedgerState(
+                                            hasAnyData = data.activities.isNotEmpty(),
+                                            onAddClick = onAddClick
+                                        )
+                                    }
+                                } else {
+                                    items(
+                                        items = filteredList,
+                                        key = { "ledger_${it.id}" }
+                                    ) { activity ->
+                                        val (catColor, catIcon) = data.catalog.resolveCategoryVisual(activity.eventType)
+                                        SwipeToEditContainer(
+                                            editLabel = "Edit",
+                                            onEdit = { onEditActivityClick(activity) }
+                                        ) {
+                                            ActivitySummaryCard(
+                                                record = activity,
+                                                categoryColor = catColor,
+                                                categoryIcon = catIcon,
+                                                onClick = { onActivityClick(activity) }
                                             )
                                         }
-                                    )
-                                }
-                            }
-                        } else if (filteredList.isEmpty()) {
-                            item(key = "ledger_empty") {
-                                EmptyLedgerState(
-                                    hasAnyData = data.activities.isNotEmpty(),
-                                    onAddClick = onAddClick
-                                )
-                            }
-                        } else {
-                            items(
-                                items = filteredList,
-                                key = { "ledger_${it.id}" }
-                            ) { activity ->
-                                val (catColor, catIcon) = data.catalog.resolveCategoryVisual(activity.eventType)
-                                SwipeToEditContainer(
-                                    editLabel = "Edit",
-                                    onEdit = { onEditActivityClick(activity) }
-                                ) {
-                                    ActivitySummaryCard(
-                                        record = activity,
-                                        categoryColor = catColor,
-                                        categoryIcon = catIcon,
-                                        onClick = { onActivityClick(activity) }
-                                    )
+                                    }
                                 }
                             }
                         }
