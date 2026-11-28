@@ -895,87 +895,10 @@ private fun FamilyDirectoryCard(
                 }
             }
 
-            // Overall In / Out Summary Bar
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Surface(
-                    color = inColor.copy(alpha = if (isDark) 0.16f else 0.11f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
-                        Text("Total In", style = MaterialTheme.typography.labelSmall, color = inColor)
-                        Text(
-                            text = formatNeondraAmount(summary.totalIn),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = JakartaSansFamily,
-                            color = inColor
-                        )
-                    }
-                }
-                Surface(
-                    color = outColor.copy(alpha = if (isDark) 0.16f else 0.11f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
-                        Text("Total Out", style = MaterialTheme.typography.labelSmall, color = outColor)
-                        Text(
-                            text = formatNeondraAmount(summary.totalOut),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = JakartaSansFamily,
-                            color = outColor
-                        )
-                    }
-                }
-            }
-
-            // Category Breakdown (نقد, ہار, سلامی, نیوندرا, ہوم گفٹ) In & Out
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                FamilyCategoryInOutChip(
-                    label = "نقد",
-                    inText = formatNeondraAmount(summary.cashIn),
-                    outText = formatNeondraAmount(summary.cashOut),
-                    accent = cashAccent,
-                    isDark = isDark
-                )
-                FamilyCategoryInOutChip(
-                    label = "ہار",
-                    inText = formatNeondraAmount(summary.haarIn),
-                    outText = formatNeondraAmount(summary.haarOut),
-                    accent = haarAccent,
-                    isDark = isDark
-                )
-                FamilyCategoryInOutChip(
-                    label = "سلامی",
-                    inText = formatNeondraAmount(summary.salamiIn),
-                    outText = formatNeondraAmount(summary.salamiOut),
-                    accent = salamiAccent,
-                    isDark = isDark
-                )
-                FamilyCategoryInOutChip(
-                    label = "نیوندرا",
-                    inText = formatNeondraAmount(summary.neondraIn),
-                    outText = formatNeondraAmount(summary.neondraOut),
-                    accent = neondraAccent,
-                    isDark = isDark
-                )
-                FamilyCategoryInOutChip(
-                    label = "ہوم گفٹ",
-                    inText = "${summary.homeGiftInCount}",
-                    outText = "${summary.homeGiftOutCount}",
-                    accent = homeGiftAccent,
-                    isDark = isDark
-                )
-            }
+            FamilyFinancialSummarySection(
+                summary = summary,
+                isDark = isDark
+            )
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f))
 
@@ -1065,13 +988,141 @@ private fun FamilyDirectoryCard(
 }
 
 @Composable
+internal fun FamilyTotalInOutRow(
+    summary: FamilyFinancialSummary,
+    isDark: Boolean
+) {
+    if (summary.totalIn <= 0L && summary.totalOut <= 0L) return
+    val inColor = if (isDark) InBadgeFgDark else InBadgeFgLight
+    val outColor = if (isDark) OutBadgeFgDark else OutBadgeFgLight
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        if (summary.totalIn > 0L) {
+            Surface(
+                color = inColor.copy(alpha = if (isDark) 0.16f else 0.11f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+                    Text("Total In", style = MaterialTheme.typography.labelSmall, color = inColor)
+                    Text(
+                        text = formatNeondraAmount(summary.totalIn),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = JakartaSansFamily,
+                        color = inColor
+                    )
+                }
+            }
+        }
+        if (summary.totalOut > 0L) {
+            Surface(
+                color = outColor.copy(alpha = if (isDark) 0.16f else 0.11f),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.weight(1f)
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+                    Text("Total Out", style = MaterialTheme.typography.labelSmall, color = outColor)
+                    Text(
+                        text = formatNeondraAmount(summary.totalOut),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = JakartaSansFamily,
+                        color = outColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun FamilyFinancialSummarySection(
+    summary: FamilyFinancialSummary,
+    isDark: Boolean
+) {
+    val cashAccent = if (isDark) Color(0xFF34D399) else Color(0xFF047857)
+    val haarAccent = if (isDark) Color(0xFFFBBF24) else Color(0xFFB45309)
+    val salamiAccent = if (isDark) Color(0xFFC084FC) else Color(0xFF7E22CE)
+    val neondraAccent = if (isDark) Color(0xFF38BDF8) else Color(0xFF0369A1)
+    val homeGiftAccent = if (isDark) Color(0xFFFB7185) else Color(0xFFBE123C)
+
+    FamilyTotalInOutRow(summary = summary, isDark = isDark)
+
+    val hasAnyCategory = summary.cashIn > 0L || summary.cashOut > 0L ||
+        summary.haarIn > 0L || summary.haarOut > 0L ||
+        summary.salamiIn > 0L || summary.salamiOut > 0L ||
+        summary.neondraIn > 0L || summary.neondraOut > 0L ||
+        summary.homeGiftInCount > 0 || summary.homeGiftOutCount > 0
+
+    if (hasAnyCategory) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (summary.cashIn > 0L || summary.cashOut > 0L) {
+                FamilyCategoryInOutChip(
+                    label = "نقد",
+                    inText = if (summary.cashIn > 0L) formatNeondraAmount(summary.cashIn) else null,
+                    outText = if (summary.cashOut > 0L) formatNeondraAmount(summary.cashOut) else null,
+                    accent = cashAccent,
+                    isDark = isDark
+                )
+            }
+            if (summary.haarIn > 0L || summary.haarOut > 0L) {
+                FamilyCategoryInOutChip(
+                    label = "ہار",
+                    inText = if (summary.haarIn > 0L) formatNeondraAmount(summary.haarIn) else null,
+                    outText = if (summary.haarOut > 0L) formatNeondraAmount(summary.haarOut) else null,
+                    accent = haarAccent,
+                    isDark = isDark
+                )
+            }
+            if (summary.salamiIn > 0L || summary.salamiOut > 0L) {
+                FamilyCategoryInOutChip(
+                    label = "سلامی",
+                    inText = if (summary.salamiIn > 0L) formatNeondraAmount(summary.salamiIn) else null,
+                    outText = if (summary.salamiOut > 0L) formatNeondraAmount(summary.salamiOut) else null,
+                    accent = salamiAccent,
+                    isDark = isDark
+                )
+            }
+            if (summary.neondraIn > 0L || summary.neondraOut > 0L) {
+                FamilyCategoryInOutChip(
+                    label = "نیوندرا",
+                    inText = if (summary.neondraIn > 0L) formatNeondraAmount(summary.neondraIn) else null,
+                    outText = if (summary.neondraOut > 0L) formatNeondraAmount(summary.neondraOut) else null,
+                    accent = neondraAccent,
+                    isDark = isDark
+                )
+            }
+            if (summary.homeGiftInCount > 0 || summary.homeGiftOutCount > 0) {
+                FamilyCategoryInOutChip(
+                    label = "ہوم گفٹ",
+                    inText = if (summary.homeGiftInCount > 0) "${summary.homeGiftInCount}" else null,
+                    outText = if (summary.homeGiftOutCount > 0) "${summary.homeGiftOutCount}" else null,
+                    accent = homeGiftAccent,
+                    isDark = isDark
+                )
+            }
+        }
+    }
+}
+
+@Composable
 internal fun FamilyCategoryInOutChip(
     label: String,
-    inText: String,
-    outText: String,
+    inText: String?,
+    outText: String?,
     accent: Color,
     isDark: Boolean
 ) {
+    if (inText == null && outText == null) return
     val inColor = if (isDark) InBadgeFgDark else InBadgeFgLight
     val outColor = if (isDark) OutBadgeFgDark else OutBadgeFgLight
 
@@ -1092,18 +1143,22 @@ internal fun FamilyCategoryInOutChip(
                 color = accent
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "In: $inText",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = inColor,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = "Out: $outText",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = outColor,
-                    fontWeight = FontWeight.SemiBold
-                )
+                if (inText != null) {
+                    Text(
+                        text = "In: $inText",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = inColor,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                if (outText != null) {
+                    Text(
+                        text = "Out: $outText",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = outColor,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }
@@ -1186,41 +1241,7 @@ private fun FamilyEntriesBottomSheet(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Surface(
-                    color = inColor.copy(alpha = if (isDark) 0.16f else 0.11f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text("Total In", style = MaterialTheme.typography.labelSmall, color = inColor)
-                        Text(
-                            text = formatNeondraAmount(summary.totalIn),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = inColor
-                        )
-                    }
-                }
-                Surface(
-                    color = outColor.copy(alpha = if (isDark) 0.16f else 0.11f),
-                    shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text("Total Out", style = MaterialTheme.typography.labelSmall, color = outColor)
-                        Text(
-                            text = formatNeondraAmount(summary.totalOut),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = outColor
-                        )
-                    }
-                }
-            }
+            FamilyTotalInOutRow(summary = summary, isDark = isDark)
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

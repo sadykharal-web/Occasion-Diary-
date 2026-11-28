@@ -161,7 +161,7 @@ fun WorldScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
-                            text = "Live",
+                            text = "World",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
